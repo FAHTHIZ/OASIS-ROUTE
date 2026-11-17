@@ -66,7 +66,8 @@ This repository currently contains the architecture and implementation handoff. 
 5. [Provider adapter contract](docs/PROVIDER_ADAPTERS.md)
 6. [Execution plan](docs/EXECUTION_PLAN.md)
 7. [Agent handoff](AGENT_HANDOFF.md)
-8. [Research notes and references](docs/RESEARCH.md)
+8. [Zero-operations autonomy requirement](docs/ZERO_OPERATIONS_AUTONOMY.md)
+9. [Research notes and references](docs/RESEARCH.md)
 
 ## Design principles
 
@@ -78,6 +79,7 @@ This repository currently contains the architecture and implementation handoff. 
 6. **Provider-neutral core.** Provider-specific behavior belongs in adapters, not routing business logic.
 7. **Independent product.** Oasis Route can be used without Oasis.
 8. **Observable and testable.** Every route decision and quota reservation must be explainable.
+9. **Zero routine operations.** After adding an authorized provider credential, onboarding, discovery, quota synchronization, routing, health checks, and recovery should happen automatically in the background. See [the autonomy requirement](docs/ZERO_OPERATIONS_AUTONOMY.md).
 
 ## Development
 
