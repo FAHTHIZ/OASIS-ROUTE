@@ -1,165 +1,311 @@
-# Oasis Route
+# OASIS Route
 
-**Open-source inference discovery, provider intelligence, quota-aware routing, and failover.**
+<p align="center">
+  <img src="./assets/oasis-route-hero.svg" alt="OASIS Route — an animated illustration of a request moving through one gateway to user-authorized inference providers" width="100%" />
+</p>
 
-Oasis Route is an independent inference infrastructure project. It discovers publicly documented inference offers, verifies their eligibility and terms, connects upstream accounts only with authorization, and exposes a unified API that routes requests to the strongest eligible model with available capacity.
+<p align="center">
+  <a href="https://github.com/FAHTHIZ/OASIS-ROUTE/actions/workflows/ci.yml"><img src="https://github.com/FAHTHIZ/OASIS-ROUTE/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python 3.12+" />
+  <img src="https://img.shields.io/badge/API-OpenAI%20%2B%20Anthropic-11A88B" alt="OpenAI and Anthropic compatible APIs" />
+  <img src="https://img.shields.io/github/license/FAHTHIZ/OASIS-ROUTE?color=8B75E5" alt="Apache 2.0 license" />
+</p>
 
-It is designed to work with Oasis and with any application that can call an OpenAI-compatible API.
+<p align="center">
+  <strong>One gateway. One Oasis Key. The strongest eligible route.</strong>
+  <br />
+  <sub>Open-source inference discovery, provider intelligence, quota-aware routing, and policy-aware failover.</sub>
+</p>
 
-## Oasis Key
+<p align="center">
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#capabilities">Capabilities</a> ·
+  <a href="#api-compatibility">API compatibility</a> ·
+  <a href="#documentation">Documentation</a> ·
+  <a href="#security-and-trust">Security</a>
+</p>
 
-**Oasis Key** is the name of the unified API credential issued by Oasis Route. An application uses its Oasis Key to authenticate with the Oasis Route gateway; Oasis Route then selects among the user's separately authorized upstream provider connections. Applications do not need a different gateway key for every inference provider.
+---
 
-```bash
+## What is OASIS Route?
+
+**OASIS Route is an independent inference routing layer.** It discovers publicly documented inference offers, verifies their eligibility and terms, connects upstream accounts only with the account owner's authorization, and routes requests to the strongest suitable model with available capacity.
+
+Connect it to **Oasis or any application that can call an OpenAI-compatible API**. Keep one gateway endpoint in your application while OASIS Route handles provider selection, quota reservations, health, and bounded failover behind it.
+
+It is designed around one important distinction:
+
+> **Finding an offer is not the same as having permission to use it.** Discovery, verification, authorization, and usable capacity are separate states.
+
+## The idea
+
+| Instead of… | OASIS Route… |
+|---|---|
+| Hard-coding one provider into every application | Gives applications one unified gateway |
+| Choosing a model only by provider name | Selects by task fit, capability, eligibility, and available quota |
+| Retrying blindly after a rate limit | Uses quota reservations, cooldowns, health state, and bounded failover |
+| Treating public announcements as usable capacity | Preserves evidence and requires verification plus user authorization |
+| Hiding a fallback or quality downgrade | Makes routing decisions explainable and signals downgrades honestly |
+
+## How it works
+
+The discovery control plane and inference data plane are deliberately separate. Public-source discovery can populate the offer registry, but it cannot grant access to a provider or activate an offer on its own.
+
+~~~mermaid
+flowchart TB
+  subgraph control["DISCOVERY CONTROL PLANE"]
+    S["Public documentation and sources"] --> D["Discovery and extraction"]
+    D --> E["Evidence and human verification"]
+    E --> R["Offer registry"]
+  end
+
+  subgraph access["USER-AUTHORIZED ACCESS"]
+    U["Your provider accounts"] --> V["Encrypted credential vault"]
+  end
+
+  subgraph inference["INFERENCE DATA PLANE"]
+    C["Your application / SDK"] --> G["Unified API gateway"]
+    G --> P["Task and policy analysis"]
+    P --> Q["Capability and quota router"]
+    Q --> A["Provider adapter layer"]
+    A --> X["Upstream inference provider"]
+    Q --> L["Usage ledger, health, and capacity"]
+  end
+
+  R --> Q
+  V --> A
+
+  classDef control fill:#182535,stroke:#6486a8,color:#e8f1fc
+  classDef access fill:#16312e,stroke:#36b99f,color:#e6fff8
+  classDef inference fill:#211d37,stroke:#9b83db,color:#f2edff
+  class S,D,E,R control
+  class U,V access
+  class C,G,P,Q,A,X,L inference
+~~~
+
+### The request lifecycle
+
+1. **Discover** — monitor permitted public sources, official provider documentation, repositories, announcements, and model catalogues.
+2. **Verify** — preserve source evidence, evaluate eligibility and terms, and distinguish advertised capacity from verified capacity.
+3. **Authorize** — connect a provider account or add an API credential that the account owner is entitled to use.
+4. **Route** — rank eligible models by capability and task fit, reserve quota atomically, and dispatch to a suitable endpoint.
+5. **Recover** — respond to rate limits, outages, expired credentials, and exhausted allocations using bounded, policy-aware failover.
+6. **Measure** — reconcile usage, quota windows, shared pools, health, concurrency, and usable capacity.
+
+## The Oasis Key
+
+**Oasis Key** is the unified gateway credential issued by OASIS Route.
+
+Your application authenticates to the OASIS Route gateway with its Oasis Key. OASIS Route then selects from the user's separately authorized upstream provider connections. Your application does not need a different gateway key for every inference provider.
+
+Set the key in your environment:
+
+~~~bash
 export OASIS_API_KEY="your-oasis-key"
-```
+~~~
 
 Send it as a bearer token:
 
-```http
+~~~http
 Authorization: Bearer <OASIS_API_KEY>
-```
+~~~
 
-An Oasis Key is not an upstream provider credential. Provider API keys and OAuth tokens remain separately authorized and protected in the credential vault. Keys should be scoped, shown only once at creation, revocable, and rotatable.
+An Oasis Key is **not** an upstream provider credential. Provider API keys and OAuth tokens remain separately authorized and protected in the credential vault. Gateway keys are designed to be scoped, revealed only once at creation, revocable, and rotatable.
 
-> **Important:** Oasis Route does not create provider identities, harvest credentials, bypass access controls, evade quotas, or reset free allocations through account rotation. It discovers legitimate offers and uses provider access explicitly authorized by the account owner and permitted by provider terms.
+## Capabilities
 
-## What it does
-
-- **Discover:** monitor official provider documentation, public announcements, repositories, model catalogues, and other permitted public sources.
-- **Verify:** preserve evidence, check eligibility and terms, and distinguish advertised offers from verified usable capacity.
-- **Connect:** let users authorize their own upstream accounts or enter their own API credentials.
-- **Route:** rank models by capability and task fit, then select the strongest eligible endpoint with sufficient quota.
-- **Recover:** handle rate limits, outages, expired credentials, and exhausted allocations with bounded, policy-aware failover.
-- **Measure:** account for input/output tokens, rate limits, shared quota pools, expiration, concurrency, and actual usable capacity.
-
-## Architecture at a glance
-
-```text
-Public sources ──> Discovery ──> Evidence & Verification ──> Offer Registry
-                                                               │
-User-authorized provider connections ──> Credential Vault ─────┤
-                                                               ▼
-Applications ──> Unified API Gateway ──> Policy & Task Analysis
-                                           │
-                                  Capability / Quota Router
-                                           │
-                                  Provider Adapter Layer
-                                           │
-                               Upstream inference providers
-                                           │
-                         Usage ledger / health / capacity metrics
-```
-
-The discovery control plane is separate from the inference data plane. Finding an offer never automatically grants access to it.
-
-## Project status
-
-Oasis Route is working software. The implementation roadmap in [docs/EXECUTION_PLAN.md](docs/EXECUTION_PLAN.md) is tracked phase by phase, and [docs/IMPLEMENTATION_AUDIT.md](docs/IMPLEMENTATION_AUDIT.md) records what is verified. The test suite runs on SQLite and PostgreSQL in CI.
-
-| Capability | Status |
+| Capability | What it does |
 |---|---|
-| OpenAI-compatible gateway (`/v1/chat/completions`, `/v1/models`), streaming, idempotency | Implemented |
-| Anthropic Messages API (`/v1/messages`, streaming, tool use) for Claude Code and Anthropic SDKs | Implemented |
-| OpenAI Responses API (`/v1/responses`, streaming, function calls; stateless) for Codex CLI and `client.responses` | Implemented |
-| `auto` / `auto/<task>` model aliases; heuristic priors order unrated models strongest-first | Implemented |
-| Adapters: OpenAI, Anthropic, Gemini (OpenAI-compatible endpoint), Groq, Mistral, OpenRouter, Cerebras, NVIDIA API Catalog, SambaNova, Hugging Face router, custom OpenAI-compatible (llama.cpp, Ollama, vLLM) | Implemented |
-| Encrypted credential vault (envelope encryption, KEK rotation with automatic re-wrap) | Implemented |
-| Atomic quota ledger: reservations, settlement, shared pools, windows, header learning | Implemented |
-| Strongest-suitable-first routing with explainable decisions and route preview | Implemented |
-| Automatic failover with circuit breakers, honest downgrade signalling | Implemented |
-| Discovery: safe fetcher, extraction, evidence, verification workflow, offer lifecycle | Implemented |
-| Capacity analytics and forecasting | Implemented |
-| Supervised background worker (leases, backoff, timeouts, crash recovery, stall alerts) | Implemented |
-| Web console with plain-language status | Implemented |
-| Optional mail notices (forwarded mail; Gmail behind a compliance attestation) | Implemented, off by default |
-| Official provider OAuth connections (OpenRouter PKCE; redirect and headless modes) | Implemented |
-| Account data export and erasure (secret-free export; deletion destroys stored credentials) | Implemented |
-| Install from wheel and upgrade from the previous release, verified in CI | Implemented |
+| **Evidence-backed discovery** | Finds publicly documented offers and records provenance, timestamps, eligibility, terms, and review state |
+| **Provider intelligence** | Separates advertised, verified, authorized, usable, consumed, and forecast capacity |
+| **Quality-first routing** | Chooses the strongest suitable eligible model for the requested task, not merely the first provider in a list |
+| **Atomic quota ledger** | Reserves capacity safely, accounts for shared quota pools, and settles actual usage |
+| **Honest failover** | Uses circuit breakers, cooldowns, and bounded fallback without concealing a model downgrade |
+| **Explainable decisions** | Provides route previews, routing reasons, and model/fallback metadata |
+| **Background autonomy** | Supervises discovery, synchronization, health, recovery, and maintenance jobs with leases and crash recovery |
+| **Operational visibility** | Tracks usage, capacity, health, forecasts, and plain-language system status |
 
-### Known limitations
+## API compatibility
 
-- Inference endpoints are `POST /v1/chat/completions`, `POST /v1/responses` (stateless: no `previous_response_id`), `POST /v1/messages` and `GET /v1/models`. Embeddings, images, audio and legacy completions are not served.
-- Streaming failover happens only before the first byte; a stream that fails midway ends with an error event rather than being spliced with another model's output.
-- OAuth sign-in is available for OpenRouter only. Other providers use an API key that the user pastes once.
-- Data-policy facts (training on inputs, retention) are unknown for seeded providers until an operator records them with evidence, so projects that require no-training or zero-retention exclude those providers. The exception is NVIDIA, whose own pages say inputs are used to improve its models; it is seeded as training on inputs.
-- Discovery extraction is deterministic pattern matching. It proposes candidates for human review and never activates an offer by itself.
-- Gmail is off by default and must stay off in production until Google's verification and security assessment are complete.
-- `/metrics` is unauthenticated and must stay on a private network.
+Use the interface that matches your client. OASIS Route exposes these inference surfaces:
+
+| API surface | Endpoints | Notes |
+|---|---|---|
+| **OpenAI Chat Completions** | <code>POST /v1/chat/completions</code>, <code>GET /v1/models</code> | OpenAI-compatible requests, streaming, and idempotency |
+| **OpenAI Responses** | <code>POST /v1/responses</code> | Streaming and function calls; currently stateless |
+| **Anthropic Messages** | <code>POST /v1/messages</code> | Messages API, streaming, and tool use |
+
+The gateway supports <code>auto</code> and <code>auto/&lt;task&gt;</code> model aliases. Heuristic priors order unrated models strongest-first until better evidence is available.
+
+### Provider adapters
+
+Implemented adapters include:
+
+- OpenAI
+- Anthropic
+- Gemini through its OpenAI-compatible endpoint
+- Groq
+- Mistral
+- OpenRouter
+- Cerebras
+- NVIDIA API Catalog
+- SambaNova
+- Hugging Face router
+- Custom OpenAI-compatible endpoints, including llama.cpp, Ollama, and vLLM
+
+OAuth authorization is currently available for OpenRouter, including PKCE, redirect, and headless modes. Other listed providers use API credentials supplied by the user.
 
 ## Quickstart
 
-Try it in one command, with deterministic mock providers and no upstream calls (needs [uv](https://docs.astral.sh/uv/)):
+### 1. Run locally — no upstream account required
 
-```bash
+The fastest way to explore OASIS Route is its deterministic mock-provider mode. It starts the application without making upstream inference calls.
+
+Requires [uv](https://docs.astral.sh/uv/).
+
+~~~bash
 uvx --from git+https://github.com/FAHTHIZ/OASIS-ROUTE oasis-route dev
-# prints the console URL, your project ID and your Oasis Key
-```
+~~~
 
-Or with Docker, no Python needed (rolling image of `main`):
+The command prints the console URL, your project ID, and an Oasis Key.
 
-```bash
+### 2. Run with Docker
+
+No local Python installation is needed:
+
+~~~bash
 docker run --rm -p 8080:8080 ghcr.io/fahthiz/oasis-route:edge dev
-```
+~~~
 
-Install it as a command instead (`oasis-route` on your PATH):
+### 3. Install the command
 
-```bash
-uv tool install git+https://github.com/FAHTHIZ/OASIS-ROUTE     # or: pipx install git+https://github.com/FAHTHIZ/OASIS-ROUTE
+~~~bash
+uv tool install git+https://github.com/FAHTHIZ/OASIS-ROUTE
+# Or: pipx install git+https://github.com/FAHTHIZ/OASIS-ROUTE
+
 oasis-route dev --port 8080
-```
+~~~
 
-From a clone, for development:
+### 4. Develop from a clone
 
-```bash
+~~~bash
+git clone https://github.com/FAHTHIZ/OASIS-ROUTE.git
+cd OASIS-ROUTE
 uv sync
 uv run oasis-route dev
-```
+~~~
 
-Add a real model in a minute with a free local server: see [local models](docs/LOCAL_MODELS.md).
+### 5. Connect a provider and make a request
 
-Production-style, with PostgreSQL ([full guide](docs/DEPLOYMENT.md)):
+Open <code>/console/</code>, sign in with the Oasis Key, and add an upstream provider credential under **Connections**.
 
-```bash
-# create .env with POSTGRES_PASSWORD, OASIS_ROUTE_MASTER_KEY, OASIS_ROUTE_API_KEY_PEPPER
+Then call the gateway:
+
+~~~bash
+curl https://route.example.com/v1/chat/completions \
+  -H "Authorization: Bearer $OASIS_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "auto",
+    "messages": [
+      {"role": "user", "content": "Explain the difference between a process and a thread."}
+    ]
+  }'
+~~~
+
+Any OpenAI SDK can use the same gateway by setting its base URL to <code>https://route.example.com/v1</code> and its API key to the Oasis Key.
+
+### Production deployment
+
+For a PostgreSQL-backed deployment, follow the [deployment guide](docs/DEPLOYMENT.md):
+
+~~~bash
+# Create .env with:
+# POSTGRES_PASSWORD
+# OASIS_ROUTE_MASTER_KEY
+# OASIS_ROUTE_API_KEY_PEPPER
+
 docker compose up -d --build
 docker compose run --rm api bootstrap --email you@example.com
-```
+~~~
 
-Open `/console/`, sign in with the Oasis Key, add a provider API key under **Connections**, and call the gateway:
+## Implementation status
 
-```bash
-curl https://route.example.com/v1/chat/completions \
-  -H "Authorization: Bearer $OASIS_API_KEY" -H 'content-type: application/json' \
-  -d '{"model":"auto","messages":[{"role":"user","content":"hello"}]}'
-```
+OASIS Route is working software. The implementation roadmap is tracked phase by phase in the [execution plan](docs/EXECUTION_PLAN.md), and the [implementation audit](docs/IMPLEMENTATION_AUDIT.md) records the verification evidence. The test suite runs against SQLite and PostgreSQL in CI.
 
-Any OpenAI SDK works by setting its base URL to `https://route.example.com/v1` and its API key to the Oasis Key.
+| Area | Implemented functionality |
+|---|---|
+| **Gateway** | OpenAI Chat Completions, OpenAI Responses, Anthropic Messages, streaming, cancellation, timeouts, and normalized errors |
+| **Identity and security** | Project isolation, scoped Oasis Keys, encrypted credential vault, envelope encryption, KEK rotation, audit trails, and redaction |
+| **Routing and quotas** | Capability-aware quality-first routing, route preview, atomic reservations, idempotency, shared quota pools, and usage settlement |
+| **Recovery** | Circuit breakers, cooldowns, Retry-After handling, reset-aware recovery, and honest downgrade signalling |
+| **Discovery** | Safe fetcher, extraction, evidence provenance, verification workflow, offer lifecycle, and human review |
+| **Capacity and telemetry** | Capacity analytics and forecasting, usage ledger, health metrics, Prometheus metrics, and OpenTelemetry instrumentation |
+| **Worker** | Database-leased jobs, backoff, timeouts, crash recovery, and stall alerts |
+| **Console and deployment** | Web console, onboarding, Docker deployment, backup/restore guidance, and production runbooks |
+| **Data rights** | Secret-free account export and account erasure that destroys stored credentials |
+| **Mail notices** | Forwarded-mail support; Gmail integration is implemented but disabled by default behind its compliance gate |
+
+## Known limitations
+
+OASIS Route is deliberately explicit about what it does not serve or guarantee today:
+
+- **Inference endpoints:** Chat Completions, Responses, Anthropic Messages, and Models are supported. Embeddings, images, audio, and legacy completions are not served.
+- **Responses state:** the Responses API is currently stateless; <code>previous_response_id</code> is not supported.
+- **Mid-stream recovery:** failover is possible only before the first response byte. A stream that fails midway ends with an error event rather than being spliced into another model's output.
+- **OAuth coverage:** OpenRouter is the only provider with OAuth sign-in at present. Other providers use API credentials supplied by the user.
+- **Provider data policies:** training and retention facts remain unknown for seeded providers until an operator records them with evidence. Providers are excluded from projects that require no-training or zero-retention when those facts are unknown. NVIDIA is seeded as training on inputs because its own pages state that inputs are used to improve its models.
+- **Discovery activation:** extraction is deterministic pattern matching. It proposes candidates for human review; it never activates an offer by itself.
+- **Gmail:** off by default and must remain off in production until Google's verification and security assessment are complete.
+- **Metrics exposure:** <code>/metrics</code> is unauthenticated and must remain on a private network.
+
+## Security and trust
+
+OASIS Route is built around authorized provider access—not credential harvesting or quota workarounds.
+
+- It does not create provider identities or rotate accounts to reset free allocations.
+- It does not harvest credentials or bypass provider access controls.
+- It does not evade quotas or treat a public offer as permission to use it.
+- Upstream credentials are separately authorized and encrypted in the credential vault.
+- Discovery candidates require evidence, review, eligibility checks, and an authorized connection before they can become usable.
+- Routing decisions and fallback behavior are designed to remain observable and explainable.
+
+Read the [security and compliance model](docs/SECURITY_AND_COMPLIANCE.md), [threat model](docs/THREAT_MODEL.md), and [security policy](SECURITY.md).
 
 ## Documentation
 
-- Using it: [API guide](docs/API.md), [SDKs and coding tools](docs/INTEGRATIONS.md) (Claude Code, Codex, Aider, Continue, Cline, OpenCode), [local models (llama.cpp, Ollama)](docs/LOCAL_MODELS.md), [free-tier capacity maths](docs/FREE_TIER_CAPACITY.md), [configuration](docs/CONFIGURATION.md)
-- Running it: [deployment](docs/DEPLOYMENT.md), [operations runbook](docs/OPERATIONS.md), [zero-operations requirement](docs/ZERO_OPERATIONS_AUTONOMY.md)
-- Building it: [development](docs/DEVELOPMENT.md), [architecture](docs/ARCHITECTURE.md), [routing and quotas](docs/ROUTING_AND_QUOTAS.md), [discovery and registry](docs/DISCOVERY_AND_REGISTRY.md), [provider adapter contract](docs/PROVIDER_ADAPTERS.md), [decision records](docs/adr/)
-- Trust: [security and compliance](docs/SECURITY_AND_COMPLIANCE.md), [threat model](docs/THREAT_MODEL.md), [implementation audit](docs/IMPLEMENTATION_AUDIT.md), [release checklist](docs/RELEASE_CHECKLIST.md)
-- Planning: [comparison with LiteLLM, OmniRoute and others](docs/COMPARISON.md), [execution plan](docs/EXECUTION_PLAN.md), [agent handoff](AGENT_HANDOFF.md), [research notes](docs/RESEARCH.md)
+| Need | Start here |
+|---|---|
+| **Use the API** | [API guide](docs/API.md) · [SDKs and coding tools](docs/INTEGRATIONS.md) |
+| **Connect local models** | [Local models: llama.cpp, Ollama, vLLM](docs/LOCAL_MODELS.md) |
+| **Understand routing** | [Routing and quotas](docs/ROUTING_AND_QUOTAS.md) · [Provider adapters](docs/PROVIDER_ADAPTERS.md) |
+| **Understand discovery** | [Discovery and registry](docs/DISCOVERY_AND_REGISTRY.md) · [Free-tier capacity maths](docs/FREE_TIER_CAPACITY.md) |
+| **Configure the service** | [Configuration](docs/CONFIGURATION.md) · [Deployment](docs/DEPLOYMENT.md) |
+| **Operate it** | [Operations runbook](docs/OPERATIONS.md) · [Zero-operations autonomy](docs/ZERO_OPERATIONS_AUTONOMY.md) |
+| **Explore the design** | [Architecture](docs/ARCHITECTURE.md) · [Decision records](docs/adr/) |
+| **Review the project** | [Implementation audit](docs/IMPLEMENTATION_AUDIT.md) · [Release checklist](docs/RELEASE_CHECKLIST.md) |
+| **Compare alternatives** | [Comparison with LiteLLM, OmniRoute, and others](docs/COMPARISON.md) |
+| **Contribute** | [Development guide](docs/DEVELOPMENT.md) · [Agent handoff](AGENT_HANDOFF.md) |
 
 ## Design principles
 
-1. **Open source, not credential scraping.** Public information can be discovered; private credentials cannot be harvested.
-2. **Strongest suitable model first.** Quality ranking is capability-aware, not just a static provider list.
-3. **Quota correctness before throughput.** Reserve capacity atomically before dispatch.
-4. **Fail over honestly.** Never hide a downgrade or silently violate task requirements.
-5. **Evidence-backed registry.** Every offer has provenance, timestamps, status, and a review trail.
+1. **Evidence before assumptions.** Every offer has provenance, timestamps, status, and a review trail.
+2. **Authorization before dispatch.** Discovering a provider offer never grants access to it.
+3. **Quality before convenience.** Choose the strongest suitable model that is eligible and has capacity.
+4. **Quota correctness before throughput.** Reserve capacity atomically before dispatch.
+5. **Honest recovery.** Never hide a downgrade or silently violate task requirements.
 6. **Provider-neutral core.** Provider-specific behavior belongs in adapters, not routing business logic.
-7. **Independent product.** Oasis Route can be used without Oasis.
-8. **Observable and testable.** Every route decision and quota reservation must be explainable.
-9. **Zero routine operations.** After adding an authorized provider credential, onboarding, discovery, quota synchronization, routing, health checks, and recovery should happen automatically in the background. See [the autonomy requirement](docs/ZERO_OPERATIONS_AUTONOMY.md).
+7. **Explainable by default.** Route decisions, quota reservations, and fallbacks should be inspectable.
+8. **Independent by design.** OASIS Route can be used without Oasis.
+9. **Zero routine operations.** After an authorized connection is added, onboarding, discovery, quota synchronization, routing, health checks, and recovery should run automatically in the background.
 
 ## Contributing
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for setup and quality gates. Provider-specific behaviour belongs in adapters; do not wrap competing gateways or duplicate their routing engines.
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the setup instructions and quality gates.
+
+Provider-specific behavior belongs in adapters. Do not wrap competing gateways or duplicate their routing engines.
 
 ## License
 
-[Apache License 2.0](LICENSE).
+OASIS Route is licensed under the [Apache License 2.0](LICENSE).
