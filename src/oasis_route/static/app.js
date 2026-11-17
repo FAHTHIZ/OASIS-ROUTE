@@ -96,6 +96,12 @@ async function startOAuth(provider, acceptTerms, msg, back) {
   }
 }
 
+// "console.groq.com/…/rate-limits": host plus the last path segment, so two pages on one site differ.
+function evidenceLabel(u) {
+  const parts = u.replace(/^https:\/\//, "").split("?")[0].split("/").filter(Boolean);
+  return parts.length > 1 ? `${parts[0]}/…/${parts[parts.length - 1]}` : parts[0];
+}
+
 const PERIOD = { minute: "min", hour: "hour", day: "day", week: "week", month: "month" };
 const UNIT = { total_tokens: "tokens", input_tokens: "input tokens", output_tokens: "output tokens" };
 function quotaText(q) {
@@ -154,7 +160,7 @@ function providerCard(p) {
             o.expires_at ? `Expires ${when(o.expires_at)} · ` : "",
             `Checked ${when(o.last_observed_at)}`,
             o.evidence.urls.length ? " · Evidence: " : "",
-            o.evidence.urls.flatMap((u, i) => [i ? ", " : "", safeLink(u, u.replace(/^https:\/\//, "").split("/")[0])])
+            o.evidence.urls.flatMap((u, i) => [i ? ", " : "", safeLink(u, evidenceLabel(u))])
           )
         )
       )

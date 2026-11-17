@@ -91,3 +91,12 @@ ul.quotas { margin: 6px 0 0; padding-left: 18px; font-variant-numeric: tabular-n
 .keyform[hidden] { display: none; }
 .msg:empty { display: none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+header { flex-wrap: nowrap; gap: 12px; }
+nav { flex: 1 1 auto; min-width: 0; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+nav button { white-space: nowrap; padding: 6px 9px; }
+#who { display: flex; align-items: center; gap: 8px; white-space: nowrap; flex: 0 0 auto; }
+#who button { padding: 5px 10px; }
+@media (max-width: 760px) {
+  header { flex-wrap: wrap; }
+  nav { order: 3; flex-basis: 100%; }
+}

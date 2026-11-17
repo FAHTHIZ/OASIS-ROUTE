@@ -132,6 +132,8 @@ _EXPIRY = re.compile(
     rf"(?:(\d{{4}}-\d{{2}}-\d{{2}})|(?:({_MONTHS})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})))",
     re.I,
 )
+_PRICE_BEFORE = re.compile(r"(?:[$€£]\s?\d[\d,.]*|\d[\d,.]*\s?(?:usd|eur|per\s+1m))[^.\n]{0,25}$", re.I)
+_OFFER_WORDS = re.compile(r"\b(?:credits?|trial|free|promo(?:tion|tional)?|offer)\b", re.I)
 _FREE = re.compile(r"\bfree (?:tier|plan|of charge|usage|access)\b|\bno credit card\b|\bfree to use\b", re.I)
 _NO_CARD = re.compile(
     r"\bno (?:credit )?card (?:is )?(?:required|needed)\b|\bwithout (?:a |adding a )?(?:credit )?card\b|"
@@ -271,6 +273,10 @@ def extract(text: str, *, known_models: list[str] | None = None) -> Extraction:
     for m in _REGION.finditer(text):
         add("region", {"statement": m.group(0)[:200].strip()}, m, 0.3)
     for m in _EXPIRY.finditer(text):
+        # "$2.00 through November 30, 2026" is a price schedule, not the end of an offer.
+        before = re.split(r"[.;:]\s|\n", text[max(0, m.start() - 40) : m.start()])[-1]  # same clause only
+        if _PRICE_BEFORE.search(before) and not _OFFER_WORDS.search(before):
+            continue
         d = _parse_date(m)
         if d:
             add("expiry", {"date": d}, m, 0.4)

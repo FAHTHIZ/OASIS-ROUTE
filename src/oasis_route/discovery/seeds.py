@@ -55,7 +55,7 @@ SEEDS: tuple[SeedSource, ...] = (
     SeedSource("openrouter", "https://openrouter.ai/docs/api-reference/limits"),
     SeedSource("groq", "https://console.groq.com/docs/rate-limits"),
     SeedSource("groq", "https://console.groq.com/docs/models", purpose="models"),
-    SeedSource("gemini", "https://ai.google.dev/gemini-api/docs/rate-limits"),
+    SeedSource("gemini", "https://aistudio.google.com/docs/rate-limits"),
     SeedSource("gemini", "https://aistudio.google.com/docs/pricing", purpose="pricing"),
     SeedSource("cerebras", "https://inference-docs.cerebras.ai/support/rate-limits"),
     SeedSource("cerebras", "https://inference-docs.cerebras.ai/models/overview", purpose="models"),
@@ -78,13 +78,34 @@ def terms_note(seed: SeedSource) -> str:
     )
 
 
+# Seed pages that moved (old -> new). A seeded row still in its original approved state follows the move;
+# a row an admin has reviewed differently is left alone.
+MOVED: dict[str, str] = {
+    "https://ai.google.dev/gemini-api/docs/rate-limits": "https://aistudio.google.com/docs/rate-limits",
+}
+
+
 async def sync_seed_sources(db: Database) -> int:
-    """Insert missing seed sources as approved. Never modifies existing rows. Returns rows inserted."""
+    """Insert missing seed sources as approved and follow moved seeds. Returns rows inserted or moved."""
     inserted = 0
     now = utcnow()
     async with db.transaction() as s:
         providers = {p.id for p in (await s.execute(select(Provider))).scalars()}
         existing = set((await s.execute(select(Source.url))).scalars())
+        for old, new in MOVED.items():
+            row = (await s.execute(select(Source).where(Source.url == old))).scalar_one_or_none()
+            if (
+                row is not None
+                and row.origin == "seed"
+                and row.review_status == SourceReviewStatus.APPROVED.value
+                and new not in existing
+            ):
+                row.url, row.domain = new, (urlsplit(new).hostname or "").lower()
+                row.etag = row.last_modified = row.content_hash = None
+                row.failure_count, row.next_fetch_at = 0, now
+                existing.discard(old)
+                existing.add(new)
+                inserted += 1
         for seed in SEEDS:
             if seed.provider_id not in providers:
                 continue
