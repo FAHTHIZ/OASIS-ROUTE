@@ -379,6 +379,16 @@ async def upsert_models(
         if m is not None:
             if info.context_window and not m.context_window:
                 m.context_window = info.context_window
+            if info.max_output_tokens and not m.max_output_tokens:
+                m.max_output_tokens = info.max_output_tokens
+            # What the provider's listing states now wins over adapter defaults
+            # (a model gaining tool support shows up on the next sync). Edits made
+            # by an admin (any other source) are left alone.
+            current = dict(m.capabilities or {})
+            if info.capabilities and current.get("source") == "adapter_default":
+                merged = {**current, **info.capabilities}
+                if merged != current:
+                    m.capabilities = merged
             if m.lifecycle == "removed":
                 m.lifecycle = "active"
             continue
