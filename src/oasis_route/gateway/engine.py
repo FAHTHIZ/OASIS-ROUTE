@@ -148,14 +148,18 @@ def parse_body(body: Any, project: Project, settings_default_max: int) -> Parsed
         raise GatewayError(
             400, "invalid_request", "'oasis_route' must be an object", type_="invalid_request_error"
         )
+    model_name = str(body.get("model") or "auto")
+    task_alias: str | None = None
+    if model_name.startswith("auto/"):  # "auto/coding" == model "auto" with task "coding"
+        model_name, task_alias = "auto", model_name.split("/", 1)[1]
     try:
-        task = Task(ext.get("task", Task.GENERAL.value))
+        task = Task(ext.get("task") or task_alias or Task.GENERAL.value)
         mode = RoutingMode(ext.get("mode") or project.routing_mode or RoutingMode.STRICT_QUALITY.value)
     except ValueError as exc:
         raise GatewayError(400, "invalid_request", str(exc), type_="invalid_request_error") from exc
     stream = bool(body.get("stream"))
     chat = ChatRequest(
-        model=str(body.get("model") or "auto"),
+        model=model_name,
         messages=messages,
         max_tokens=max_tokens,
         stop=stop,

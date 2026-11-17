@@ -85,6 +85,20 @@ def _reply(model: str, messages: list[dict[str, Any]]) -> str:
     return f"[{model}] echo: {content}"
 
 
+def _tool_call(body: dict[str, Any], messages: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Deterministic tool use: when tools are offered and the last user turn says ``use_tool``."""
+    tools = body.get("tools") or []
+    last = next((m for m in reversed(messages) if m.get("role") in ("user", "tool")), None)
+    if not tools or last is None or last.get("role") != "user" or "use_tool" not in str(last.get("content")):
+        return None
+    name = str(((tools[0] or {}).get("function") or {}).get("name", "tool"))
+    return {
+        "id": f"call_{uuid.uuid4().hex[:12]}",
+        "type": "function",
+        "function": {"name": name, "arguments": json.dumps({"query": "mock"})},
+    }
+
+
 def create_mock_provider(state: MockProviderState | None = None) -> FastAPI:
     app = FastAPI(title="Oasis Route mock provider")
     st = state or MockProviderState()
@@ -159,6 +173,18 @@ def create_mock_provider(state: MockProviderState | None = None) -> FastAPI:
         text = _reply(model, messages)
         usage = _usage(messages, text)
         cid, created = f"chatcmpl-{uuid.uuid4().hex[:16]}", int(time.time())
+        call = _tool_call(body, messages)
+        if call is not None and not body.get("stream"):
+            message = {"role": "assistant", "content": None, "tool_calls": [call]}
+            tool_payload: dict[str, Any] = {
+                "id": cid,
+                "object": "chat.completion",
+                "created": created,
+                "model": model,
+                "choices": [{"index": 0, "message": message, "finish_reason": "tool_calls"}],
+                "usage": usage,
+            }
+            return JSONResponse(tool_payload, headers=_rl_headers())
         if not body.get("stream"):
             payload: dict[str, Any] = {
                 "id": cid,
@@ -187,6 +213,34 @@ def create_mock_provider(state: MockProviderState | None = None) -> FastAPI:
                 return f"data: {json.dumps(obj)}\n\n".encode()
 
             yield c({"role": "assistant", "content": ""})
+            if call is not None:
+                fn = call["function"]
+                yield c(
+                    {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": call["id"],
+                                "type": "function",
+                                "function": {"name": fn["name"], "arguments": ""},
+                            }
+                        ]
+                    }
+                )
+                yield c({"tool_calls": [{"index": 0, "function": {"arguments": fn["arguments"]}}]})
+                yield c({}, "tool_calls")
+                if include_usage and not st.omit_usage:
+                    u0 = {
+                        "id": cid,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": model,
+                        "choices": [],
+                        "usage": usage,
+                    }
+                    yield f"data: {json.dumps(u0)}\n\n".encode()
+                yield b"data: [DONE]\n\n"
+                return
             for i, word in enumerate(text.split(" ")):
                 if st.stream_fail_after_chunks is not None and i >= st.stream_fail_after_chunks:
                     err = {"error": {"message": "mock mid-stream failure", "type": "server_error"}}

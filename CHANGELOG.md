@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Anthropic Messages API: `POST /v1/messages` (text, images, tools, streaming) and `POST /v1/messages/count_tokens`, routed through the same engine as chat completions. Unconnected `claude-*` names route as `auto`, so Claude Code works against any provider.
+- `auto/<task>` model aliases (`auto/coding`, `auto/reasoning`, ...) and listing in `/v1/models`.
+- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md): cURL, Python, Node, Anthropic SDK, Claude Code, Aider, Continue, Cline, OpenCode, Open WebUI.
 - Name-based routing priors for unrated models: `auto` now tries larger/flagship models before small ones without operator input. Priors are labelled (`prior`, `prior_source`, `quality_prior`), always rank after real quality evidence, and never satisfy `min_quality`.
 - Account data rights: `GET /api/v1/projects/{id}/export`, `GET /api/v1/users/{id}/export`, `DELETE /api/v1/projects/{id}`, `DELETE /api/v1/users/{id}`. Exports never include secrets; deletion destroys stored provider credentials first.
 - Optional retention for usage records, routing decisions and audit events (`OASIS_ROUTE_USAGE_RETENTION_DAYS`, `OASIS_ROUTE_ROUTE_DECISION_RETENTION_DAYS`, `OASIS_ROUTE_AUDIT_RETENTION_DAYS`; default keep).
