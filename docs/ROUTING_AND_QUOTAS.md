@@ -28,6 +28,17 @@ Suggested lexicographic ranking:
 6. Quota scarcity and reset horizon.
 7. Cost (free eligible capacity may be preferred only after the preceding constraints).
 
+### Unrated models and name-based priors
+
+Models discovered from a provider's `/models` listing carry no quality evidence, and Oasis Route never invents benchmark scores. Every rated model ranks ahead of every unrated one. Unrated models are then ordered among themselves by a deterministic, clearly labelled heuristic prior (`src/oasis_route/routing/priors.py`) derived only from the identifier:
+
+- total parameter count parsed from the name (`70b`, `8x7b`; active-parameter suffixes such as `a22b` are ignored), or a short table of widely published open-weight sizes (DeepSeek R1/V3, Kimi K2, GLM-4.5), scored on a log scale;
+- tier words (`opus`/`ultra`/`max`, `pro`/`large`, versus `mini`/`small`/`lite`/`nano`, `flash`);
+- a small newer-generation bonus (`llama-3.3` over `llama-3.1`, release-date suffixes ignored);
+- a task bonus for specialists (`coder`/`codestral` for `coding`, `r1`/`thinking`/`o3` for `reasoning`, `vl`/`vision` for `vision`).
+
+A prior is an ordering hint, not evidence: it is reported as `prior` with `prior_source` in route previews and as `quality_prior` in `/v1/models`, it never satisfies `min_quality`, and it never makes a fallback look like a non-downgrade. Operators who want exact ordering attach evidence with `PATCH /api/v1/admin/models/{model_id}`, which immediately takes precedence.
+
 A strict quality-first mode should exhaust eligible capacity at the highest suitable quality tier before descending. A balanced mode may trade a small quality difference for reliability or latency. Expose the mode to users.
 
 ## 4. Quota model

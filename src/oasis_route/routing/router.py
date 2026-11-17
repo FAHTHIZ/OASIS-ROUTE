@@ -10,7 +10,9 @@ Modes:
 - ``strict_quality``: exact task score; all capacity of the strongest model is tried before descending.
 - ``balanced``: scores are compared in 10-point bands, so reliability/latency can break near-ties.
 
-Unrated models (no quality evidence) rank after every rated model; they are never assumed strong.
+Unrated models (no quality evidence) rank after every rated model; they are never assumed strong. Among
+themselves they are ordered by a labelled name-based prior (``routing.priors``) so ``auto`` still tries a
+70B model before a 1B one without operator input. Priors never satisfy ``min_quality``.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from oasis_route.domain.enums import ConnectionStatus, QuotaPeriod, RoutingMode,
 from oasis_route.health import breaker
 from oasis_route.quota import ledger
 from oasis_route.quota.windows import next_reset
+from oasis_route.routing.priors import PRIOR_SOURCE, model_prior
 
 QUALITY_EPSILON = 0.5  # score difference treated as "same quality" for downgrade detection
 
@@ -66,11 +69,13 @@ class Candidate:
     needs_probe: bool
     priority: int
     preference_rank: int
+    prior: float | None = None  # heuristic ordering hint for unrated models; never quality evidence
 
     def describe(self) -> dict[str, Any]:
         d = asdict(self)
         d.pop("adapter_key")
         d.pop("multi_account_permitted")
+        d["prior_source"] = PRIOR_SOURCE if self.prior is not None else None
         return d
 
 
@@ -347,6 +352,7 @@ async def build_plan(
                     needs_probe=av.needs_probe,
                     priority=c.priority,
                     preference_rank=opts.providers.index(prov.id) if prov.id in opts.providers else 0,
+                    prior=model_prior(m.upstream_id, opts.task) if q is None else None,
                 )
             )
 
@@ -369,16 +375,16 @@ async def build_plan(
 
 
 def rank_key(c: Candidate, mode: RoutingMode) -> tuple[float, ...]:
+    # Rated candidates (tier 0) always precede unrated ones (tier 1); unrated are ordered by heuristic prior.
     if c.quality is None:
-        q_key = math.inf
-    elif mode is RoutingMode.BALANCED:
-        q_key = -math.floor(c.quality / 10.0)
+        q_tier, q_val = 1.0, c.prior if c.prior is not None else 0.0
     else:
-        q_key = -c.quality
+        q_tier, q_val = 0.0, c.quality
+    q_key = -math.floor(q_val / 10.0) if mode is RoutingMode.BALANCED else -q_val
     rel_key = -round(c.reliability, 1 if mode is RoutingMode.STRICT_QUALITY else 2)
     lat_key = round((c.latency_ms if c.latency_ms is not None else 5_000.0) / 250.0)
     # Use-it-or-lose-it: prefer capacity that resets sooner, then the less scarce pool.
     reset_key = round((c.reset_in_s if c.reset_in_s is not None else 86_400.0 * 31) / 3600.0)
     frac_key = -(c.quota_fraction if c.quota_fraction is not None else 0.5)
     pref = (float(c.preference_rank), float(-c.priority))
-    return (*pref, q_key, rel_key, lat_key, reset_key, frac_key)
+    return (*pref, q_tier, q_key, rel_key, lat_key, reset_key, frac_key)
