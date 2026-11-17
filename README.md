@@ -280,7 +280,7 @@ Read the [security and compliance model](docs/SECURITY_AND_COMPLIANCE.md), [thre
 | **Use the API** | [API guide](docs/API.md) · [SDKs and coding tools](docs/INTEGRATIONS.md) |
 | **Connect local models** | [Local models: llama.cpp, Ollama, vLLM](docs/LOCAL_MODELS.md) |
 | **Understand routing** | [Routing and quotas](docs/ROUTING_AND_QUOTAS.md) · [Provider adapters](docs/PROVIDER_ADAPTERS.md) |
-| **Understand discovery** | [Discovery and registry](docs/DISCOVERY_AND_REGISTRY.md) · [Free-tier capacity maths](docs/FREE_TIER_CAPACITY.md) |
+| **Understand discovery** | [Discovery and registry](docs/DISCOVERY_AND_REGISTRY.md) · [Live provider discovery and onboarding](docs/LIVE_PROVIDER_DISCOVERY_AND_ONBOARDING.md) · [Agent implementation prompt](docs/LIVE_PROVIDER_DISCOVERY_AGENT_PROMPT.md) · [Free-tier capacity maths](docs/FREE_TIER_CAPACITY.md) |
 | **Configure the service** | [Configuration](docs/CONFIGURATION.md) · [Deployment](docs/DEPLOYMENT.md) |
 | **Operate it** | [Operations runbook](docs/OPERATIONS.md) · [Zero-operations autonomy](docs/ZERO_OPERATIONS_AUTONOMY.md) |
 | **Explore the design** | [Architecture](docs/ARCHITECTURE.md) · [Decision records](docs/adr/) |
