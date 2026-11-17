@@ -137,6 +137,9 @@ async def reserve(
                     QuotaPool.id == p.id,
                     or_(QuotaPool.exhausted_until.is_(None), QuotaPool.exhausted_until <= now),
                     or_(QuotaPool.expires_at.is_(None), QuotaPool.expires_at > now),
+                    # Reset-aware recovery: a pool awaiting recheck admits one in-flight probe at a time
+                    # until a success proves capacity is back (clear_recheck).
+                    or_(QuotaPool.needs_recheck.is_(False), QuotaPool.reserved == 0),
                 ]
                 if p.limit_value is None:
                     if not allow_unknown:
@@ -158,6 +161,8 @@ async def reserve(
                             reason = "expired"
                         elif fresh.exhausted_until is not None and fresh.exhausted_until > now:
                             reason, retry_at = "exhausted", fresh.exhausted_until
+                        elif fresh.needs_recheck and fresh.reserved > 0:
+                            reason, retry_at = "awaiting_recheck", now + timedelta(seconds=2)
                         else:
                             retry_at = next_reset(
                                 QuotaPeriod(fresh.period),

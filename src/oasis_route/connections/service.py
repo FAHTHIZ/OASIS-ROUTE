@@ -391,6 +391,30 @@ async def upsert_models(
     return added
 
 
+async def retire_unlisted_models(
+    session: AsyncSession, provider_id: str, infos: list[ModelInfo]
+) -> list[str]:
+    """Mark discovered (non-curated) models the provider stopped listing as ``removed``.
+
+    Curated catalog entries are left alone: their lifecycle is owned by reviewed catalog data, and some
+    providers list only a subset of models per account. An empty listing is never treated as removal.
+    """
+    if not infos:
+        return []
+    listed = {i.upstream_id for i in infos}
+    rows = (
+        await session.execute(
+            select(Model).where(Model.provider_id == provider_id, Model.lifecycle != "removed")
+        )
+    ).scalars()
+    removed = []
+    for m in rows:
+        if m.upstream_id not in listed and (m.capabilities or {}).get("source") == "adapter_default":
+            m.lifecycle = "removed"
+            removed.append(m.upstream_id)
+    return sorted(removed)
+
+
 @dataclass
 class ValidationResult:
     status: str
@@ -429,13 +453,43 @@ async def validate(ctx: AppContext, connection_id: str, actor_id: str | None = N
             conn.last_validated_at = utcnow()
             conn.last_error = None
             added = await upsert_models(s, target.provider_id, infos, adapter.get_capabilities(""))
+            removed = await retire_unlisted_models(s, target.provider_id, infos)
+            if removed:
+                await notify(
+                    s,
+                    kind="models.removed",
+                    severity="warning",
+                    project_id=conn.project_id,
+                    title=f"{len(removed)} model(s) no longer offered by {target.provider_id}",
+                    body="Routing will skip these models. Pinned requests for them will fail over or "
+                    "return model_not_found.",
+                    facts={"provider": target.provider_id, "models": removed[:50]},
+                    dedupe_key=f"models_removed:{target.provider_id}",
+                )
             if conn.offer_id:
                 from oasis_route.discovery.review import on_connection_validated
 
                 await on_connection_validated(s, conn.offer_id)
         elif error.category in (ErrorCategory.AUTH_INVALID, ErrorCategory.AUTH_EXPIRED):
+            was_active = conn.status == ConnectionStatus.ACTIVE.value
             conn.status = ConnectionStatus.SUSPENDED.value
             conn.last_error = f"{error.category.value}: {error.message}"
+            if was_active:
+                await notify(
+                    s,
+                    kind="connection.suspended",
+                    severity="warning",
+                    project_id=conn.project_id,
+                    title=f"Connection '{conn.display_name}' needs attention",
+                    body="The provider rejected the stored credential during revalidation. Rotate the "
+                    "credential or reconnect the account.",
+                    facts={
+                        "connection_id": conn.id,
+                        "provider": conn.provider_id,
+                        "category": error.category.value,
+                    },
+                    dedupe_key=f"suspended:{conn.id}",
+                )
         else:
             conn.last_error = f"{error.category.value}: {error.message}"
         await audit.record(
