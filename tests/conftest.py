@@ -114,3 +114,63 @@ def upstreams(ctx: AppContext) -> dict[str, object]:
     ctx.resolver = resolver
     ctx.settings.allow_private_upstreams = True
     return states  # type: ignore[return-value]
+
+
+class FakeWeb:
+    """Deterministic public web for discovery tests: url -> (status, headers, body); records requests."""
+
+    def __init__(self) -> None:
+        self.pages: dict[str, tuple[int, dict[str, str], bytes]] = {}
+        self.requests: list[httpx.Request] = []
+        self.dns: dict[str, str] = {}
+        self.sleeps: list[float] = []
+        self.now = 1000.0
+
+    def page(self, url: str, body: str | bytes, status: int = 200, **headers: str) -> None:
+        h = {
+            "content-type": "text/html; charset=utf-8",
+            **{k.replace("_", "-"): v for k, v in headers.items()},
+        }
+        self.pages[url] = (status, h, body.encode() if isinstance(body, str) else body)
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        url = str(request.url)
+        if url not in self.pages:
+            return httpx.Response(404, text="not found")
+        status, headers, body = self.pages[url]
+        etag = headers.get("etag")
+        if etag and request.headers.get("if-none-match") == etag:
+            return httpx.Response(304, headers={"etag": etag})
+        return httpx.Response(status, headers=headers, content=body)
+
+    def fetched(self, url: str) -> int:
+        return sum(1 for r in self.requests if str(r.url) == url)
+
+
+@pytest.fixture
+def web(ctx: AppContext) -> FakeWeb:
+    """Public-web stand-in. Hosts resolve to a public address unless overridden in ``web.dns``."""
+    from oasis_route.discovery.fetcher import fetcher_for
+
+    fw = FakeWeb()
+    ctx.discovery_transport = httpx.MockTransport(fw.handler)
+    previous = ctx.resolver
+
+    async def resolver(host: str, port: int) -> list[str]:
+        if host in fw.dns:
+            return [fw.dns[host]]
+        if host.startswith("mock-") and previous is not None:
+            return await previous(host, port)
+        return ["93.184.216.34"]
+
+    ctx.resolver = resolver
+    f = fetcher_for(ctx)
+
+    async def fake_sleep(s: float) -> None:
+        fw.sleeps.append(s)
+        fw.now += s
+
+    f.sleep = fake_sleep
+    f.clock = lambda: fw.now
+    return fw

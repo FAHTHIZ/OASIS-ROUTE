@@ -429,6 +429,10 @@ async def validate(ctx: AppContext, connection_id: str, actor_id: str | None = N
             conn.last_validated_at = utcnow()
             conn.last_error = None
             added = await upsert_models(s, target.provider_id, infos, adapter.get_capabilities(""))
+            if conn.offer_id:
+                from oasis_route.discovery.review import on_connection_validated
+
+                await on_connection_validated(s, conn.offer_id)
         elif error.category in (ErrorCategory.AUTH_INVALID, ErrorCategory.AUTH_EXPIRED):
             conn.status = ConnectionStatus.SUSPENDED.value
             conn.last_error = f"{error.category.value}: {error.message}"
