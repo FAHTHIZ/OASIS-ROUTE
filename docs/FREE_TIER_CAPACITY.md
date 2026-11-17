@@ -32,6 +32,9 @@ Two request profiles are shown: a **chat** turn (`S = 1,500`) and a **coding-age
 | [Groq](https://console.groq.com/docs/rate-limits) openai/gpt-oss-120b | RPM 30, RPD 1.00K, TPM 8.00K, TPD 200.00K | 6.09M | 0 |
 | [Groq](https://console.groq.com/docs/rate-limits) openai/gpt-oss-20b | RPM 30, RPD 1.00K, TPM 8.00K, TPD 200.00K | 6.09M | 0 |
 | [Groq](https://console.groq.com/docs/rate-limits) qwen/qwen3.8-27b | RPM 30, RPD 1.00K, TPM 8.00K, TPD 200.00K | 6.09M | 0 |
+| [SambaNova](https://docs.sambanova.ai/docs/en/models/rate-limits) DeepSeek-V3.1 | RPM 20, RPD 20, TPD 200.00K | 913.12K | 6.09M |
+| [SambaNova](https://docs.sambanova.ai/docs/en/models/rate-limits) Meta-Llama-3.3-70B-Instruct | RPM 20, RPD 20, TPD 200.00K | 913.12K | 6.09M |
+| [SambaNova](https://docs.sambanova.ai/docs/en/models/rate-limits) gpt-oss-120b | RPM 20, RPD 20, TPD 200.00K | 913.12K | 6.09M |
 | [OpenRouter](https://openrouter.ai/docs/api/reference/limits) all `:free` models (shared) | RPM 20, RPD 50 | 2.28M | 30.44M |
 | [OpenRouter](https://openrouter.ai/docs/api/reference/limits) all `:free` models (shared) | RPM 20, RPD 1.00K | 45.66M | 608.75M |
 | [NVIDIA build.nvidia.com](https://build.nvidia.com/search) most hosted models | RPM 40 | 2.63B | 35.06B |
@@ -42,15 +45,15 @@ Worked example (Groq `openai/gpt-oss-120b`, chat profile): `min(200,000, 1,000 Ã
 
 | Scenario | chat (1,500 tok/request) | coding agent (20,000 tok/request) |
 |---|---|---|
-| A. Published recurring floor (Groq + OpenRouter, no purchase) | 20.55M | 30.44M |
-| B. A + OpenRouter 10-credit unlock | 63.92M | 608.75M |
-| C. B + NVIDIA prototyping ceiling (100% utilisation) | 2.69B | 35.67B |
+| A. Published recurring floor (Groq + SambaNova + OpenRouter, no purchase) | 23.28M | 48.70M |
+| B. A + OpenRouter 10-credit unlock | 66.66M | 627.01M |
+| C. B + NVIDIA prototyping ceiling (100% utilisation) | 2.70B | 35.69B |
 
 How to read this:
 
-- **Scenario A, about 20-30 million tokens a month**, is the honest guaranteed floor from published, recurring, no-purchase limits.
+- **Scenario A, about 23-49 million tokens a month**, is the honest guaranteed floor from published, recurring, no-purchase limits. SambaNova's [rate-limit page](https://docs.sambanova.ai/docs/en/models/rate-limits) says its Free Tier applies while no payment method is linked; its plans page reads differently, so treat that share (about 2.7M chat / 18M agent tokens) as likely rather than certain. Only its three production models are counted.
 - **Scenario B** adds a one-time purchase of 10 OpenRouter credits, which raises the shared free-model cap from 50 to 1,000 requests a day. The credits are only spent if you call paid models. Request-capped pools favour large requests, so agent-style traffic reaches about 0.6 billion tokens a month.
-- **Scenario C** adds NVIDIA's published 40 requests per minute at 100% utilisation, around the clock. That is a mathematical ceiling, not a forecast, and NVIDIA describes the API as free *to prototype with*, so check its terms before routing production traffic there.
+- **Scenario C** adds NVIDIA's published 40 requests per minute at 100% utilisation, around the clock. That is a mathematical ceiling, not a forecast. NVIDIA describes the API as free *to prototype with*, and its [trial terms](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf) allow internal testing and evaluation only, not production. Its model pages also say inputs and outputs are recorded to improve NVIDIA's models, so Oasis Route's built-in NVIDIA provider carries a `trains_on_inputs: true` data policy and is excluded from projects that require no-training.
 
 Unquantified free tiers: they add capacity, but their size is not published.
 
@@ -60,6 +63,10 @@ Unquantified free tiers: they add capacity, but their size is not published.
 - [GitHub Models](https://docs.github.com/en/github-models/use-github-models/prototyping-with-ai-models): retired on 2026-07-30.
 
 Once you connect them, Oasis Route measures these tiers itself. Learned limits appear in the capacity report alongside the published ones.
+
+## Local models
+
+A model on your own hardware has no quota, only a speed limit. Measured on 2026-11-17 with Qwen2.5-0.5B-Instruct Q4_K_M on llama.cpp (2 CPU cores, see [LOCAL_MODELS.md](LOCAL_MODELS.md)): about 27 ms per generated token, or 37 tokens/s. At 100% utilisation that is \(37 \times 86{,}400 \approx 3.2\)M output tokens a day, about 97M a month, from a tiny model on a laptop-class CPU. Larger models and GPUs change this by orders of magnitude in both directions, so measure your own hardware.
 
 ## Comparison with other gateways' claims
 

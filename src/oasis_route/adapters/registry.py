@@ -23,6 +23,15 @@ PROFILES: dict[str, OpenAIProfile] = {
     ),
     "gemini": OpenAIProfile("gemini", default_capabilities=dict(_FULL)),
     "cerebras": OpenAIProfile("cerebras", stream_usage_option=False, default_capabilities=dict(_FULL)),
+    # Catalogues mixing chat, code and base models: only streaming is assumed for every model. Tool and
+    # JSON support is left unknown rather than over-claimed. Usage in streams is estimated when absent.
+    "nvidia": OpenAIProfile("nvidia", stream_usage_option=False, default_capabilities={"streaming": True}),
+    "sambanova": OpenAIProfile(
+        "sambanova", stream_usage_option=False, default_capabilities={"streaming": True}
+    ),
+    "huggingface": OpenAIProfile(
+        "huggingface", stream_usage_option=False, default_capabilities={"streaming": True}
+    ),
     "custom": OpenAIProfile("custom", stream_usage_option=False),
     "mock": OpenAIProfile("mock", default_capabilities=dict(_FULL)),
     "mock_alt": OpenAIProfile("mock_alt", default_capabilities=dict(_FULL)),

@@ -55,12 +55,19 @@ class Pool:
 GROQ = "https://console.groq.com/docs/rate-limits"
 OPENROUTER = "https://openrouter.ai/docs/api/reference/limits"
 NVIDIA = "https://build.nvidia.com/search"
+SAMBANOVA = "https://docs.sambanova.ai/docs/en/models/rate-limits"
 
 # Published, recurring free limits (chat models only). Groq limits are per model per organization.
 FLOOR: tuple[Pool, ...] = (
     Pool("Groq", "openai/gpt-oss-120b", rpm=30, rpd=1_000, tpm=8_000, tpd=200_000, source=GROQ),
     Pool("Groq", "openai/gpt-oss-20b", rpm=30, rpd=1_000, tpm=8_000, tpd=200_000, source=GROQ),
     Pool("Groq", "qwen/qwen3.8-27b", rpm=30, rpd=1_000, tpm=8_000, tpd=200_000, source=GROQ),
+    # SambaNova Free Tier (no payment method linked), per production model. Preview models are left out
+    # because they "may be removed at short notice". Its plans page reads differently; see the doc.
+    *(
+        Pool("SambaNova", m, rpm=20, rpd=20, tpd=200_000, source=SAMBANOVA)
+        for m in ("DeepSeek-V3.1", "Meta-Llama-3.3-70B-Instruct", "gpt-oss-120b")
+    ),
     Pool(
         "OpenRouter",
         "all `:free` models (shared)",
@@ -147,7 +154,7 @@ def main() -> None:
     print("| Scenario | " + " | ".join(names) + " |")
     print("|---|" + "---|" * len(names))
     print(
-        "| A. Published recurring floor (Groq + OpenRouter, no purchase) | "
+        "| A. Published recurring floor (Groq + SambaNova + OpenRouter, no purchase) | "
         + " | ".join(fmt(floor[n]) for n in names)
         + " |"
     )
