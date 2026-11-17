@@ -80,7 +80,7 @@ Every test session applies the real Alembic migrations, so migrations are tested
 ```text
 src/oasis_route/
   api/            HTTP routers (gateway, management, status, discovery, mail)
-  adapters/       provider adapters (OpenAI-compatible profiles incl. Gemini/Groq/Mistral/OpenRouter/Cerebras, Anthropic)
+  adapters/       provider adapters (OpenAI-compatible profiles incl. Gemini/Groq/Mistral/OpenRouter/Cerebras/NVIDIA/SambaNova/Hugging Face, Anthropic)
   gateway/        request parsing, failover engine, streaming relay, idempotency
   routing/        candidate building and strongest-suitable-first ranking
   quota/          atomic reservation ledger, windows, observations

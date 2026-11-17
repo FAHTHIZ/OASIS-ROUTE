@@ -63,7 +63,7 @@ Oasis Route is working software. The implementation roadmap in [docs/EXECUTION_P
 | Anthropic Messages API (`/v1/messages`, streaming, tool use) for Claude Code and Anthropic SDKs | Implemented |
 | OpenAI Responses API (`/v1/responses`, streaming, function calls; stateless) for Codex CLI and `client.responses` | Implemented |
 | `auto` / `auto/<task>` model aliases; heuristic priors order unrated models strongest-first | Implemented |
-| Adapters: OpenAI, Anthropic, Gemini (OpenAI-compatible endpoint), Groq, Mistral, OpenRouter, Cerebras, custom OpenAI-compatible | Implemented |
+| Adapters: OpenAI, Anthropic, Gemini (OpenAI-compatible endpoint), Groq, Mistral, OpenRouter, Cerebras, NVIDIA API Catalog, SambaNova, Hugging Face router, custom OpenAI-compatible (llama.cpp, Ollama, vLLM) | Implemented |
 | Encrypted credential vault (envelope encryption, KEK rotation with automatic re-wrap) | Implemented |
 | Atomic quota ledger: reservations, settlement, shared pools, windows, header learning | Implemented |
 | Strongest-suitable-first routing with explainable decisions and route preview | Implemented |

@@ -10,6 +10,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Provider seeds: NVIDIA API Catalog (`https://integrate.api.nvidia.com/v1`, data policy recorded from its trial terms: inputs are used to improve NVIDIA models, so privacy-restricted projects exclude it), SambaNova Cloud and the Hugging Face Inference Providers router.
 - OpenAI Responses API: `POST /v1/responses` (string or item input, function calls, JSON formats, images, streaming events with sequence numbers), stateless, routed through the same engine as chat completions. Codex CLI now works with `wire_api = "responses"`; see [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 - README: one-command trial (`uvx --from git+https://github.com/FAHTHIZ/OASIS-ROUTE oasis-route dev`) and `uv tool install` instructions, both verified against `main`.
 - [docs/LOCAL_MODELS.md](docs/LOCAL_MODELS.md): connecting llama.cpp, Ollama and vLLM as providers, with a verified end-to-end run against a real local model.

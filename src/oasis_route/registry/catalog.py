@@ -4,9 +4,11 @@ This is a seed, not a source of truth. ``sync_catalog`` only inserts rows that a
 made through the admin registry API (data policy, eligibility, quality evidence) are never overwritten.
 
 Facts we cannot verify from a primary source at build time are left **unknown** (``None`` / empty):
-- ``data_policy`` keys (``trains_on_inputs``, ``zero_retention``) are unset for every real provider. Projects
-  that require no-training or zero-retention therefore exclude these providers until an operator records the
-  policy with an evidence URL. Unknown never satisfies a privacy requirement.
+- ``data_policy`` keys (``trains_on_inputs``, ``zero_retention``) are unset for real providers unless a
+  primary source states them. NVIDIA's API Catalog says inputs are recorded to improve its models, so it is
+  seeded as ``trains_on_inputs: True`` with that URL. Projects requiring no-training or zero-retention exclude
+  providers with unknown policy until an operator records it with an evidence URL. Unknown never satisfies a
+  privacy requirement.
 - Model quality is not seeded for real providers. Models discovered through ``list_models`` are *unrated* and
   rank below rated models; operators attach task-specific scores with source/date/methodology/confidence.
 - Eligibility values below are taken from each provider's published terms as linked in ``terms_url`` and must
@@ -114,6 +116,48 @@ PROVIDERS: tuple[ProviderSeed, ...] = (
         "openai_chat",
         ("cerebras.ai", "inference-docs.cerebras.ai"),
         terms_url="https://www.cerebras.ai/terms-of-service",
+    ),
+    ProviderSeed(
+        "nvidia",
+        "NVIDIA API Catalog (NIM)",
+        "openai_compatible",
+        "https://integrate.api.nvidia.com/v1",
+        "openai_chat",
+        ("nvidia.com", "build.nvidia.com", "docs.api.nvidia.com", "integrate.api.nvidia.com"),
+        terms_url="https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf",
+        min_age=18,
+        # build.nvidia.com: "Your input and output will be recorded ... to improve NVIDIA products and
+        # services, including AI models". Recorded so no-training / zero-retention projects exclude it.
+        data_policy={
+            "trains_on_inputs": True,
+            "zero_retention": False,
+            "source": "https://build.nvidia.com/openai/gpt-oss-20b/deploy",
+        },
+        notes="Free prototyping access (rate-limited, about 40 RPM for most models). The trial terms "
+        "allow internal testing and evaluation only, not production use. " + REVIEW_NOTE,
+    ),
+    ProviderSeed(
+        "sambanova",
+        "SambaNova Cloud",
+        "openai_compatible",
+        "https://api.sambanova.ai/v1",
+        "openai_chat",
+        ("sambanova.ai", "docs.sambanova.ai", "cloud.sambanova.ai"),
+        terms_url="https://sambanova.ai/cloud-end-user-license-agreement",
+        notes="Free tier applies while no payment method is linked (per-model RPM, RPD and TPD limits, "
+        "https://docs.sambanova.ai/docs/en/models/rate-limits). " + REVIEW_NOTE,
+    ),
+    ProviderSeed(
+        "huggingface",
+        "Hugging Face Inference Providers",
+        "openai_compatible",
+        "https://router.huggingface.co/v1",
+        "openai_chat",
+        ("huggingface.co", "router.huggingface.co"),
+        terms_url="https://huggingface.co/terms-of-service",
+        notes="OpenAI-compatible router for chat models. Billed against Hugging Face credits; PRO and "
+        "Team accounts include monthly credits (https://huggingface.co/docs/inference-providers/pricing). "
+        + REVIEW_NOTE,
     ),
     ProviderSeed(
         "custom",
