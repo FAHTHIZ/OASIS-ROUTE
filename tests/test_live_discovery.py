@@ -339,3 +339,57 @@ async def test_billing_trial_and_card_claims() -> None:
     assert kinds["usage_scope"] == {"evaluation_only": True}
     billing = disc._billing_from(ex.claims)
     assert billing["card_required"] is False and billing["trial_days"] == 30
+
+
+async def test_gzip_responses_are_decoded_once(ctx: AppContext, web: FakeWeb) -> None:
+    """Most CDNs serve robots.txt and docs gzip-encoded; a double decode used to read as 'disallowed'."""
+    import gzip
+
+    from oasis_route.discovery.fetcher import fetcher_for
+
+    web.page(
+        "https://gz.example.com/robots.txt",
+        gzip.compress(b"User-agent: *\nAllow: /\n"),
+        content_type="text/plain",
+        content_encoding="gzip",
+    )
+    web.page(
+        "https://gz.example.com/docs",
+        gzip.compress(b"<h1>Free tier</h1><p>30 requests per minute</p>"),
+        content_encoding="gzip",
+    )
+    res = await fetcher_for(ctx).fetch("https://gz.example.com/docs", min_interval_s=0)
+    assert res.status == 200 and "30 requests per minute" in res.text
+
+
+def test_frontier_skips_account_and_privacy_pages() -> None:
+    from oasis_route.discovery.urls import is_frontier_candidate
+
+    assert is_frontier_candidate("https://huggingface.co/pricing")
+    assert is_frontier_candidate("https://docs.mistral.ai/admin/billing-usage/usage-limits")
+    for url in (
+        "https://huggingface.co/settings/billing",
+        "https://admin.mistral.ai/organization/usage",
+        "https://chat.mistral.ai/upgrade/plans",
+        "https://www.nvidia.com/en-us/about-nvidia/privacy-policy",
+    ):
+        assert not is_frontier_candidate(url), url
+
+
+async def test_paid_provider_rate_limits_are_not_called_a_free_tier(
+    client: httpx.AsyncClient, web: FakeWeb
+) -> None:
+    admin = await _admin(client)
+    url = "https://platform.claude.com/docs/en/api/rate-limits"
+    web.page("https://platform.claude.com/robots.txt", "User-agent: *\nAllow: /\n", content_type="text/plain")
+    web.page(
+        url,
+        "<h2>Rate limits</h2><p>Start building for free with a funded account.</p>"
+        "<p>Tier 1 organizations can make 50 requests per minute.</p>",
+    )
+    sid = await _official_source(client, admin, url, provider="anthropic")
+    body = (await client.post(f"/api/v1/admin/sources/{sid}/run", headers=auth(admin))).json()
+    assert len(body["offers"]) == 1, body
+    offer = (await client.get(f"/api/v1/offers/{body['offers'][0]}", headers=auth(admin))).json()
+    assert offer["access_mode"] == "rate_limits" and offer["offer_class"] == "paid"
+    assert "free tier" not in offer["title"].lower()
