@@ -33,47 +33,26 @@ def _context(s: Settings) -> Any:
 
 
 def _cmd_serve(args: argparse.Namespace) -> int:
+    """Run the API. By default the process also supervises the background worker (zero-ops)."""
     import uvicorn
 
     from oasis_route.app import create_app
 
+    if args.no_worker:
+        os.environ["OASIS_ROUTE_WORKER_MODE"] = "external"
+        get_settings.cache_clear()
     s = get_settings()
     if args.migrate:
         from oasis_route.db import migrate
 
         migrate.upgrade(s.database_url)
-    if not args.with_worker:
-        uvicorn.run(
-            create_app(s),
-            host=args.host or s.host,
-            port=args.port or s.port,
-            log_config=None,
-            proxy_headers=True,
-        )
-        return 0
-
-    async def _run() -> None:
-        from oasis_route.worker.runner import run_forever
-
-        ctx = _context(s)
-        server = uvicorn.Server(
-            uvicorn.Config(
-                create_app(s, ctx),
-                host=args.host or s.host,
-                port=args.port or s.port,
-                log_config=None,
-                proxy_headers=True,
-            )
-        )
-        stop = asyncio.Event()
-        worker = asyncio.create_task(run_forever(ctx, stop))
-        try:
-            await server.serve()
-        finally:
-            stop.set()
-            await worker
-
-    asyncio.run(_run())
+    uvicorn.run(
+        create_app(s),
+        host=args.host or s.host,
+        port=args.port or s.port,
+        log_config=None,
+        proxy_headers=True,
+    )
     return 0
 
 
@@ -93,7 +72,7 @@ def _cmd_worker(args: argparse.Namespace) -> int:
             if args.once:
                 print(json.dumps(await run_once(ctx), default=str, indent=2))
             else:
-                await run_forever(ctx)
+                await run_forever(ctx, mode="standalone")
         finally:
             await ctx.aclose()
 
@@ -176,7 +155,6 @@ def _cmd_dev(args: argparse.Namespace) -> int:
     async def _run() -> None:
         from oasis_route.connections import service as conns
         from oasis_route.registry.catalog import sync_catalog
-        from oasis_route.worker.runner import run_forever
 
         ctx = _context(s)
         await sync_catalog(ctx.db, s)
@@ -229,15 +207,12 @@ def _cmd_dev(args: argparse.Namespace) -> int:
             '-d \'{"model":"auto","messages":[{"role":"user","content":"hello"}]}\'\n',
             flush=True,
         )
-        stop = asyncio.Event()
-        worker = asyncio.create_task(run_forever(ctx, stop))
         try:
-            await api.serve()
+            await api.serve()  # the app lifespan supervises the embedded worker
         finally:
-            stop.set()
             for x in servers:
                 x.should_exit = True
-            await asyncio.gather(worker, *tasks, return_exceptions=True)
+            await asyncio.gather(*tasks, return_exceptions=True)
             await ctx.aclose()
 
     with contextlib.suppress(KeyboardInterrupt):
@@ -258,7 +233,11 @@ def build_parser() -> argparse.ArgumentParser:
     sv.add_argument("--host")
     sv.add_argument("--port", type=int)
     sv.add_argument("--migrate", action="store_true", help="apply migrations before starting")
-    sv.add_argument("--with-worker", action="store_true", help="also run background jobs in this process")
+    sv.add_argument(
+        "--no-worker",
+        action="store_true",
+        help="do not supervise background jobs in this process (run `oasis-route worker` separately)",
+    )
     sv.set_defaults(func=_cmd_serve)
 
     w = sub.add_parser("worker", help="run background jobs (safe to run on several hosts)")

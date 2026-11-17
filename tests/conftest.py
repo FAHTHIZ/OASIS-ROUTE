@@ -62,6 +62,7 @@ def settings(db_url: str) -> Settings:
         log_level="WARNING",
         admin_bootstrap_token="bootstrap-test-token",
         breaker_base_cooldown_s=1.0,
+        worker_mode="off",
     )
 
 

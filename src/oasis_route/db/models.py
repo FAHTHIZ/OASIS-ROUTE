@@ -28,6 +28,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.sql.expression import false as sa_false
 
 NAMING = {
     "ix": "ix_%(column_0_label)s",
@@ -108,6 +109,8 @@ class Project(Base):
     # reservable; when True, they are reservable but reported as "unknown" capacity.
     allow_unknown_quota: Mapped[bool] = mapped_column(Boolean, default=False)
     kill_switch: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Pauses background maintenance (revalidation, quota rechecks) for this project; routing is unaffected.
+    automation_paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
     rate_limit_rpm: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = _created()
 
@@ -522,3 +525,24 @@ class WorkerLease(Base):
     lease_until: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     last_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_result: Mapped[str | None] = mapped_column(Text)
+    # Observability and scheduling (0002). ``next_run_at`` drives scheduling, including failure backoff.
+    next_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_started_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_success_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_duration_ms: Mapped[int | None] = mapped_column(Integer)
+    last_error: Mapped[str | None] = mapped_column(String(300))
+    consecutive_failures: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    run_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
+
+
+class WorkerInstance(Base):
+    """Heartbeat row per running worker loop; used to detect a stalled or missing worker."""
+
+    __tablename__ = "worker_instances"
+    holder: Mapped[str] = mapped_column(String(100), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False)
+    version: Mapped[str] = mapped_column(String(40), default="")
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    heartbeat_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    stopped_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
