@@ -106,6 +106,7 @@ application and tests that exercise it. Evidence for each release gate:
 | P7 UX, CLI, deployment | `test_cli.py`, `test_zero_ops.py` (one-credential onboarding end to end, supervised worker, stall alerts), CI compose smoke test |
 | P8 optional mail | `test_notifications.py` |
 | P9 release readiness | `test_resilience.py` (seeded fault injection under concurrency), CI supply-chain job (pip-audit, licenses, gitleaks, SBOM), Trivy, `scripts/install_check.sh`, `scripts/upgrade_check.sh`, [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) |
+| P10 live discovery and onboarding | `test_live_discovery.py` (seeds, catalogues, tables, frontier, candidates, gzip, price-schedule and paid-tier guards), `test_spend_policy.py`, `test_hf_oauth.py`, `test_oauth_connections.py`, `test_discover_view.py`, plus a manual run against the 17 live seed sources on 2026-11-17 |
 | Data rights (export, erasure, retention) | `test_data_rights.py`, `test_worker.py::test_record_retention_is_opt_in_and_prunes_only_old_rows` |
 
 Open items are tracked as known limitations in the [README](../README.md#known-limitations), not as

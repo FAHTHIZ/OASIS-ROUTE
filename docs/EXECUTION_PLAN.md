@@ -99,6 +99,22 @@ This plan is deliberately sequential. A coding agent should deliver working vert
 
 **Acceptance:** release checklist signed off; no critical/high unresolved security findings; install and upgrade paths verified.
 
+## P10 — Live provider discovery and onboarding
+
+Scope from [LIVE_PROVIDER_DISCOVERY_AND_ONBOARDING.md](LIVE_PROVIDER_DISCOVERY_AND_ONBOARDING.md).
+
+- [x] Maintainer-reviewed seed sources for official docs and public catalogues; frontier expansion within official domains; provider candidates from catalogues.
+- [x] Structured extraction: OpenRouter and Hugging Face catalogues, HTML rate-limit tables, credits, trials, card requirements, expiry, usage scope.
+- [x] Free-only spend policy (default for new projects), per-connection billing modes, `paid_route_blocked` / `cost_unknown` route rejections, explicit acknowledgement to allow paid routes.
+- [x] Account sync: OpenRouter key status (free tier, credits, free-model daily quota) and Hugging Face billing status (`canPay`).
+- [x] Official sign-in: OpenRouter PKCE key exchange; Hugging Face OAuth 2.0 + PKCE with a Client ID Metadata Document and background token refresh.
+- [x] Discover catalogue API and console tab with access requirements, verified offers, evidence links and next actions.
+- [ ] Device-code sign-in (Hugging Face publishes a device endpoint; not wired yet).
+- [ ] Announcement and GitHub release feeds as sources; permitted search APIs.
+- [ ] Re-extraction of unchanged pages after an extractor upgrade.
+
+**Acceptance:** nothing discovered is shown to users or used for routing before a reviewer cites evidence; free-only projects never route to a connection whose cost is paid or unknown.
+
 ## Prioritization rule
 
 Do not begin broad internet crawling before the offer schema, evidence model, policy checks, and adapter contracts exist. Do not build Gmail before the gateway and security posture. The MVP is one provider end-to-end plus a correct gateway/router/ledger, not hundreds of scraped listings.
