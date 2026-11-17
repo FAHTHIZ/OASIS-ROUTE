@@ -52,3 +52,32 @@ jobs:
           python-version: "3.12"
       - run: uv sync --locked
       - run: uv run pytest
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t oasis-route:ci .
+      - name: Validate compose file
+        run: |
+          printf 'POSTGRES_PASSWORD=ci\nOASIS_ROUTE_MASTER_KEY=%s\nOASIS_ROUTE_API_KEY_PEPPER=%s\n' \
+            "$(python3 -c 'import os,base64;print(base64.b64encode(os.urandom(32)).decode())')" \
+            "$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')" > .env
+          docker compose config -q
+      - name: Smoke test the default deployment
+        run: |
+          docker compose up -d --build api
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/readyz; then break; fi; sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/readyz | tee /tmp/ready.json
+          grep -q '"status":"ready"' /tmp/ready.json
+          sleep 20
+          curl -fsS http://127.0.0.1:8080/readyz | grep -q '"worker":"running"'
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
