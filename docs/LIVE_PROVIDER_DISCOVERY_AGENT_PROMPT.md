@@ -10,8 +10,7 @@ Read these documents before changing code:
 4. `docs/DISCOVERY_AND_REGISTRY.md`
 5. `docs/ZERO_OPERATIONS_AUTONOMY.md`
 6. `docs/SECURITY_AND_COMPLIANCE.md`
-7. `docs/SECURITY_AND_COMPLIANCE.md`
-8. `docs/FREE_TIER_CAPACITY.md`
+7. `docs/FREE_TIER_CAPACITY.md`
 9. `docs/PROVIDER_ADAPTERS.md`
 10. `docs/ROUTING_AND_QUOTAS.md`
 11. `docs/OPERATIONS.md`
