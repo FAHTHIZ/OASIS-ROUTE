@@ -27,12 +27,14 @@ class AppContext:
     # Upstream HTTP transport override (tests inject deterministic mock transports here).
     upstream_transport: httpx.AsyncBaseTransport | None = None
     discovery_transport: httpx.AsyncBaseTransport | None = None
+    google_transport: httpx.AsyncBaseTransport | None = None  # Gmail OAuth/API (tests inject a fake)
     # DNS resolver used by SSRF checks (tests inject a fake resolver).
     resolver: Resolver | None = None
     # Process-local helpers (e.g. the discovery fetcher with robots cache and per-domain budgets).
     extras: dict[str, Any] = field(default_factory=dict, repr=False)
     _upstream_client: httpx.AsyncClient | None = field(default=None, repr=False)
     _discovery_client: httpx.AsyncClient | None = field(default=None, repr=False)
+    _google_client: httpx.AsyncClient | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if self.vault is None:
@@ -71,9 +73,20 @@ class AppContext:
             )
         return self._discovery_client
 
+    @property
+    def google_client(self) -> httpx.AsyncClient:
+        if self._google_client is None:
+            self._google_client = httpx.AsyncClient(
+                transport=self.google_transport,
+                follow_redirects=False,
+                timeout=httpx.Timeout(20.0),
+                headers={"user-agent": "OasisRoute/0.1"},
+            )
+        return self._google_client
+
     async def aclose(self) -> None:
-        for c in (self._upstream_client, self._discovery_client):
+        for c in (self._upstream_client, self._discovery_client, self._google_client):
             if c is not None:
                 await c.aclose()
-        self._upstream_client = self._discovery_client = None
+        self._upstream_client = self._discovery_client = self._google_client = None
         await self.db.dispose()

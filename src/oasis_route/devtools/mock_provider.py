@@ -47,6 +47,13 @@ class MockProviderState:
     omit_usage: bool = False
     stream_chunk_delay_s: float = 0.0
     stream_fail_after_chunks: int | None = None  # emit an in-stream error event after N content chunks
+    revoked: bool = False  # simulate the upstream revoking/expiring every key
+    hidden_models: set[str] = field(default_factory=set)  # simulate upstream model removal
+    # Models listed upstream but absent from the curated catalog (exercises discovered-model sync).
+    extra_models: list[dict[str, Any]] = field(default_factory=list)
+
+    def listed(self) -> list[dict[str, Any]]:
+        return [m for m in (*MODELS, *self.extra_models) if m["id"] not in self.hidden_models]
 
     def fail_next(
         self,
@@ -86,7 +93,7 @@ def create_mock_provider(state: MockProviderState | None = None) -> FastAPI:
     def _auth(request: Request) -> JSONResponse | None:
         auth = request.headers.get("authorization", "")
         key = auth[7:] if auth.lower().startswith("bearer ") else ""
-        if not key.startswith("mock-") or key == "mock-invalid":
+        if not key.startswith("mock-") or key == "mock-invalid" or st.revoked:
             return JSONResponse(
                 {
                     "error": {
@@ -111,7 +118,8 @@ def create_mock_provider(state: MockProviderState | None = None) -> FastAPI:
     async def models(request: Request) -> JSONResponse:
         if (err := _auth(request)) is not None:
             return err
-        return JSONResponse({"object": "list", "data": [{"object": "model", **m} for m in MODELS]})
+        data = [{"object": "model", **m} for m in st.listed()]
+        return JSONResponse({"object": "list", "data": data})
 
     @app.post("/_control/fail")
     async def control(body: dict[str, Any]) -> dict[str, str]:
@@ -136,7 +144,7 @@ def create_mock_provider(state: MockProviderState | None = None) -> FastAPI:
         if st.failures.get(model):
             f = st.failures[model].popleft()
             return JSONResponse(f.body, status_code=f.status, headers=f.headers)
-        if model not in {m["id"] for m in MODELS}:
+        if model not in {m["id"] for m in st.listed()}:
             return JSONResponse(
                 {
                     "error": {

@@ -90,6 +90,12 @@ class Settings(BaseSettings):
     gmail_client_id: str | None = None
     gmail_client_secret: SecretStr | None = None
     gmail_redirect_uri: str | None = None
+    mail_facts_retention_days: int = Field(default=30, ge=1, le=365)
+    mail_forwarding_enabled: bool = Field(
+        default=True,
+        description="Accept user-forwarded provider notices. Only extracted facts are stored; "
+        "raw mail is discarded.",
+    )
 
     otel_enabled: bool = False
 

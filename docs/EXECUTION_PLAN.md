@@ -62,8 +62,8 @@ This plan is deliberately sequential. A coding agent should deliver working vert
 ## P6 — Health, recovery, capacity
 - [x] Health state and circuit breakers.
 - [x] Cooldowns and Retry-After handling.
-- [ ] Reset-aware recovery checks.
-- [ ] Advertised/verified/authorized/usable capacity calculations.
+- [x] Reset-aware recovery checks.
+- [x] Advertised/verified/authorized/usable capacity calculations.
 - [ ] Usage and routing dashboard.
 - [ ] OpenTelemetry instrumentation.
 
