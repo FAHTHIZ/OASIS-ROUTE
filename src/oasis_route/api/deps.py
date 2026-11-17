@@ -72,10 +72,11 @@ async def authenticate_key(ctx: AppContext, session: AsyncSession, plaintext: st
     return Principal(user=user, project=project, key=key)
 
 
-async def get_principal(
-    request: Request, ctx: AppContext = Depends(get_ctx), session: AsyncSession = Depends(get_session)
-) -> Principal:
-    p = await authenticate_key(ctx, session, extract_bearer(request))
+async def get_principal(request: Request, ctx: AppContext = Depends(get_ctx)) -> Principal:
+    # Authenticate in a short transaction of its own so long-running requests (gateway calls, connection
+    # validation) never hold a database write transaction open across network I/O.
+    async with ctx.db.transaction() as session:
+        p = await authenticate_key(ctx, session, extract_bearer(request))
     limit = p.project.rate_limit_rpm or ctx.settings.rate_limit_per_key_rpm
     ok, retry = ctx.limiter.check(f"key:{p.key.id}", limit)
     if not ok:
@@ -114,7 +115,7 @@ async def project_access(
         raise NotFound("project not found")
     if write and ApiKeyScope.MANAGE.value not in p.scopes:
         raise Forbidden("API key lacks scope 'manage'")
-    project = p.project if project_id == p.project.id else await session.get(Project, project_id)
+    project = await session.get(Project, project_id)
     if project is None:
         raise NotFound("project not found")
     return project

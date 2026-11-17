@@ -25,6 +25,7 @@ PROFILES: dict[str, OpenAIProfile] = {
     "cerebras": OpenAIProfile("cerebras", stream_usage_option=False, default_capabilities=dict(_FULL)),
     "custom": OpenAIProfile("custom", stream_usage_option=False),
     "mock": OpenAIProfile("mock", default_capabilities=dict(_FULL)),
+    "mock_alt": OpenAIProfile("mock_alt", default_capabilities=dict(_FULL)),
 }
 
 
