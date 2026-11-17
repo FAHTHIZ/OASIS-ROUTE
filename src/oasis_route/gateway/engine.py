@@ -180,6 +180,7 @@ def parse_body(body: Any, project: Project, settings_default_max: int) -> Parsed
         require=require,
         input_tokens=estimate_tokens_from_messages(messages, chat.tools),
         max_output_tokens=max_tokens or settings_default_max,
+        free_only=ext.get("free_only") is True,  # can only tighten the project's spend policy
     )
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str)
     return ParsedRequest(

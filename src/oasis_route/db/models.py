@@ -370,6 +370,8 @@ class Connection(Base):
     # free_tier (user declares the upstream account has no billing / is on a free plan) | paid | unknown.
     # Under a free_only project only free_tier connections or provably zero-priced models are routable.
     billing_mode: Mapped[str] = mapped_column(String(20), default="unknown", server_default="unknown")
+    # Provider-reported account facts from the last validation (free tier flag, credit limit/remaining, ...).
+    account_status: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, server_default="{}")
     last_validated_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_error: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str | None] = mapped_column(String(36))

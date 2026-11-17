@@ -65,6 +65,7 @@ Optional routing controls go in an `oasis_route` object:
 | `allow_fallback` | `true` | Fail over to other eligible candidates on retryable errors. |
 | `allow_downgrade` | project `allow_downgrade` | Allow falling back to a lower-quality model. A project setting of `false` cannot be overridden per request. |
 | `providers` | all | Restrict routing to these provider ids. |
+| `free_only` | project `spend_policy` | `true` restricts this request to provably free capacity. It can only tighten a project's policy, never loosen it (see [ROUTING_AND_QUOTAS.md](ROUTING_AND_QUOTAS.md#21-spend-policy-never-silently-incur-paid-usage)). |
 | `require` | inferred | Extra capabilities to require (`tools`, `vision`, `json_mode`, ...). Required features are also inferred from the request itself. |
 
 Every successful response says who actually served it, both in headers and in the body:
@@ -195,7 +196,7 @@ All paths are under `/api/v1`. Project-scoped endpoints require the key's own pr
 | `POST` | `/projects/{id}/connections/oauth/{flow_id}/complete` | Finish a `manual` flow: `{"code"}`. Creates and validates the connection; returns `{connection_id, validation}`. A rejected code returns `502 oauth_failed`; start a new flow to retry. |
 | `GET` | `/oauth/callback` | Browser redirect target for `redirect` flows (no Oasis Key; authenticated by the single-use `state`). Shows a short confirmation page and links back to the console. The callback base URL comes from `OASIS_ROUTE_PUBLIC_URL` when set. |
 | `GET` | `/projects/{id}/connections`, `/projects/{id}/connections/{cid}` | Connections with status and health. Never includes the secret. |
-| `PATCH` | `/projects/{id}/connections/{cid}` | Change name, priority, allowed models. |
+| `PATCH` | `/projects/{id}/connections/{cid}` | Change name, priority, allowed models, or `billing_mode` (`free_tier`, `paid`, `unknown`). Connections also report `account_status` when the provider documents an account endpoint (OpenRouter). |
 | `POST` | `/projects/{id}/connections/{cid}/validate` | Re-check now. |
 | `POST` | `/projects/{id}/connections/{cid}/rotate-credential` | Replace the stored provider credential. |
 | `DELETE` | `/projects/{id}/connections/{cid}` | Revoke the connection and destroy its stored credential. |

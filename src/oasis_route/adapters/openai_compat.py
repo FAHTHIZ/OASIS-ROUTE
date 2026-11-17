@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from oasis_route.adapters.base import (
+    AccountStatus,
     AdapterMetadata,
     ChatRequest,
     ChatResult,
@@ -233,9 +234,46 @@ class OpenAICompatibleAdapter:
                         or None,
                         max_output_tokens=max_out,
                         capabilities=caps,
+                        free=_reported_free(conn.provider_id, it),
                     )
                 )
         return out
+
+    async def account_status(self, conn: ConnectionContext) -> AccountStatus | None:
+        """Read the account's own credit/free-tier status where the provider documents an endpoint for it.
+
+        OpenRouter: ``GET /api/v1/key`` (https://openrouter.ai/docs/api/reference/limits). Failures return
+        ``None``; validation never depends on this call.
+        """
+        if conn.provider_id != "openrouter":
+            return None
+        try:
+            r = await conn.client.get(
+                self._url(conn, "/key"), headers=self._headers(conn), timeout=timeout_for(conn)
+            )
+            if r.status_code != 200:
+                return None
+            data = json.loads(r.content).get("data")
+        except (httpx.HTTPError, ValueError, AttributeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+
+        def num(v: Any) -> float | None:
+            return float(v) if isinstance(v, int | float) and not isinstance(v, bool) else None
+
+        fm = data.get("free_model_daily_requests")
+        fm = fm if isinstance(fm, dict) else {}
+        lim, used = num(fm.get("limit")), num(fm.get("used"))
+        return AccountStatus(
+            free_tier=data["is_free_tier"] if isinstance(data.get("is_free_tier"), bool) else None,
+            credit_limit=num(data.get("limit")),
+            credit_remaining=num(data.get("limit_remaining")),
+            usage_total=num(data.get("usage")),
+            free_model_daily_limit=int(lim) if lim is not None else None,
+            free_model_daily_used=int(used) if used is not None else None,
+            source="https://openrouter.ai/api/v1/key",
+        )
 
     async def validate_connection(self, conn: ConnectionContext) -> list[ModelInfo]:
         return await self.list_models(conn)
@@ -432,3 +470,24 @@ def infer_capabilities(item: dict[str, Any]) -> tuple[dict[str, Any], int | None
             max_out = raw
             break
     return caps, max_out
+
+
+def _is_zero(v: Any) -> bool:
+    try:
+        return float(v) == 0.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _reported_free(provider_id: str, item: dict[str, Any]) -> bool | None:
+    """Zero-priced per the provider's own model list (OpenRouter publishes ``pricing`` and ``:free``)."""
+    pricing = item.get("pricing")
+    if isinstance(pricing, dict) and "prompt" in pricing and "completion" in pricing:
+        return (
+            _is_zero(pricing["prompt"])
+            and _is_zero(pricing["completion"])
+            and (pricing.get("request") is None or _is_zero(pricing.get("request")))
+        )
+    if provider_id == "openrouter" and str(item.get("id", "")).endswith(":free"):
+        return True  # OpenRouter's documented free variant suffix
+    return None

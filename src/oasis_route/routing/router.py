@@ -48,6 +48,7 @@ class RouteOptions:
     require: set[str] = field(default_factory=set)  # required capabilities
     input_tokens: int = 0
     max_output_tokens: int = 0
+    free_only: bool = False  # per-request tightening; a free_only project is always free-only
 
 
 @dataclass
@@ -70,6 +71,7 @@ class Candidate:
     priority: int
     preference_rank: int
     prior: float | None = None  # heuristic ordering hint for unrated models; never quality evidence
+    cost_basis: str = "unknown"  # free_model | free_tier_account | local | paid | unknown
 
     def describe(self) -> dict[str, Any]:
         d = asdict(self)
@@ -98,6 +100,7 @@ class RoutePlan:
     rejected: list[Rejection]
     best_quality: float | None
     pinned: bool
+    free_only: bool = False
 
     def is_downgrade(self, c: Candidate) -> bool:
         if self.best_quality is None:
@@ -110,6 +113,7 @@ class RoutePlan:
             "task": self.options.task.value,
             "mode": self.options.mode.value,
             "best_quality": self.best_quality,
+            "free_only": self.free_only,
             "candidates": [c.describe() for c in self.candidates],
             "rejected": [r.describe() for r in self.rejected],
         }
@@ -121,6 +125,29 @@ def quality_of(model: Model, task: Task) -> tuple[float | None, str | None]:
     if isinstance(entry, dict) and isinstance(entry.get("score"), int | float):
         return float(entry["score"]), str(entry.get("source") or "")
     return None, None
+
+
+SPEND_FREE_ONLY = "free_only"
+SPEND_ALLOW_PAID = "allow_paid"
+
+
+def cost_basis(conn: Connection, provider: Provider, model: Model) -> str:
+    """Why a (connection, model) pair costs nothing, or ``paid`` / ``unknown``.
+
+    A pair is provably free when the model is published at zero price in the provider's own catalogue
+    (``Model.pricing.free``), the user declared the upstream account a free-tier account with no billing
+    (``Connection.billing_mode == "free_tier"``), or the provider is a local development mock.
+    Everything else is ``paid`` (explicitly billed) or ``unknown``; neither is routable under ``free_only``.
+    """
+    if "local" in (provider.regions or []):
+        return "local"
+    if (model.pricing or {}).get("free") is True:
+        return "free_model"
+    if conn.billing_mode == "free_tier":
+        return "free_tier_account"
+    if conn.billing_mode == "paid":
+        return "paid"
+    return "unknown"
 
 
 def _model_matches(m: Model, name: str) -> bool:
@@ -274,6 +301,7 @@ async def build_plan(
             Rejection(pinned_provider or "*", name, None, "model_not_found_in_authorized_connections")
         )
 
+    free_only = opts.free_only or (project.spend_policy or SPEND_FREE_ONLY) == SPEND_FREE_ONLY
     survivors: list[Candidate] = []
     static_ok_quality: list[float | None] = []
     for c in conns:
@@ -311,6 +339,17 @@ async def build_plan(
             if conn_reason:
                 rejected.append(Rejection(prov.id, m.upstream_id, c.id, conn_reason))
                 continue
+            basis = cost_basis(c, prov, m)
+            if free_only and basis in ("paid", "unknown"):
+                rejected.append(
+                    Rejection(
+                        prov.id,
+                        m.upstream_id,
+                        c.id,
+                        "paid_route_blocked" if basis == "paid" else "cost_unknown",
+                    )
+                )
+                continue
             reason = _capability_reason(m, opts, explicit=not auto)
             q, q_src = quality_of(m, opts.task)
             if reason is None and opts.min_quality is not None and (q is None or q < opts.min_quality):
@@ -332,7 +371,7 @@ async def build_plan(
                 for p in pools_all
                 if p.provider_id == prov.id
                 and p.account_scope == c.upstream_account_ref
-                and p.model_scope in ("*", m.upstream_id)
+                and p.model_scope in ledger.scopes_for(m.upstream_id)
             ]
             q_reason, frac, reset_in, metered = _quota_view(pools, now, project.allow_unknown_quota)
             if q_reason:
@@ -359,12 +398,13 @@ async def build_plan(
                     priority=c.priority,
                     preference_rank=opts.providers.index(prov.id) if prov.id in opts.providers else 0,
                     prior=model_prior(m.upstream_id, opts.task) if q is None else None,
+                    cost_basis=basis,
                 )
             )
 
     rated = [q for q in static_ok_quality if q is not None]
     best = max(rated) if rated else None
-    plan = RoutePlan(opts, [], rejected, best, pinned_provider is not None or not auto)
+    plan = RoutePlan(opts, [], rejected, best, pinned_provider is not None or not auto, free_only)
     final: list[Candidate] = []
     for cand in survivors:
         if not opts.allow_downgrade and plan.is_downgrade(cand):

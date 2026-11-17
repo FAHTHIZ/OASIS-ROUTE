@@ -14,20 +14,40 @@ from __future__ import annotations
 
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oasis_route.adapters.base import ConnectionContext, ModelInfo
+from oasis_route.adapters.base import AccountStatus, ConnectionContext, ModelInfo
+from oasis_route.connections.access import access_for
 from oasis_route.context import AppContext
-from oasis_route.db.models import Connection, Credential, Endpoint, Model, Offer, Provider, User, utcnow
-from oasis_route.domain.enums import AuthMethod, ConnectionStatus, ErrorCategory, OfferState
+from oasis_route.db.models import (
+    Connection,
+    Credential,
+    Endpoint,
+    Model,
+    Offer,
+    Provider,
+    QuotaPool,
+    User,
+    utcnow,
+)
+from oasis_route.domain.enums import (
+    AuthMethod,
+    ConnectionStatus,
+    ErrorCategory,
+    OfferState,
+    QuotaPeriod,
+    QuotaSource,
+    QuotaUnit,
+)
 from oasis_route.domain.errors import Conflict, NotFound, PolicyViolation, UpstreamError, ValidationFailed
 from oasis_route.identity import audit
 from oasis_route.notifications.service import notify
+from oasis_route.quota.ledger import FREE_MODELS_SCOPE
 from oasis_route.security.ssrf import UnsafeUrlError, assert_safe_url
 from oasis_route.security.vault import SealedSecret
 
@@ -36,6 +56,7 @@ _NON_CHAT = re.compile(
     r"(embed|whisper|tts|dall-e|moderation|image|audio|transcri|rerank|speech|guard|realtime)", re.I
 )
 CONNECTABLE_OFFER_STATES = {OfferState.CONNECTABLE.value, OfferState.ACTIVE.value}
+
 _LOCAL_PROVIDERS = {"custom", "mock", "mock_alt"}
 
 
@@ -108,6 +129,7 @@ class ConnectionInput:
     priority: int = 0
     allowed_models: list[str] | None = None
     accept_terms: bool = False
+    billing_mode: str | None = None  # free_tier | paid | unknown; None == provider default (see access.py)
 
 
 def _validate_base_url_scope(provider: Provider, base_url: str) -> None:
@@ -236,6 +258,7 @@ async def create_connection(
         credential_id=cred_id,
         priority=data.priority,
         allowed_models=list(data.allowed_models or []),
+        billing_mode=data.billing_mode or access_for(provider.id).default_billing_mode,
         eligibility_ack={
             "accepted_terms": data.accept_terms,
             "terms_url": provider.terms_url,
@@ -389,6 +412,8 @@ async def upsert_models(
                 merged = {**current, **info.capabilities}
                 if merged != current:
                     m.capabilities = merged
+            if info.free is not None:
+                _set_reported_price(m, info.free)
             if m.lifecycle == "removed":
                 m.lifecycle = "active"
             continue
@@ -397,6 +422,7 @@ async def upsert_models(
             caps["chat"] = False
         session.add(
             Model(
+                pricing=_reported_pricing(info.free) if info.free is not None else {},
                 provider_id=provider_id,
                 upstream_id=info.upstream_id,
                 display_name=info.display_name or info.upstream_id,
@@ -411,6 +437,16 @@ async def upsert_models(
         added += 1
     await session.flush()
     return added
+
+
+def _reported_pricing(free: bool) -> dict[str, Any]:
+    return {"free": free, "source": "provider_model_list", "observed_at": utcnow().isoformat()}
+
+
+def _set_reported_price(m: Model, free: bool) -> None:
+    current = m.pricing or {}
+    if current.get("free") is not free or current.get("source") != "provider_model_list":
+        m.pricing = {**current, **_reported_pricing(free)}
 
 
 async def retire_unlisted_models(
@@ -461,9 +497,13 @@ async def validate(ctx: AppContext, connection_id: str, actor_id: str | None = N
     adapter = ctx.adapters.for_provider(target.provider_id, target.adapter_key)
     infos: list[ModelInfo] = []
     error: UpstreamError | None = None
+    account: AccountStatus | None = None
     try:
         cctx = await connection_context(ctx, target)
         infos = await adapter.validate_connection(cctx)
+        status_fn = getattr(adapter, "account_status", None)
+        if status_fn is not None:
+            account = await status_fn(cctx)
     except UpstreamError as exc:
         error = exc
     async with ctx.db.transaction() as s:
@@ -476,6 +516,8 @@ async def validate(ctx: AppContext, connection_id: str, actor_id: str | None = N
             conn.last_error = None
             added = await upsert_models(s, target.provider_id, infos, adapter.get_capabilities(""))
             removed = await retire_unlisted_models(s, target.provider_id, infos)
+            if account is not None:
+                await _apply_account_status(s, conn, account)
             if removed:
                 await notify(
                     s,
@@ -530,6 +572,56 @@ async def validate(ctx: AppContext, connection_id: str, actor_id: str | None = N
             error=error.message if error else None,
             category=error.category.value if error else None,
         )
+
+
+async def _apply_account_status(s: AsyncSession, conn: Connection, account: AccountStatus) -> None:
+    """Record provider-reported account facts; may only *tighten* or fill an unknown billing mode.
+
+    An account the provider reports as free tier (no purchased credits) cannot be billed, so an ``unknown``
+    billing mode becomes ``free_tier``. A user-declared ``paid`` mode is never relaxed, and an account
+    that has purchased credits flips a stale ``free_tier`` back to ``unknown`` so free-only projects stop
+    routing its paid models. The provider's free-model daily ceiling is mirrored into the quota ledger.
+    """
+    conn.account_status = {**asdict(account), "observed_at": utcnow().isoformat()}
+    if account.free_tier is True and conn.billing_mode == "unknown":
+        conn.billing_mode = "free_tier"
+    elif account.free_tier is False and conn.billing_mode == "free_tier":
+        conn.billing_mode = "unknown"
+    if account.free_model_daily_limit:
+        pool = (
+            await s.execute(
+                select(QuotaPool).where(
+                    QuotaPool.project_id == conn.project_id,
+                    QuotaPool.provider_id == conn.provider_id,
+                    QuotaPool.account_scope == conn.upstream_account_ref,
+                    QuotaPool.model_scope == FREE_MODELS_SCOPE,
+                    QuotaPool.unit == QuotaUnit.REQUESTS.value,
+                    QuotaPool.period == QuotaPeriod.DAY.value,
+                )
+            )
+        ).scalar_one_or_none()
+        if pool is None:
+            pool = QuotaPool(
+                project_id=conn.project_id,
+                provider_id=conn.provider_id,
+                account_scope=conn.upstream_account_ref,
+                model_scope=FREE_MODELS_SCOPE,
+                unit=QuotaUnit.REQUESTS.value,
+                period=QuotaPeriod.DAY.value,
+                rolling=False,
+                used=0,
+                reserved=0,
+                window_start=utcnow(),
+                confidence=0.9,
+            )
+            s.add(pool)
+        pool.limit_value = account.free_model_daily_limit
+        pool.source = QuotaSource.PROVIDER_API.value
+        pool.last_verified_at = utcnow()
+        if account.free_model_daily_used is not None:
+            pool.observed_remaining = max(0, account.free_model_daily_limit - account.free_model_daily_used)
+            pool.observed_at = utcnow()
+            pool.used = max(pool.used or 0, account.free_model_daily_used)
 
 
 async def suspend_for_auth(

@@ -139,6 +139,21 @@ class ModelInfo:
     context_window: int | None = None
     max_output_tokens: int | None = None
     capabilities: dict[str, Any] = field(default_factory=dict)
+    # True when the provider's own authenticated model list prices this model at zero; None == not reported.
+    free: bool | None = None
+
+
+@dataclass
+class AccountStatus:
+    """Provider-reported facts about the connected account (never secrets)."""
+
+    free_tier: bool | None = None  # True == the account cannot be billed (e.g. never purchased credits)
+    credit_limit: float | None = None
+    credit_remaining: float | None = None
+    usage_total: float | None = None
+    free_model_daily_limit: int | None = None
+    free_model_daily_used: int | None = None
+    source: str = ""
 
 
 @dataclass(frozen=True)
