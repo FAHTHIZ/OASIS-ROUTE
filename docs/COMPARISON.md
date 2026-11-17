@@ -30,7 +30,7 @@ Reviewed on 2026-11-17 against the most-starred open-source LLM gateways and rou
 | Task-aware routing | — | Yes (`auto/<task>`) | — | Conditional rules | Experiments | — | Yes (`auto`, `auto/<task>`) |
 | Response caching | Yes | Yes | — | Yes | — | Yes | No |
 | Guardrails or PII masking | Yes | Yes | — | Yes | — | Yes | No |
-| Web dashboard | Yes | Yes | Yes | — | Yes | Yes | No (API and CLI) |
+| Web dashboard | Yes | Yes | Yes | — | Yes | Yes | Yes (`/console/`) |
 | Published container image | Yes | Yes | Yes | — | Yes | Yes | No (build from `Dockerfile`) |
 | Quotas learned from response headers | — | — | — | — | — | — | Yes |
 | Provider terms, age and multi-account checks | — | — | — | — | — | — | Yes |
@@ -43,7 +43,7 @@ Reviewed on 2026-11-17 against the most-starred open-source LLM gateways and rou
 - **Surface area.** LiteLLM and new-api cover embeddings, images, audio, batches and rerank. Oasis Route only routes text generation.
 - **Install.** OmniRoute, Bifrost and Portkey start with one `npx` or `docker run`. Oasis Route needs `uv` (one command) or a Docker build.
 - **Provider count.** OmniRoute lists hundreds of providers and LiteLLM over a hundred. Oasis Route seeds ten real providers and accepts any OpenAI-compatible endpoint.
-- **Operations features.** Caching, guardrails, dashboards and experiment tooling (TensorZero) are not in scope yet.
+- **Operations features.** Caching, guardrails, cost and spend analytics, and experiment tooling (TensorZero) are not in scope yet. The built-in console covers overview, capacity, connections, keys, models, route preview, usage, offers and notices.
 
 ## Where Oasis Route is different
 

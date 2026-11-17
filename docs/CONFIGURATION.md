@@ -115,6 +115,14 @@ The `retention.records` job applies these hourly.
 
 Prometheus metrics are always available at `GET /metrics` (do not expose it publicly).
 
+## Local all-in-one (`oasis-route dev`)
+
+`oasis-route dev` always runs with `OASIS_ROUTE_ENVIRONMENT=development` (it overrides the production value set in the container image), SQLite, private upstreams allowed and the two mock providers enabled. It is for trying Oasis Route, not for serving traffic.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `OASIS_ROUTE_DEV_STATE_DIR` | `.oasis-dev` (`/data/dev` in the image) | Where `dev` keeps its SQLite database and `admin.key`. `--state-dir` overrides it. |
+
 ## Per-project settings
 
 Routing behaviour that varies per project is stored in the database and changed through `PATCH /api/v1/projects/{id}` rather than environment variables: `routing_mode` (`strict_quality` or `balanced`), `max_fallback_hops`, `allow_downgrade`, `allow_unknown_quota`, `data_policy` (no-training, zero-retention, allowed regions, provider allow/deny lists), `rate_limit_rpm`, and `kill_switch`. Background maintenance can be paused per project with `PUT /api/v1/projects/{id}/automation`.

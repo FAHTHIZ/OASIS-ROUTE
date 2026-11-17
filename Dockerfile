@@ -15,7 +15,8 @@ FROM python:3.12-slim AS runtime
 RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 RUN python -m pip uninstall -y pip setuptools wheel || true
 RUN groupadd --system --gid 10001 oasis \
- && useradd --system --uid 10001 --gid oasis --home-dir /app --shell /usr/sbin/nologin oasis
+ && useradd --system --uid 10001 --gid oasis --home-dir /app --shell /usr/sbin/nologin oasis \
+ && install -d -o oasis -g oasis /data
 WORKDIR /app
 COPY --from=build --chown=oasis:oasis /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -24,7 +25,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     OASIS_ROUTE_HOST=0.0.0.0 \
     OASIS_ROUTE_PORT=8080 \
     OASIS_ROUTE_ENVIRONMENT=production \
-    OASIS_ROUTE_WORKER_MODE=embedded
+    OASIS_ROUTE_WORKER_MODE=embedded \
+    OASIS_ROUTE_DEV_STATE_DIR=/data/dev
 USER oasis
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

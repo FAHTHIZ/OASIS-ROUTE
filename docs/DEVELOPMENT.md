@@ -64,7 +64,7 @@ make test-pg    # same suite on PostgreSQL (OASIS_TEST_DATABASE_URL)
 make check      # lint + type + test
 ```
 
-CI runs lint, the full suite on SQLite and on PostgreSQL 16, a container build with a vulnerability scan (Trivy) and a smoke test of the default compose deployment, and supply-chain checks: dependency audit (pip-audit), license compatibility (`scripts/check_licenses.py`), secret scanning over the full history (gitleaks) and a CycloneDX SBOM. Run the same checks locally with `make audit`. Tagged releases (`v*`) build distributions and a GHCR image with SBOM and signed build provenance.
+CI runs lint, the full suite on SQLite and on PostgreSQL 16, a container build with a vulnerability scan (Trivy) and a smoke test of the default compose deployment, and supply-chain checks: dependency audit (pip-audit), license compatibility (`scripts/check_licenses.py`), secret scanning over the full history (gitleaks) and a CycloneDX SBOM. Run the same checks locally with `make audit`. It also runs `docker run <image> dev` and checks a chat completion. Every green push to `main` publishes `ghcr.io/fahthiz/oasis-route:edge`; tagged releases (`v*`) build distributions and a versioned GHCR image with SBOM and signed build provenance.
 
 To run the PostgreSQL suite locally:
 
