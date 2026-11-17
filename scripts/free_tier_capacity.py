@@ -131,14 +131,16 @@ def main() -> None:
     print("|---|---|" + "---|" * len(names))
     for p in (*FLOOR, OPENROUTER_UNLOCKED, NVIDIA_CEILING):
         limits = ", ".join(
-            f"{k.upper()} {fmt(v)}" for k, v in (("rpm", p.rpm), ("rpd", p.rpd), ("tpm", p.tpm), ("tpd", p.tpd)) if v
+            f"{k.upper()} {fmt(v)}"
+            for k, v in (("rpm", p.rpm), ("rpd", p.rpd), ("tpm", p.tpm), ("tpd", p.tpd))
+            if v
         )
         cells = " | ".join(fmt(p.monthly(s)) for s in PROFILES.values())
         print(f"| [{p.provider}]({p.source}) {p.model} | {limits} | {cells} |")
     print()
     floor = {n: scenario(FLOOR, s) for n, s in PROFILES.items()}
     unlocked = {
-        n: scenario(tuple(p for p in FLOOR if p.provider != "OpenRouter") + (OPENROUTER_UNLOCKED,), s)
+        n: scenario((*(p for p in FLOOR if p.provider != "OpenRouter"), OPENROUTER_UNLOCKED), s)
         for n, s in PROFILES.items()
     }
     ceiling = {n: unlocked[n] + NVIDIA_CEILING.monthly(s) for n, s in PROFILES.items()}
@@ -151,7 +153,9 @@ def main() -> None:
     )
     print("| B. A + OpenRouter 10-credit unlock | " + " | ".join(fmt(unlocked[n]) for n in names) + " |")
     print(
-        "| C. B + NVIDIA prototyping ceiling (100% utilisation) | " + " | ".join(fmt(ceiling[n]) for n in names) + " |"
+        "| C. B + NVIDIA prototyping ceiling (100% utilisation) | "
+        + " | ".join(fmt(ceiling[n]) for n in names)
+        + " |"
     )
     print()
     for name, why, url in UNQUANTIFIED:
