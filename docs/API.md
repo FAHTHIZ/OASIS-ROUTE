@@ -154,6 +154,10 @@ All paths are under `/api/v1`. Project-scoped endpoints require the key's own pr
 | `POST` | `/projects/{id}/keys/{key_id}/rotate` | Issue a replacement key and revoke the old one. |
 | `DELETE` | `/projects/{id}/keys/{key_id}` | Revoke a key. |
 | `GET` | `/projects/{id}/audit`, `/audit` | Audit trail for a project, or the whole instance (administrators). |
+| `GET` | `/projects/{id}/export` | Project owners: download everything stored for the project (settings, members, key metadata, connection metadata, pools, usage, routing decisions, notifications, audit). Never contains Oasis Key hashes, provider credentials or OAuth material. |
+| `DELETE` | `/projects/{id}` | Project owners: body `{"confirm": "<project id>"}`. Destroys every stored provider credential, revokes the project's Oasis Keys and deletes its data. Irreversible. Returns counts of what was removed. |
+| `GET` | `/users/{id}/export` | The user themself or an administrator: profile, memberships, notifications, mail grants, audit events they performed, and a full export of every project they own. |
+| `DELETE` | `/users/{id}` | The user themself or an administrator: body `{"confirm": "<user id>"}`. Deletes the account, its owned projects, its keys, mail grants and stored credentials. `409` if an owned project has other members or if it is the last active administrator. |
 
 ### Providers, models and connections
 
@@ -217,5 +221,5 @@ All paths are under `/api/v1`. Project-scoped endpoints require the key's own pr
 | Path | Response |
 |---|---|
 | `GET /healthz` | `200 {"status":"ok"}` while the process is up. |
-| `GET /readyz` | `200 {"status":"ready","schema_revision":"0002","worker":"running"}` when the database is reachable and migrated; `503` otherwise. `worker` is `running`, `degraded`, `stalled` or `disabled` and never fails readiness, because the gateway keeps working without background jobs. |
+| `GET /readyz` | `200 {"status":"ready","schema_revision":"0004","worker":"running"}` when the database is reachable and migrated; `503` otherwise. `worker` is `running`, `degraded`, `stalled` or `disabled` and never fails readiness, because the gateway keeps working without background jobs. |
 | `GET /metrics` | Prometheus metrics: HTTP, gateway requests, upstream attempts and latency, fallbacks, tokens, reservations, open circuits, discovery fetches, worker job runs and restarts. |

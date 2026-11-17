@@ -90,6 +90,8 @@ Re-wrapping only touches the 32-byte data keys; provider secrets are never decry
 | Notifications | until `delete_after` (mail facts: `OASIS_ROUTE_MAIL_FACTS_RETENTION_DAYS`) | `retention.records` |
 | Idempotency records | 24 hours | `retention.records` |
 | Discovery evidence | per-source policy | `retention.evidence` |
-| Usage records, route decisions, audit events | kept; prune with SQL if your policy requires it | none |
+| Usage records, route decisions, audit events | kept by default; `OASIS_ROUTE_USAGE_RETENTION_DAYS`, `OASIS_ROUTE_ROUTE_DECISION_RETENTION_DAYS`, `OASIS_ROUTE_AUDIT_RETENTION_DAYS` | `retention.records` |
 
 Deleting a connection destroys its stored credential immediately. `DELETE /api/v1/mail/data` removes all mail-derived notices for a user.
+
+**Export and erasure requests.** `GET /api/v1/projects/{id}/export` and `GET /api/v1/users/{id}/export` return everything stored, without secrets. `DELETE /api/v1/projects/{id}` and `DELETE /api/v1/users/{id}` (body `{"confirm": "<id>"}`) destroy the stored provider credentials first, then delete the rows. The audit events recording what happened are kept until the audit retention removes them. Deleting a user also deletes the projects they own; it refuses if an owned project has other members, or if it would remove the last active administrator.

@@ -111,6 +111,11 @@ class Settings(BaseSettings):
         "raw mail is discarded.",
     )
 
+    # Record retention. 0 keeps records forever (the default); otherwise the retention job deletes older rows.
+    usage_retention_days: int = Field(default=0, ge=0, description="Usage records. 0 = keep.")
+    route_decision_retention_days: int = Field(default=0, ge=0, description="Routing decisions. 0 = keep.")
+    audit_retention_days: int = Field(default=0, ge=0, description="Audit events. 0 = keep.")
+
     otel_enabled: bool = False
 
     @field_validator("log_level")
