@@ -38,7 +38,7 @@ Options: `--port`, `--mock-port`, `--state-dir`. Delete the state directory to s
 
 ### Connecting a real provider locally
 
-In the console, open **Connections**, choose a provider, paste your own API key and accept the provider terms. Oasis Route validates it with a non-billable model-list call, synchronizes models, and starts routing to it. To point a connection at a local model server (Ollama, vLLM, llama.cpp) set `OASIS_ROUTE_ALLOW_PRIVATE_UPSTREAMS=true` first; this is off by default because it disables SSRF protection for connections.
+In the console, open **Connections**, choose a provider, paste your own API key and accept the provider terms. Oasis Route validates it with a non-billable model-list call, synchronizes models, and starts routing to it. To point a connection at a local model server (Ollama, vLLM, llama.cpp) set `OASIS_ROUTE_ALLOW_PRIVATE_UPSTREAMS=true` first; this is off by default because it disables SSRF protection for connections. See [LOCAL_MODELS.md](LOCAL_MODELS.md).
 
 ## Other commands
 
