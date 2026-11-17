@@ -48,3 +48,31 @@ async def connect_mock(
     assert r.status_code == 201, r.text
     data: dict[str, Any] = r.json()
     return data
+
+
+async def gateway_setup(client: httpx.AsyncClient, *, two_providers: bool = True) -> dict[str, Any]:
+    """Admin + a user project with mock (mock-a.test) and optionally mock_alt (mock-b.test) connected."""
+    admin = await bootstrap(client)
+    u = await create_user(
+        client, admin["api_key"]["secret"], "dev@example.com", declared_age=30, country="BD"
+    )
+    key, pid = u["api_key"]["secret"], u["project"]["id"]
+    a = await connect_mock(client, key, pid, provider="mock", host="mock-a.test")
+    out = {"admin": admin["api_key"]["secret"], "key": key, "pid": pid, "conn_a": a}
+    if two_providers:
+        out["conn_b"] = await connect_mock(client, key, pid, provider="mock_alt", host="mock-b.test")
+    return out
+
+
+async def chat(
+    client: httpx.AsyncClient,
+    key: str,
+    model: str = "auto",
+    content: str = "hi",
+    *,
+    headers: dict[str, str] | None = None,
+    **extra: Any,
+) -> httpx.Response:
+    body = {"model": model, "messages": [{"role": "user", "content": content}], **extra}
+    h = {**auth(key), **(headers or {})}
+    return await client.post("/v1/chat/completions", json=body, headers=h)

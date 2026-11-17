@@ -360,12 +360,13 @@ async def apply_observations(
                     or_(QuotaPool.model_scope == upstream_model, QuotaPool.model_scope == "*"),
                 )
                 .order_by(QuotaPool.model_scope.desc())
+                .with_for_update()  # row lock: header folding must not clobber concurrent reservations
             )  # exact model scope before "*"
             pool = (await s.execute(q)).scalars().first()
             if pool is None:
                 if ob.limit is None:
                     continue
-                pool = QuotaPool(
+                created = QuotaPool(
                     project_id=project_id,
                     provider_id=provider_id,
                     account_scope=account_scope,
@@ -380,8 +381,15 @@ async def apply_observations(
                     source=QuotaSource.RESPONSE_HEADERS.value,
                     confidence=0.8,
                 )
-                s.add(pool)
-                await s.flush()
+                try:
+                    async with s.begin_nested():
+                        s.add(created)
+                    pool = created
+                except IntegrityError:
+                    # A concurrent request created the same observed pool first: use theirs.
+                    pool = (await s.execute(q)).scalars().first()
+                    if pool is None:  # pragma: no cover - deleted between insert and re-read
+                        continue
             if pool.limit_value is None and ob.limit is not None:
                 pool.limit_value = ob.limit
                 pool.source = QuotaSource.RESPONSE_HEADERS.value

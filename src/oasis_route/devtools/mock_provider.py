@@ -46,6 +46,7 @@ class MockProviderState:
     delay_s: float = 0.0
     omit_usage: bool = False
     stream_chunk_delay_s: float = 0.0
+    stream_fail_after_chunks: int | None = None  # emit an in-stream error event after N content chunks
 
     def fail_next(
         self,
@@ -178,7 +179,11 @@ def create_mock_provider(state: MockProviderState | None = None) -> FastAPI:
                 return f"data: {json.dumps(obj)}\n\n".encode()
 
             yield c({"role": "assistant", "content": ""})
-            for word in text.split(" "):
+            for i, word in enumerate(text.split(" ")):
+                if st.stream_fail_after_chunks is not None and i >= st.stream_fail_after_chunks:
+                    err = {"error": {"message": "mock mid-stream failure", "type": "server_error"}}
+                    yield f"data: {json.dumps(err)}\n\n".encode()
+                    return
                 if st.stream_chunk_delay_s:
                     await asyncio.sleep(st.stream_chunk_delay_s)
                 yield c({"content": word + " "})
