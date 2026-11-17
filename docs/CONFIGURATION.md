@@ -83,6 +83,7 @@ Production also refuses `OASIS_ROUTE_GMAIL_ENABLED=true` without `OASIS_ROUTE_GM
 | `OASIS_ROUTE_DISCOVERY_SOURCES_PER_TICK` | `10` | Upper bound on sources fetched per worker run. |
 | `OASIS_ROUTE_DISCOVERY_MAX_PENDING_SUBMISSIONS_PER_USER` | `20` | Limits unreviewed source submissions from non-admins. |
 | `OASIS_ROUTE_OFFER_STALE_AFTER_DAYS` | `30` | Offers whose evidence has not been re-confirmed for this long are marked stale and stop being routable. |
+| `OASIS_ROUTE_HF_OAUTH_CLIENT_ID` | empty | Client id of a public Hugging Face OAuth app used for "Sign in with Hugging Face" (scopes `openid profile read-billing inference-api`). When empty and `OASIS_ROUTE_PUBLIC_URL` is https, the server serves its own Client ID Metadata Document at `/.well-known/oauth-cimd` and uses that URL as the client id, so no registration is needed. Otherwise Hugging Face is connected with an API key. |
 | `OASIS_ROUTE_DISCOVERY_SEED_SOURCES` | `true` | Register the built-in, maintainer-reviewed official provider pages and public model catalogues (`discovery/seeds.py`) at startup and daily. Existing rows are never modified; set `false` to run with only the sources you add. |
 | `OASIS_ROUTE_DISCOVERY_FRONTIER_ENABLED` | `true` | Follow links from approved official pages to more access/pricing/limits/models pages on the same provider's official domains. |
 | `OASIS_ROUTE_DISCOVERY_FRONTIER_MAX_DEPTH` | `1` | Link-following depth from a seed or admin-approved source (0 disables following). |

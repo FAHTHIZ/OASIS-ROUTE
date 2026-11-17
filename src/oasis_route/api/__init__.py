@@ -24,4 +24,5 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(mail.router)
     app.include_router(automation.router)
     app.include_router(oauth.router)
+    app.include_router(oauth.wellknown)
     app.include_router(gateway.router)

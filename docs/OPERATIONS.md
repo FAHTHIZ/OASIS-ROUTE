@@ -27,6 +27,8 @@ Suggested alerts: `/readyz` failing for 2 minutes; `worker` not `running` for 10
 
 **One job keeps failing:** the Background tab shows the error class. `ConnectError` or `TimeoutError` on `discovery.sources` usually means a source site is down; it backs off on its own. Use **Pause** to silence a job while you investigate and **Run now** to verify a fix.
 
+**OAuth token refresh:** `connections.oauth_refresh` (every 10 minutes) renews provider OAuth tokens that expire within 30 minutes, using the provider's refresh grant. If the provider refuses, the connection moves to `suspended` with reason `auth_expired` and appears under Action required; reconnect it with **Sign in** again. Nothing is retried in a loop.
+
 **Pause per project:** `PUT /api/v1/projects/{id}/automation {"paused": true}` (or the button on the Overview page) stops credential checks, health probes and quota refresh for that project only. Routing keeps working.
 
 ## Backup and restore

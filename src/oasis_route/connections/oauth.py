@@ -1,5 +1,15 @@
 """Official provider OAuth connections (authorization code + PKCE).
 
+Two documented flow kinds are supported:
+
+- ``key_exchange`` (OpenRouter, https://openrouter.ai/docs/guides/overview/auth/oauth): the code is exchanged
+  for a user-scoped API key. No client registration is needed.
+- ``oauth2_pkce`` (Hugging Face, https://huggingface.co/docs/hub/oauth): standard OAuth 2.0 authorization
+  code with PKCE for a *public* client. The access token is scoped to ``inference-api`` (Inference Providers
+  on the user's behalf) and refreshed by the worker with the documented ``refresh_token`` grant. The client
+  id is either an operator-registered app (``OASIS_ROUTE_HF_OAUTH_CLIENT_ID``) or, when ``public_url`` is
+  https, this deployment's own Client ID Metadata Document served at ``/.well-known/oauth-cimd``.
+
 Only providers that publish a first-party OAuth flow for third-party apps are listed in ``SPECS``. The user
 signs in on the provider's own site and approves; the provider returns a single-use code that Oasis Route
 exchanges for a credential scoped to that user's account. Oasis Route never sees the user's password and never
@@ -20,7 +30,7 @@ import hashlib
 import hmac
 import secrets
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
@@ -40,12 +50,21 @@ CALLBACK_PATH = "/api/v1/oauth/callback"
 BINDING_COOKIE = "oasis_oauth_binding"
 
 
+CIMD_PATH = "/.well-known/oauth-cimd"
+REFRESH_MARGIN = timedelta(minutes=30)
+
+
 @dataclass(frozen=True)
 class OAuthSpec:
     provider_id: str
     authorize_url: str
     exchange_url: str
     docs_url: str
+    kind: str = "key_exchange"  # key_exchange | oauth2_pkce
+    scope: str = ""
+    client_id_setting: str | None = None  # Settings attribute holding a registered client id
+    supports_cimd: bool = False  # provider accepts a Client ID Metadata Document URL as client_id
+    manual_mode: bool = True  # provider can display the code for headless completion
 
 
 SPECS: dict[str, OAuthSpec] = {
@@ -55,7 +74,55 @@ SPECS: dict[str, OAuthSpec] = {
         exchange_url="https://openrouter.ai/api/v1/auth/keys",
         docs_url="https://openrouter.ai/docs/guides/overview/auth/oauth",
     ),
+    # https://huggingface.co/.well-known/openid-configuration (checked 2026-11-17): S256 PKCE, refresh_token
+    # grant, client_id_metadata_document_supported. read-billing exposes only whether a payment method exists.
+    "huggingface": OAuthSpec(
+        provider_id="huggingface",
+        authorize_url="https://huggingface.co/oauth/authorize",
+        exchange_url="https://huggingface.co/oauth/token",
+        docs_url="https://huggingface.co/docs/hub/oauth",
+        kind="oauth2_pkce",
+        scope="openid profile read-billing inference-api",
+        client_id_setting="hf_oauth_client_id",
+        supports_cimd=True,
+        manual_mode=False,
+    ),
 }
+
+
+def client_id_for(ctx: AppContext, spec: OAuthSpec) -> str | None:
+    """The OAuth client id to use, or ``None`` when this deployment cannot use the provider's flow."""
+    if spec.kind != "oauth2_pkce":
+        return ""
+    configured = str(getattr(ctx.settings, spec.client_id_setting or "", "") or "").strip()
+    if configured:
+        return configured
+    public = (ctx.settings.public_url or "").rstrip("/")
+    if spec.supports_cimd and public.startswith("https://"):
+        return public + CIMD_PATH
+    return None
+
+
+def available(ctx: AppContext, provider_id: str) -> bool:
+    spec = SPECS.get(provider_id)
+    return spec is not None and client_id_for(ctx, spec) is not None
+
+
+def cimd_document(ctx: AppContext) -> dict[str, Any] | None:
+    """Client ID Metadata Document for this deployment (public client, no secret)."""
+    public = (ctx.settings.public_url or "").rstrip("/")
+    if not public.startswith("https://"):
+        return None
+    return {
+        "client_id": public + CIMD_PATH,
+        "client_name": "Oasis Route",
+        "client_uri": public + "/console/",
+        "redirect_uris": [public + CALLBACK_PATH],
+        "token_endpoint_auth_method": "none",
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "scope": SPECS["huggingface"].scope,
+    }
 
 
 class OAuthFailed(AppError):
@@ -96,8 +163,20 @@ async def start(
     if spec is None:
         raise ValidationFailed(
             "this provider does not offer an official OAuth flow; connect it with an API key",
-            details={"oauth_providers": sorted(SPECS)},
+            details={"oauth_providers": sorted(k for k in SPECS if available(ctx, k))},
         )
+    client_id = client_id_for(ctx, spec)
+    if client_id is None:
+        raise ValidationFailed(
+            f"{provider_id} sign-in needs a registered OAuth app or an https public_url on this server; "
+            "connect it with an API key instead",
+            details={
+                "setting": f"OASIS_ROUTE_{(spec.client_id_setting or '').upper()}",
+                "docs": spec.docs_url,
+            },
+        )
+    if not redirect and not spec.manual_mode:
+        raise ValidationFailed(f"{provider_id} sign-in only supports the browser redirect mode")
     if not accept_terms:
         raise ValidationFailed(
             "you must confirm you hold this account yourself and accept the provider's terms"
@@ -125,21 +204,36 @@ async def start(
         )
         session.add(flow)
         await session.flush()
-        sealed = ctx.vault_.seal({"code_verifier": verifier}, _aad(flow.id))
+        redirect_uri = callback_url(ctx, request_base_url)
+        sealed = ctx.vault_.seal(
+            {"code_verifier": verifier, "redirect_uri": redirect_uri, "client_id": client_id}, _aad(flow.id)
+        )
         cred = Credential(
             kek_id=sealed.kek_id, wrapped_dek=sealed.wrapped_dek, ciphertext=sealed.ciphertext, aad=sealed.aad
         )
         session.add(cred)
         await session.flush()
         flow.verifier_credential_id = cred.id
-        params: dict[str, str] = {
-            "code_challenge": _challenge(verifier),
-            "code_challenge_method": "S256",
-            "key_label": f"Oasis Route ({flow.display_name})"[:60],
-        }
-        if redirect:
-            params["callback_url"] = callback_url(ctx, request_base_url)
-            params["state"] = state
+        params: dict[str, str]
+        if spec.kind == "oauth2_pkce":
+            params = {
+                "response_type": "code",
+                "client_id": str(client_id),
+                "redirect_uri": redirect_uri,
+                "scope": spec.scope,
+                "state": state,
+                "code_challenge": _challenge(verifier),
+                "code_challenge_method": "S256",
+            }
+        else:
+            params = {
+                "code_challenge": _challenge(verifier),
+                "code_challenge_method": "S256",
+                "key_label": f"Oasis Route ({flow.display_name})"[:60],
+            }
+            if redirect:
+                params["callback_url"] = redirect_uri
+                params["state"] = state
         await audit.record(
             session,
             "connection.oauth_started",
@@ -159,13 +253,29 @@ async def start(
         }
 
 
-async def _exchange(ctx: AppContext, spec: OAuthSpec, code: str, verifier: str) -> str:
+async def _exchange(ctx: AppContext, spec: OAuthSpec, code: str, sealed: dict[str, Any]) -> dict[str, Any]:
+    """Exchange the single-use code for the secret stored in the vault (``api_key`` + optional refresh)."""
+    verifier = str(sealed["code_verifier"])
     try:
-        resp = await ctx.upstream_client.post(
-            spec.exchange_url,
-            json={"code": code, "code_verifier": verifier, "code_challenge_method": "S256"},
-            timeout=20.0,
-        )
+        if spec.kind == "oauth2_pkce":
+            resp = await ctx.upstream_client.post(
+                spec.exchange_url,
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": str(sealed.get("redirect_uri") or ""),
+                    "client_id": str(sealed.get("client_id") or ""),
+                    "code_verifier": verifier,
+                },
+                headers={"accept": "application/json"},
+                timeout=20.0,
+            )
+        else:
+            resp = await ctx.upstream_client.post(
+                spec.exchange_url,
+                json={"code": code, "code_verifier": verifier, "code_challenge_method": "S256"},
+                timeout=20.0,
+            )
     except httpx.HTTPError as exc:
         raise OAuthFailed(f"could not reach the provider: {type(exc).__name__}") from exc
     if resp.status_code >= 400:
@@ -173,13 +283,33 @@ async def _exchange(ctx: AppContext, spec: OAuthSpec, code: str, verifier: str) 
             "the provider rejected the authorization code (it may have expired or already been used)",
             details={"upstream_status": resp.status_code},
         )
-    try:
-        key = resp.json().get("key")
-    except ValueError:
-        key = None
-    if not isinstance(key, str) or not key.strip():
+    secret = _token_secret(spec, resp, client_id=str(sealed.get("client_id") or ""))
+    if secret is None:
         raise OAuthFailed("the provider did not return a credential")
-    return key.strip()
+    return secret
+
+
+def _token_secret(spec: OAuthSpec, resp: httpx.Response, *, client_id: str) -> dict[str, Any] | None:
+    try:
+        body = resp.json()
+    except ValueError:
+        return None
+    if not isinstance(body, dict):
+        return None
+    if spec.kind != "oauth2_pkce":
+        key = body.get("key")
+        return {"api_key": key.strip()} if isinstance(key, str) and key.strip() else None
+    token = body.get("access_token")
+    if not isinstance(token, str) or not token.strip():
+        return None
+    out: dict[str, Any] = {"api_key": token.strip(), "oauth": spec.provider_id, "client_id": client_id}
+    refresh = body.get("refresh_token")
+    if isinstance(refresh, str) and refresh:
+        out["refresh_token"] = refresh
+    expires_in = body.get("expires_in")
+    if isinstance(expires_in, int | float) and not isinstance(expires_in, bool) and expires_in > 0:
+        out["expires_at"] = (utcnow() + timedelta(seconds=float(expires_in))).isoformat()
+    return out
 
 
 async def _finish(ctx: AppContext, flow_id: str, code: str) -> dict[str, Any]:
@@ -207,13 +337,13 @@ async def _finish(ctx: AppContext, flow_id: str, code: str) -> dict[str, Any]:
         )
         if cred is None:
             raise ValidationFailed("this authorization request is no longer usable; start again")
-        verifier = str(
+        sealed_flow = dict(
             ctx.vault_.open(
                 SealedSecret(
                     kek_id=cred.kek_id, wrapped_dek=cred.wrapped_dek, ciphertext=cred.ciphertext, aad=cred.aad
                 ),
                 _aad(flow.id),
-            )["code_verifier"]
+            )
         )
         flow.status = "exchanging"  # claims the flow: a concurrent callback now sees it as used
         await _shred(session, flow)
@@ -221,7 +351,7 @@ async def _finish(ctx: AppContext, flow_id: str, code: str) -> dict[str, Any]:
     project_id, user_id, provider_id, display_name, priority = snapshot
     spec = SPECS[provider_id]
     try:
-        key = await _exchange(ctx, spec, code, verifier)
+        secret = await _exchange(ctx, spec, code, sealed_flow)
         async with ctx.db.transaction() as session:
             user = await session.get(User, user_id)
             if user is None or not user.is_active:
@@ -233,7 +363,7 @@ async def _finish(ctx: AppContext, flow_id: str, code: str) -> dict[str, Any]:
                 user=user,
                 data=conns.ConnectionInput(
                     provider_id=provider_id,
-                    secret={"api_key": key},
+                    secret=secret,
                     display_name=display_name,
                     auth_method=AuthMethod.OAUTH.value,
                     priority=priority,
@@ -323,3 +453,81 @@ async def purge_expired(ctx: AppContext) -> int:
             await _shred(session, flow)
             n += 1
     return n
+
+
+async def refresh_tokens(ctx: AppContext) -> dict[str, int]:
+    """Worker hook: refresh OAuth access tokens that expire within ``REFRESH_MARGIN``.
+
+    Uses only the provider's documented ``refresh_token`` grant. A rejected refresh suspends the connection
+    and notifies the owner (they reconnect); it is never retried in a loop.
+    """
+    from oasis_route.db.models import Connection
+    from oasis_route.domain.enums import ConnectionStatus, ErrorCategory
+
+    due: list[tuple[str, OAuthSpec, dict[str, Any]]] = []
+    async with ctx.db.session() as session:
+        rows = (
+            await session.execute(
+                select(Connection).where(
+                    Connection.auth_method == AuthMethod.OAUTH.value,
+                    Connection.status.in_(
+                        [ConnectionStatus.ACTIVE.value, ConnectionStatus.PENDING_VALIDATION.value]
+                    ),
+                    Connection.provider_id.in_([p for p, sp in SPECS.items() if sp.kind == "oauth2_pkce"]),
+                )
+            )
+        ).scalars()
+        for conn in rows:
+            spec = SPECS[conn.provider_id]
+            try:
+                secret = conns.open_secret(ctx, conn, conn.credential)
+            except Exception:  # noqa: S112 - unreadable credential is reported by validation, not here
+                continue
+            exp = secret.get("expires_at")
+            if not secret.get("refresh_token") or not isinstance(exp, str):
+                continue
+            try:
+                expires_at = datetime.fromisoformat(exp)
+            except ValueError:
+                continue
+            if expires_at - utcnow() <= REFRESH_MARGIN:
+                due.append((conn.id, spec, secret))
+    refreshed = failed = 0
+    for conn_id, spec, secret in due:
+        try:
+            resp = await ctx.upstream_client.post(
+                spec.exchange_url,
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": str(secret["refresh_token"]),
+                    "client_id": str(secret.get("client_id") or ""),
+                },
+                headers={"accept": "application/json"},
+                timeout=20.0,
+            )
+            new = (
+                _token_secret(spec, resp, client_id=str(secret.get("client_id") or ""))
+                if resp.status_code < 400
+                else None
+            )
+        except httpx.HTTPError:
+            continue  # transient: try again on the next run
+        if new is None:
+            failed += 1
+            await conns.suspend_for_auth(
+                ctx,
+                conn_id,
+                ErrorCategory.AUTH_EXPIRED,
+                "the provider did not refresh the sign-in; reconnect",
+            )
+            continue
+        new.setdefault("refresh_token", secret["refresh_token"])  # providers may not rotate refresh tokens
+        async with ctx.db.transaction() as session:
+            target = await session.get(Connection, conn_id)
+            if target is None:
+                continue
+            status = target.status
+            await conns.rotate_credential(ctx, session, target, new, actor_id="system:oauth_refresh")
+            target.status = status  # same account and grant: keep serving without a revalidation gap
+        refreshed += 1
+    return {"due": len(due), "refreshed": refreshed, "failed": failed}

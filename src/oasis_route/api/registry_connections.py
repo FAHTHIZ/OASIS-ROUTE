@@ -11,8 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oasis_route.api.deps import Principal, get_ctx, get_session, project_access, require_admin, require_scope
+from oasis_route.connections import oauth as oauth_flows
 from oasis_route.connections import service as conns
-from oasis_route.connections.oauth import SPECS as OAUTH_SPECS
 from oasis_route.context import AppContext
 from oasis_route.db.models import Connection, Endpoint, HealthRecord, Model, Provider, QuotaPool
 from oasis_route.domain.enums import ApiKeyScope, AuthMethod, QuotaPeriod, QuotaSource, QuotaUnit, Task
@@ -58,7 +58,9 @@ class ProviderOut(ORM):
 
 @router.get("/providers", response_model=list[ProviderOut])
 async def list_providers(
-    _: Principal = Depends(require_scope(ApiKeyScope.READ)), session: AsyncSession = Depends(get_session)
+    _: Principal = Depends(require_scope(ApiKeyScope.READ)),
+    session: AsyncSession = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
 ) -> list[ProviderOut]:
     providers = (await session.execute(select(Provider).order_by(Provider.id))).scalars().all()
     eps = (await session.execute(select(Endpoint).where(Endpoint.is_default.is_(True)))).scalars().all()
@@ -69,7 +71,7 @@ async def list_providers(
     for p in providers:
         po = ProviderOut.model_validate(p)
         po.endpoints = by.get(p.id, [])
-        po.oauth_available = p.id in OAUTH_SPECS
+        po.oauth_available = oauth_flows.available(ctx, p.id)
         out.append(po)
     return out
 

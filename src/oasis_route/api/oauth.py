@@ -16,6 +16,7 @@ from oasis_route.domain.enums import ApiKeyScope
 from oasis_route.domain.errors import AppError
 
 router = APIRouter(prefix="/api/v1", tags=["oauth"])
+wellknown = APIRouter(tags=["oauth"])
 MANAGE = Depends(require_scope(ApiKeyScope.MANAGE))
 
 _PAGE_HEADERS = {
@@ -140,4 +141,18 @@ async def callback(
         "Connected, checking provider",
         "The connection was created. Oasis Route will keep checking it; see the console for status.",
         200,
+    )
+
+
+@wellknown.get(oauth.CIMD_PATH, include_in_schema=False)
+async def client_metadata(ctx: AppContext = Depends(get_ctx)) -> Response:
+    """OAuth Client ID Metadata Document: lets providers that support CIMD (Hugging Face) identify this
+    deployment as a public client without manual app registration. Served only with an https public_url."""
+    doc = oauth.cimd_document(ctx)
+    if doc is None:
+        return Response(status_code=404)
+    import json
+
+    return Response(
+        json.dumps(doc), media_type="application/json", headers={"cache-control": "public, max-age=3600"}
     )
