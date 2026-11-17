@@ -27,7 +27,7 @@ What `docker compose up` does:
 Check it:
 
 ```bash
-curl -s localhost:8080/readyz      # {"status":"ready","schema_revision":"0002","worker":"running"}
+curl -s localhost:8080/readyz      # {"status":"ready","schema_revision":"0004","worker":"running"}
 ```
 
 Then open `https://<your-host>/console/`, sign in with the Oasis Key, and add a provider API key under **Connections**. Validation, model synchronization, quota learning and routing set themselves up; the Overview shows **Ready** when a request can be served.

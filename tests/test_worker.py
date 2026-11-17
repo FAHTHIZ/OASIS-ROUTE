@@ -279,3 +279,34 @@ async def test_retention_job_removes_expired_records(ctx: AppContext) -> None:
     assert out["retention.records"] == {"notifications": 1, "idempotency": 1, "oauth_flows_expired": 0}
     async with ctx.db.session() as s:
         assert [n.title for n in (await s.execute(select(Notification))).scalars()] == ["new"]
+
+
+async def test_record_retention_is_opt_in_and_prunes_only_old_rows(ctx: AppContext) -> None:
+    from oasis_route.db.models import AuditEvent, RouteDecision, UsageRecord
+
+    pid, _ = await project_with_provider(ctx.db)
+    old = utcnow() - timedelta(days=40)
+    async with ctx.db.transaction() as s:
+        for i, ts in enumerate((old, utcnow())):
+            s.add(UsageRecord(request_id=f"r{i}", project_id=pid, created_at=ts))
+            s.add(
+                RouteDecision(
+                    request_id=f"r{i}", project_id=pid, requested_model="auto", mode="x", created_at=ts
+                )
+            )
+            s.add(AuditEvent(action=f"a{i}", project_id=pid, created_at=ts))
+    job = [j for j in runner.default_jobs(ctx) if j.name == "retention.records"]
+
+    # Default: keep everything.
+    out = await runner.run_once(ctx, job)
+    assert "usage_records" not in out["retention.records"]
+
+    ctx.settings.usage_retention_days = 30
+    ctx.settings.route_decision_retention_days = 30
+    ctx.settings.audit_retention_days = 30
+    r = await runner._retention(ctx)
+    assert r["usage_records"] == 1 and r["route_decisions"] == 1 and r["audit_events"] >= 1
+    async with ctx.db.session() as s:
+        assert [u.request_id for u in (await s.execute(select(UsageRecord))).scalars()] == ["r1"]
+        assert [d.request_id for d in (await s.execute(select(RouteDecision))).scalars()] == ["r1"]
+        assert "a1" in {a.action for a in (await s.execute(select(AuditEvent))).scalars()}

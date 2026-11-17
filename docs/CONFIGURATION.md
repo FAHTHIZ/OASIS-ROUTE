@@ -97,6 +97,16 @@ Gmail is off by default and must stay off in production until Google's OAuth ver
 | `OASIS_ROUTE_MAIL_FACTS_RETENTION_DAYS` | `30` | Extracted notice facts are deleted after this many days. Raw mail is never stored. |
 | `OASIS_ROUTE_MAIL_FORWARDING_ENABLED` | `true` | Accept provider notices that users forward to `POST /api/v1/mail/forwarded`. |
 
+## Record retention
+
+| Variable | Default | Notes |
+|---|---|---|
+| `OASIS_ROUTE_USAGE_RETENTION_DAYS` | `0` | Delete usage records older than this. `0` keeps them. |
+| `OASIS_ROUTE_ROUTE_DECISION_RETENTION_DAYS` | `0` | Delete routing decisions older than this. `0` keeps them. |
+| `OASIS_ROUTE_AUDIT_RETENTION_DAYS` | `0` | Delete audit events older than this. `0` keeps them. Keep at least as long as your incident-response policy requires. |
+
+The `retention.records` job applies these hourly.
+
 ## Telemetry
 
 | Variable | Default | Notes |

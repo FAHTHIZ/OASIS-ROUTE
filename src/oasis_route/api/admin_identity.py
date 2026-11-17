@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,10 +21,10 @@ from oasis_route.api.deps import (
     require_scope,
 )
 from oasis_route.context import AppContext
-from oasis_route.db.models import ApiKey, AuditEvent, Project, ProjectMember, User
+from oasis_route.db.models import ApiKey, AuditEvent, Project, ProjectMember, User, utcnow
 from oasis_route.domain.enums import ApiKeyScope, ProjectRole, Role, RoutingMode
-from oasis_route.domain.errors import Conflict, Forbidden, NotFound, Unauthorized
-from oasis_route.identity import audit, service
+from oasis_route.domain.errors import Conflict, Forbidden, NotFound, Unauthorized, ValidationFailed
+from oasis_route.identity import audit, data_rights, service
 
 router = APIRouter(prefix="/api/v1", tags=["identity"])
 
@@ -482,3 +483,97 @@ async def instance_audit(
 ) -> list[AuditOut]:
     rows = await session.execute(select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit))
     return [AuditOut.model_validate(r) for r in rows.scalars().all()]
+
+
+# ------------------------------------------------------------------------------------------- data rights
+def _attachment(data: dict[str, Any], filename: str) -> JSONResponse:
+    return JSONResponse(
+        data,
+        headers={
+            "content-disposition": f'attachment; filename="{filename}"',
+            "cache-control": "no-store",
+        },
+    )
+
+
+@router.get("/projects/{project_id}/export")
+async def export_project(
+    project_id: str,
+    p: Principal = Depends(require_scope(ApiKeyScope.MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> JSONResponse:
+    """Everything stored for a project, without secrets. Project owners and administrators."""
+    project = await project_access(project_id, p, session, write=True)
+    service.require_project_role(
+        await service.member_role(session, project.id, p.user.id), {ProjectRole.OWNER}, p.user
+    )
+    data = {
+        "format": data_rights.EXPORT_FORMAT,
+        "exported_at": utcnow().isoformat(),
+        **await data_rights.export_project(session, project),
+    }
+    await audit.record(
+        session, "project.exported", actor_user_id=p.user.id, actor_key_id=p.key.id, project_id=project.id
+    )
+    return _attachment(data, f"oasis-route-project-{project.id}.json")
+
+
+class DeleteConfirm(BaseModel):
+    confirm: str = Field(description="Must equal the id of the thing being deleted.")
+
+
+@router.delete("/projects/{project_id}")
+async def delete_project(
+    project_id: str,
+    body: DeleteConfirm,
+    p: Principal = Depends(require_scope(ApiKeyScope.MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Delete a project, destroy its provider credentials and revoke its Oasis Keys. Irreversible."""
+    project = await project_access(project_id, p, session, write=True)
+    service.require_project_role(
+        await service.member_role(session, project.id, p.user.id), {ProjectRole.OWNER}, p.user
+    )
+    if body.confirm != project.id:
+        raise ValidationFailed("confirm must equal the project id")
+    counts = await data_rights.delete_project(session, project, actor_user_id=p.user.id)
+    return {"deleted": True, "project_id": project_id, **counts}
+
+
+async def _user_for(user_id: str, p: Principal, session: AsyncSession) -> User:
+    if user_id != p.user.id and not p.is_admin:
+        raise NotFound("user not found")
+    user = await session.get(User, user_id)
+    if user is None:
+        raise NotFound("user not found")
+    return user
+
+
+@router.get("/users/{user_id}/export")
+async def export_user(
+    user_id: str,
+    p: Principal = Depends(require_scope(ApiKeyScope.MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> JSONResponse:
+    """Everything stored about a user, including the projects they own, without secrets."""
+    user = await _user_for(user_id, p, session)
+    data = await data_rights.export_user(session, user)
+    await audit.record(
+        session, "user.exported", actor_user_id=p.user.id, target_type="user", target_id=user.id
+    )
+    return _attachment(data, f"oasis-route-user-{user.id}.json")
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    body: DeleteConfirm,
+    p: Principal = Depends(require_scope(ApiKeyScope.MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Delete a user account with its owned projects, keys, credentials and mail data. Irreversible."""
+    user = await _user_for(user_id, p, session)
+    if body.confirm != user.id:
+        raise ValidationFailed("confirm must equal the user id")
+    counts = await data_rights.delete_user(session, user, actor_user_id=p.user.id)
+    return {"deleted": True, "user_id": user_id, **counts}

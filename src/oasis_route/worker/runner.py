@@ -30,12 +30,15 @@ from sqlalchemy.exc import IntegrityError
 from oasis_route import __version__
 from oasis_route.context import AppContext
 from oasis_route.db.models import (
+    AuditEvent,
     Connection,
     HealthRecord,
     IdempotencyRecord,
     Notification,
     Project,
     QuotaPool,
+    RouteDecision,
+    UsageRecord,
     WorkerInstance,
     WorkerLease,
     utcnow,
@@ -122,11 +125,22 @@ async def _retention(ctx: AppContext) -> Any:
         i = await s.execute(
             delete(IdempotencyRecord).where(IdempotencyRecord.created_at < now - timedelta(days=1))
         )
+        aged: dict[str, int] = {}
+        st = ctx.settings
+        for name, model, days in (
+            ("usage_records", UsageRecord, st.usage_retention_days),
+            ("route_decisions", RouteDecision, st.route_decision_retention_days),
+            ("audit_events", AuditEvent, st.audit_retention_days),
+        ):
+            if days > 0:
+                r = await s.execute(delete(model).where(model.created_at < now - timedelta(days=days)))
+                aged[name] = int(getattr(r, "rowcount", 0) or 0)
     from oasis_route.connections import oauth
 
     return {
         "notifications": getattr(n, "rowcount", 0),
         "idempotency": getattr(i, "rowcount", 0),
+        **aged,
         "oauth_flows_expired": await oauth.purge_expired(ctx),
     }
 
