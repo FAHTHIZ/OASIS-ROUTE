@@ -12,7 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oasis_route.api.deps import Principal, get_ctx, get_session, require_admin, require_scope
 from oasis_route.context import AppContext
-from oasis_route.db.models import ChangeEvent, Evidence, Offer, OfferTransition, Source
+from oasis_route.db.models import (
+    ChangeEvent,
+    Evidence,
+    Offer,
+    OfferTransition,
+    ProviderCandidate,
+    Source,
+    utcnow,
+)
 from oasis_route.discovery import review
 from oasis_route.discovery import service as disc
 from oasis_route.domain.enums import ApiKeyScope, OfferState, SourceClass, SourceReviewStatus
@@ -45,6 +53,10 @@ class SourceOut(ORM):
     next_fetch_at: datetime | None
     failure_count: int
     submitted_by: str | None
+    origin: str
+    depth: int
+    parent_id: str | None
+    extractor: str | None
     created_at: datetime
 
 
@@ -132,6 +144,30 @@ async def run_source(
         "changed": r.changed,
         "offers": r.offers,
         "claims": r.claims,
+        "discovered_sources": r.discovered_sources,
+        "provider_candidates": r.provider_candidates,
+    }
+
+
+@router.post("/admin/discovery/run")
+async def run_due(
+    _: Principal = Depends(require_admin), ctx: AppContext = Depends(get_ctx)
+) -> dict[str, Any]:
+    """Run one discovery tick now: every approved, due source (bounded by sources_per_tick)."""
+    results = await disc.run_due_sources(ctx)
+    return {
+        "sources": len(results),
+        "results": [
+            {
+                "source_id": r.source_id,
+                "status": r.status,
+                "offers": r.offers,
+                "claims": r.claims,
+                "discovered_sources": r.discovered_sources,
+                "provider_candidates": r.provider_candidates,
+            }
+            for r in results
+        ],
     }
 
 
@@ -150,6 +186,15 @@ class OfferOut(ORM):
     expires_at: datetime | None
     confidence: float
     next_review_at: datetime | None
+    offer_class: str
+    access_path: str
+    models: list[Any]
+    regions: list[Any]
+    billing: dict[str, Any]
+    links: dict[str, Any]
+    first_observed_at: datetime | None
+    last_observed_at: datetime | None
+    extractor_version: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -239,6 +284,15 @@ class OfferPatch(BaseModel):
     terms_url: AnyHttpUrl | None = None
     onboarding_url: AnyHttpUrl | None = None
     expires_at: datetime | None = None
+    offer_class: str | None = Field(
+        default=None, pattern="^(recurring_free|one_time_trial|evaluation|promotional|paid|local|unknown)$"
+    )
+    access_path: str | None = Field(
+        default=None, pattern="^(anonymous_public|official_oauth|api_key|user_action_required|unsupported)$"
+    )
+    regions: list[str] | None = Field(default=None, max_length=100)
+    billing: dict[str, Any] | None = None
+    links: dict[str, AnyHttpUrl] | None = None
 
 
 _EDITABLE_STATES = {OfferState.DISCOVERED.value, OfferState.NEEDS_REVIEW.value}
@@ -274,6 +328,8 @@ async def edit_offer(
         unknown = set(data["eligibility"] or {}) - _ELIG_ALLOWED
         if unknown:
             raise ValidationFailed(f"unknown eligibility fields: {sorted(unknown)}")
+    if "links" in data and data["links"] is not None:
+        data["links"] = {str(k): str(v) for k, v in data["links"].items()}
     for k, v in data.items():
         setattr(o, k, str(v) if k in ("terms_url", "onboarding_url") and v is not None else v)
     await audit.record(
@@ -345,3 +401,57 @@ async def change_events(
     if action_required is not None:
         q = q.where(ChangeEvent.action_required == action_required)
     return [ChangeEventOut.model_validate(c) for c in (await session.execute(q)).scalars()]
+
+
+# ------------------------------------------------------------------------------------------- candidates
+class ProviderCandidateOut(ORM):
+    id: str
+    slug: str
+    name: str
+    status: str
+    via: str
+    source_id: str | None
+    facts: dict[str, Any]
+    first_seen_at: datetime
+    last_seen_at: datetime
+    reviewed_by: str | None
+
+
+@router.get("/admin/provider-candidates", response_model=list[ProviderCandidateOut])
+async def provider_candidates(
+    status: str | None = Query(default=None, pattern="^(candidate|promoted|dismissed)$"),
+    _: Principal = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+) -> list[ProviderCandidateOut]:
+    """Providers seen in public catalogues that are not in the registry. Leads only; never routable."""
+    q = select(ProviderCandidate).order_by(ProviderCandidate.slug)
+    if status:
+        q = q.where(ProviderCandidate.status == status)
+    return [ProviderCandidateOut.model_validate(c) for c in (await session.execute(q)).scalars()]
+
+
+class CandidateDecision(BaseModel):
+    status: str = Field(pattern="^(promoted|dismissed|candidate)$")
+    note: str = Field(default="", max_length=2000)
+
+
+@router.post("/admin/provider-candidates/{candidate_id}", response_model=ProviderCandidateOut)
+async def decide_candidate(
+    candidate_id: str,
+    body: CandidateDecision,
+    p: Principal = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+) -> ProviderCandidateOut:
+    c = await session.get(ProviderCandidate, candidate_id)
+    if c is None:
+        raise NotFound("candidate not found")
+    c.status, c.reviewed_by, c.last_seen_at = body.status, p.user.id, c.last_seen_at or utcnow()
+    await audit.record(
+        session,
+        "provider_candidate.decide",
+        actor_user_id=p.user.id,
+        target_type="provider_candidate",
+        target_id=c.id,
+        details={"status": body.status, "note": body.note[:500]},
+    )
+    return ProviderCandidateOut.model_validate(c)

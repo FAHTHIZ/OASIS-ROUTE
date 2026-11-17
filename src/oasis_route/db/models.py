@@ -112,6 +112,10 @@ class Project(Base):
     # Pauses background maintenance (revalidation, quota rechecks) for this project; routing is unaffected.
     automation_paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
     rate_limit_rpm: Mapped[int | None] = mapped_column(Integer)
+    # free_only: only routes provably free to the caller are used (free-tier connections, zero-priced models,
+    # local providers). allow_paid: an owner explicitly consented to paid usage (audited). New projects are
+    # free_only; projects created before this setting existed keep their behaviour (migration 0006).
+    spend_policy: Mapped[str] = mapped_column(String(20), default="free_only", server_default="allow_paid")
     created_at: Mapped[datetime] = _created()
 
 
@@ -202,6 +206,8 @@ class Model(Base):
     lifecycle: Mapped[str] = mapped_column(String(20), default="active")  # active|deprecated|removed
     # {task: {score: 0-100, source, date, methodology, confidence}}
     quality: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # {free: bool|None, prompt_usd_per_mtok, completion_usd_per_mtok, source, observed_at}. Empty == unknown.
+    pricing: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, server_default="{}")
     created_at: Mapped[datetime] = _created()
 
 
@@ -225,6 +231,19 @@ class Offer(Base):
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     next_review_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # recurring_free | one_time_trial | evaluation | promotional | paid | local | unknown
+    offer_class: Mapped[str] = mapped_column(String(30), default="unknown", server_default="unknown")
+    # anonymous_public | official_oauth | api_key | user_action_required | unsupported
+    access_path: Mapped[str] = mapped_column(String(30), default="api_key", server_default="api_key")
+    models: Mapped[list[Any]] = mapped_column(JSON, default=list, server_default="[]")  # [{model, free, ...}]
+    regions: Mapped[list[Any]] = mapped_column(JSON, default=list, server_default="[]")
+    # {card_required, billing_account_required, credit_usd, renewal, trial_days, evaluation_only}
+    billing: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, server_default="{}")
+    # {signup, console, api_key, oauth, pricing, rate_limits, docs, terms}
+    links: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, server_default="{}")
+    first_observed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_observed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    extractor_version: Mapped[str | None] = mapped_column(String(20))
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
@@ -263,7 +282,28 @@ class Source(Base):
     next_fetch_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     failure_count: Mapped[int] = mapped_column(Integer, default=0)
     submitted_by: Mapped[str | None] = mapped_column(String(36))
+    # manual (admin/user registered) | seed (built-in, maintainer-reviewed) | frontier (link-following)
+    origin: Mapped[str] = mapped_column(String(20), default="manual", server_default="manual")
+    depth: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    parent_id: Mapped[str | None] = mapped_column(String(36))
+    extractor: Mapped[str | None] = mapped_column(String(40))  # html | openrouter_models | hf_router_models
     created_at: Mapped[datetime] = _created()
+
+
+class ProviderCandidate(Base):
+    """A provider seen in a public catalogue that is not in the registry yet. A lead, never routable."""
+
+    __tablename__ = "provider_candidates"
+    id: Mapped[str] = _id()
+    slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="candidate")  # candidate | promoted | dismissed
+    via: Mapped[str] = mapped_column(String(64), default="")  # e.g. "huggingface" (served through its router)
+    source_id: Mapped[str | None] = mapped_column(ForeignKey("sources.id", ondelete="SET NULL"))
+    facts: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # {models, live_models, free_models}
+    first_seen_at: Mapped[datetime] = _created()
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, nullable=False)
+    reviewed_by: Mapped[str | None] = mapped_column(String(36))
 
 
 class Evidence(Base):
@@ -327,6 +367,9 @@ class Connection(Base):
     priority: Mapped[int] = mapped_column(Integer, default=0)  # user preference boost
     eligibility_ack: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     allowed_models: Mapped[list[Any]] = mapped_column(JSON, default=list)  # empty == all known models
+    # free_tier (user declares the upstream account has no billing / is on a free plan) | paid | unknown.
+    # Under a free_only project only free_tier connections or provably zero-priced models are routable.
+    billing_mode: Mapped[str] = mapped_column(String(20), default="unknown", server_default="unknown")
     last_validated_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_error: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str | None] = mapped_column(String(36))

@@ -83,6 +83,11 @@ Production also refuses `OASIS_ROUTE_GMAIL_ENABLED=true` without `OASIS_ROUTE_GM
 | `OASIS_ROUTE_DISCOVERY_SOURCES_PER_TICK` | `10` | Upper bound on sources fetched per worker run. |
 | `OASIS_ROUTE_DISCOVERY_MAX_PENDING_SUBMISSIONS_PER_USER` | `20` | Limits unreviewed source submissions from non-admins. |
 | `OASIS_ROUTE_OFFER_STALE_AFTER_DAYS` | `30` | Offers whose evidence has not been re-confirmed for this long are marked stale and stop being routable. |
+| `OASIS_ROUTE_DISCOVERY_SEED_SOURCES` | `true` | Register the built-in, maintainer-reviewed official provider pages and public model catalogues (`discovery/seeds.py`) at startup and daily. Existing rows are never modified; set `false` to run with only the sources you add. |
+| `OASIS_ROUTE_DISCOVERY_FRONTIER_ENABLED` | `true` | Follow links from approved official pages to more access/pricing/limits/models pages on the same provider's official domains. |
+| `OASIS_ROUTE_DISCOVERY_FRONTIER_MAX_DEPTH` | `1` | Link-following depth from a seed or admin-approved source (0 disables following). |
+| `OASIS_ROUTE_DISCOVERY_FRONTIER_LINKS_PER_FETCH` | `5` | New sources one fetched page may add. |
+| `OASIS_ROUTE_DISCOVERY_FRONTIER_MAX_PER_PROVIDER` | `25` | Total link-discovered sources per provider. |
 
 ## Optional mail integration
 

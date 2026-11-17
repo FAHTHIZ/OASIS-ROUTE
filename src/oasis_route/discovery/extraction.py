@@ -105,7 +105,10 @@ _QUOTA_LONG = re.compile(
     re.I,
 )
 _QUOTA_ACRO = re.compile(_NUM + r"\s*(RPM|RPD|RPH|TPM|TPD|ITPM|OTPM)\b")
-_CREDIT = re.compile(r"\$\s?(\d+(?:\.\d{1,2})?)\s*(?:USD\s*)?(?:in\s+)?(?:free\s+)?(?:api\s+)?credits?", re.I)
+_CREDIT = re.compile(
+    r"\$\s?(\d+(?:\.\d{1,2})?)\s*(?:USD\s*)?(?:in\s+)?(?:free\s+)?(?:trial\s+)?(?:api\s+)?credits?",
+    re.I,
+)
 _ONE_TIME_HINT = re.compile(r"one[- ]time|trial|sign[- ]?up|new accounts?|expire|valid for|first \d+", re.I)
 _MONTHLY_HINT = re.compile(r"(?:per|each|every|a)\s+month|monthly|resets?", re.I)
 _AGE = re.compile(
@@ -130,6 +133,29 @@ _EXPIRY = re.compile(
     re.I,
 )
 _FREE = re.compile(r"\bfree (?:tier|plan|of charge|usage|access)\b|\bno credit card\b|\bfree to use\b", re.I)
+_NO_CARD = re.compile(
+    r"\bno (?:credit )?card (?:is )?(?:required|needed)\b|\bwithout (?:a |adding a )?(?:credit )?card\b|"
+    r"\bno payment (?:method|information) (?:is )?(?:required|needed)\b",
+    re.I,
+)
+_CARD = re.compile(
+    r"\b(?:credit card|payment method|billing (?:account|information)) (?:is |must be )?"
+    r"(?:required|needed|must be (?:added|linked|on file))\b|"
+    r"\b(?:add|link|attach) a (?:credit card|payment method) to (?:use|access|unlock|start)\b",
+    re.I,
+)
+_TRIAL_DAYS = re.compile(
+    r"\b(\d{1,3})[- ]day (?:free )?trial\b|\btrial (?:credits? )?(?:valid|lasts?|expires?) (?:for|after) "
+    r"(\d{1,3}) days\b|\bcredits?,?\s+(?:which\s+)?(?:expire|are valid for|valid for) (?:after |in )?"
+    r"(\d{1,3}) days\b",
+    re.I,
+)
+_EVALUATION = re.compile(
+    r"\b(?:for )?(?:evaluation|prototyping|testing) (?:and (?:testing|evaluation|experimentation) )?"
+    r"(?:purposes )?only\b|\bnot (?:intended |to be used |for use )?(?:for|in) production\b|"
+    r"\bshould not be used in production\b",
+    re.I,
+)
 _TERMS = re.compile(r"\b(?:terms of (?:service|use)|acceptable use policy|usage polic(?:y|ies))\b", re.I)
 _RESTRICT = {
     "no_commercial_use": re.compile(
@@ -251,6 +277,17 @@ def extract(text: str, *, known_models: list[str] | None = None) -> Extraction:
     for m in _FREE.finditer(text):
         add("free_tier", {"mentioned": True}, m, 0.3)
         break
+    no_card = _NO_CARD.search(text)
+    if no_card is not None:
+        add("billing", {"card_required": False}, no_card, 0.5)
+    elif (card := _CARD.search(text)) is not None:
+        add("billing", {"card_required": True}, card, 0.5)
+    for m in _TRIAL_DAYS.finditer(text):
+        days = int(next(g for g in m.groups() if g))
+        if 0 < days <= 366:
+            add("trial", {"days": days}, m, 0.5)
+    if (ev := _EVALUATION.search(text)) is not None:
+        add("usage_scope", {"evaluation_only": True}, ev, 0.5)
     for m in _TERMS.finditer(text):
         add("terms", {"mentioned": True}, m, 0.2)
         break

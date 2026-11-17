@@ -89,6 +89,13 @@ class Settings(BaseSettings):
     discovery_sources_per_tick: int = Field(default=10, ge=1)
     discovery_max_pending_submissions_per_user: int = Field(default=20, ge=1)
     offer_stale_after_days: int = Field(default=30, ge=1)
+    # Built-in, maintainer-reviewed official sources (discovery/seeds.py), inserted at startup if missing.
+    discovery_seed_sources: bool = True
+    # Bounded link-following from approved official pages to more official pages (same provider domains).
+    discovery_frontier_enabled: bool = True
+    discovery_frontier_max_depth: int = Field(default=1, ge=0, le=3)
+    discovery_frontier_links_per_fetch: int = Field(default=5, ge=0, le=50)
+    discovery_frontier_max_per_provider: int = Field(default=25, ge=0, le=500)
     worker_interval_s: float = Field(default=30.0, gt=0, description="Discovery scheduling interval.")
     worker_mode: Literal["embedded", "external", "off"] = Field(
         default="embedded",

@@ -73,7 +73,23 @@ async def _discovery(ctx: AppContext) -> Any:
     from oasis_route.discovery import service
 
     res = await service.run_due_sources(ctx)
-    return {"sources": len(res), "changed": sum(1 for r in res if r.changed)}
+    return {
+        "sources": len(res),
+        "changed": sum(1 for r in res if r.changed),
+        "offers": len({o for r in res for o in r.offers}),
+        "new_sources": sum(r.discovered_sources for r in res),
+        "provider_candidates": sum(r.provider_candidates for r in res),
+        "errors": sorted({r.status for r in res if r.status.startswith(("http_", "network", "disallowed"))}),
+    }
+
+
+async def _seed_sources(ctx: AppContext) -> Any:
+    """Add built-in official sources that are missing (e.g. after an upgrade adds new seeds)."""
+    if not ctx.settings.discovery_seed_sources:
+        return {"skipped": "disabled"}
+    from oasis_route.discovery.seeds import sync_seed_sources
+
+    return {"inserted": await sync_seed_sources(ctx.db)}
 
 
 async def _offer_lifecycle(ctx: AppContext) -> Any:
@@ -267,6 +283,12 @@ def default_jobs(ctx: AppContext) -> list[Job]:
             _discovery,
             lease_s=900,
             description="Check approved discovery sources for offer changes",
+        ),
+        Job(
+            "discovery.seed_sources",
+            86_400,
+            _seed_sources,
+            description="Register missing built-in official provider sources",
         ),
         Job("offers.lifecycle", 3600, _offer_lifecycle, description="Expire and mark stale offers"),
         Job(
