@@ -25,6 +25,7 @@ from oasis_route.gateway.engine import (
     idem_finish,
     parse_body,
 )
+from oasis_route.routing.priors import model_prior
 from oasis_route.routing.router import quality_of
 
 router = APIRouter(prefix="/v1", tags=["gateway"])
@@ -187,6 +188,7 @@ async def list_models(
                     "capabilities": m.capabilities,
                     "quality_general": q,
                     "quality_source": src,
+                    "quality_prior": model_prior(m.upstream_id) if q is None else None,
                     "lifecycle": m.lifecycle,
                 },
             }
