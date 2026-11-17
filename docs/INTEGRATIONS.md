@@ -128,7 +128,20 @@ OPENAI_API_BASE_URL=http://localhost:8080/v1 OPENAI_API_KEY="$OASIS_API_KEY" ope
 
 ### OpenAI Codex CLI
 
-Current Codex releases document custom providers with `wire_api = "responses"` ([Codex advanced configuration](https://developers.openai.com/codex/config-advanced)), which needs the OpenAI Responses API. Oasis Route does not implement `/v1/responses` yet, so Codex is not supported today.
+Codex custom providers use the Responses API (`wire_api = "responses"`, see [Codex advanced configuration](https://developers.openai.com/codex/config-advanced)), which Oasis Route serves at `/v1/responses`. Add a provider to `~/.codex/config.toml`:
+
+```toml
+model = "auto/coding"
+model_provider = "oasis"
+
+[model_providers.oasis]
+name = "Oasis Route"
+base_url = "http://localhost:8080/v1"
+env_key = "OASIS_API_KEY"
+wire_api = "responses"
+```
+
+Then `export OASIS_API_KEY=...` and run `codex`. The gateway is stateless, which matches how Codex sends the full conversation on each turn. Function tools (Codex's shell and patch tools) are routed; hosted tools such as web search are dropped. Small free models often handle Codex's long system prompt and tool schemas poorly, so pin a capable model with `model = "<provider>/<model>"` if `auto/coding` picks a weak one.
 
 ## Seeing multiple providers at work
 

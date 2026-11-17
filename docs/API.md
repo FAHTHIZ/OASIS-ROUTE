@@ -122,6 +122,15 @@ Gateway errors use the OpenAI error envelope plus routing metadata:
 | 503 | `no_eligible_route` | Nothing eligible can serve the request (no active connection, policy excludes all candidates, required capability missing). |
 | 503 | `project_disabled` | The project kill switch is on. |
 
+### `POST /v1/responses` (OpenAI Responses API)
+
+OpenAI Responses request and response format, for `client.responses.create` in the OpenAI SDKs and for tools such as Codex CLI (`wire_api = "responses"`). Requests are translated to the internal chat-completion shape and routed exactly like `/v1/chat/completions` (same quota, health, fallback, audit and `x-oasis-route-*` headers), so any connected provider can serve them.
+
+- Translated: `input` as a string or as items (`message` with `input_text` / `output_text` / `input_image` parts, `function_call`, `function_call_output`), `instructions`, `developer` and `system` roles, function `tools`, `tool_choice`, `text.format` (`json_object`, `json_schema`), `max_output_tokens`, `temperature`, `top_p`, `user`, and `stream: true` (`response.created`, `response.in_progress`, `response.output_item.added/done`, `response.content_part.added/done`, `response.output_text.delta/done`, `response.function_call_arguments.delta/done`, then `response.completed`, `response.incomplete` or `response.failed`, each with a `sequence_number`).
+- Stateless: responses are not stored. `previous_response_id` and `background` return `400`; send the whole conversation in `input` (Codex does this). `GET /v1/responses/{id}` is not served.
+- Not translated: hosted tools (`web_search`, `file_search`, `code_interpreter`, computer use) are dropped because no other provider can run them; `input_file` parts and `item_reference` items return `400`; `reasoning` items in `input` are ignored and responses contain no reasoning items.
+- A response truncated by `max_output_tokens` has `status: "incomplete"` and `incomplete_details.reason: "max_output_tokens"`. Errors use the OpenAI error shape, as for chat completions.
+
 ### `POST /v1/messages` (Anthropic Messages API)
 
 Anthropic Messages request and response format, for Anthropic SDKs and tools such as Claude Code. Requests are translated to the internal chat-completion shape and routed exactly like `/v1/chat/completions` (same quota, health, fallback, audit and `x-oasis-route-*` headers), so any connected provider can serve them. Authenticate with `x-api-key: <Oasis Key>` or `Authorization: Bearer <Oasis Key>`.
