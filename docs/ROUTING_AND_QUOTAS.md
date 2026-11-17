@@ -85,7 +85,7 @@ For concurrency, reservations must be made against the shared quota-pool row, no
 
 Normalize upstream errors into:
 - QUOTA_EXHAUSTED: pool depleted until reset or replenishment.
-- RATE_LIMITED: temporary request/token window restriction; respect Retry-After.
+- RATE_LIMITED: temporary request/token window restriction; respect Retry-After. The cooldown applies to that model on that connection, because most providers enforce limits per model. If a second model on the same connection is rate limited while the first is still cooling down, the limit is evidently account-wide and the whole connection cools down as well. Within one request the router may try other models on the same account, but never another account of the same provider unless the provider permits multiple accounts.
 - AUTH_INVALID / AUTH_EXPIRED: suspend connection pending user action.
 - PROVIDER_UNAVAILABLE: transient provider outage.
 - MODEL_UNAVAILABLE: model removed or endpoint unavailable.

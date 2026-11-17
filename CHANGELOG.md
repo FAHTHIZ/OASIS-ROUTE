@@ -4,6 +4,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+### Changed
+
+- Rate limits (`429`) now cool down only the affected model on that connection, escalating to the whole connection when a second model is also limited. Previously one model's per-model limit blocked every model on the account. Account hopping within a request is still refused.
+
 ### Added
 
 - [docs/FREE_TIER_CAPACITY.md](docs/FREE_TIER_CAPACITY.md) and `scripts/free_tier_capacity.py`: reproducible monthly token-capacity maths from published free-tier limits (one account per provider, binding-limit per request size).

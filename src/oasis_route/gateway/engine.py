@@ -221,7 +221,9 @@ class RequestState:
     plan: RoutePlan | None = None
     attempts: list[Attempt] = field(default_factory=list)
     exclude: set[tuple[str, str]] = field(default_factory=set)
-    excluded_providers: set[str] = field(default_factory=set)
+    # provider id -> the connection whose account failed. Other accounts of that provider are not tried for
+    # the rest of the request (no account hopping); other models on the same connection still may be.
+    excluded_providers: dict[str, str] = field(default_factory=dict)
     served: Candidate | None = None
 
     def meta(self) -> dict[str, Any]:
@@ -271,7 +273,8 @@ class Engine:
     def _skip(self, st: RequestState, c: Candidate) -> str | None:
         if (c.connection_id, c.upstream_model) in st.exclude or (c.connection_id, "*") in st.exclude:
             return "excluded_after_failure"
-        if c.provider_id in st.excluded_providers:
+        failed_conn = st.excluded_providers.get(c.provider_id)
+        if failed_conn is not None and failed_conn != c.connection_id:
             return "provider_excluded_after_account_failure"
         return None
 
@@ -403,7 +406,7 @@ class Engine:
         # Exclusions for the remainder of this request.
         st.exclude.add((c.connection_id, "*" if cat in _CONNECTION_WIDE else c.upstream_model))
         if cat in _ACCOUNT_SCOPED and not c.multi_account_permitted:
-            st.excluded_providers.add(c.provider_id)
+            st.excluded_providers.setdefault(c.provider_id, c.connection_id)
         st.attempts.append(
             Attempt(
                 c.provider_id,

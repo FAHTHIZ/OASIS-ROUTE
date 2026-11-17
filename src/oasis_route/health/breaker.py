@@ -45,8 +45,14 @@ _COUNTED = {
 _OPEN_IMMEDIATELY = {ErrorCategory.RATE_LIMITED, ErrorCategory.MODEL_UNAVAILABLE}
 
 
+# Rate limits are usually enforced per model (e.g. Groq, Gemini), so a 429 cools down only that model. When a
+# second model on the same connection is also rate limited, the limit is evidently account-wide and the whole
+# connection is cooled down too.
+_MODEL_SCOPED = {ErrorCategory.MODEL_UNAVAILABLE, ErrorCategory.RATE_LIMITED}
+
+
 def scope_for(category: ErrorCategory, upstream_model: str) -> str:
-    return upstream_model if category is ErrorCategory.MODEL_UNAVAILABLE else CONNECTION_SCOPE
+    return upstream_model if category in _MODEL_SCOPED else CONNECTION_SCOPE
 
 
 @dataclass(frozen=True)
@@ -269,7 +275,23 @@ async def record_failure(
         else:
             rec.state = HealthState.DEGRADED.value
 
-    return await _with_record(db, connection_id, scope, apply)
+    rec = await _with_record(db, connection_id, scope, apply)
+    if category is ErrorCategory.RATE_LIMITED and scope != CONNECTION_SCOPE:
+        async with db.session() as s:
+            others = (
+                await s.execute(
+                    select(HealthRecord.id).where(
+                        HealthRecord.connection_id == connection_id,
+                        HealthRecord.model_scope.not_in([CONNECTION_SCOPE, upstream_model]),
+                        HealthRecord.state == HealthState.OPEN.value,
+                        HealthRecord.last_error_category == ErrorCategory.RATE_LIMITED.value,
+                        HealthRecord.open_until > now,
+                    )
+                )
+            ).first()
+        if others is not None:
+            await _with_record(db, connection_id, CONNECTION_SCOPE, apply)
+    return rec
 
 
 async def release_probe(db: Database, connection_id: str, upstream_model: str) -> None:
