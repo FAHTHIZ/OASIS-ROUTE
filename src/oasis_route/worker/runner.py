@@ -167,6 +167,42 @@ async def _health_probe(ctx: AppContext) -> Any:
     return {"probed": len(ids)}
 
 
+async def rewrap_credentials(ctx: AppContext, batch: int = 200) -> dict[str, int]:
+    """Finish a KEK rotation: re-wrap every DEK still under a previous master key with the current one.
+
+    Ciphertext is untouched and secrets are never decrypted here (only the 32-byte DEK is unwrapped), so this
+    is cheap and safe to run repeatedly. Once ``remaining`` is 0 the old key can be removed from config.
+    """
+    from oasis_route.db.models import Credential
+    from oasis_route.security.vault import SealedSecret, VaultError
+
+    current = ctx.vault_.keys.current_kek_id
+    done = failed = 0
+    async with ctx.db.transaction() as s:
+        rows = list(
+            (await s.execute(select(Credential).where(Credential.kek_id != current).limit(batch))).scalars()
+        )
+        for c in rows:
+            try:
+                new = ctx.vault_.rewrap(SealedSecret(c.kek_id, c.wrapped_dek, c.ciphertext, c.aad))
+            except VaultError:
+                failed += 1  # KEK not configured; reported, never fatal
+                continue
+            c.kek_id, c.wrapped_dek = new.kek_id, new.wrapped_dek
+            done += 1
+    async with ctx.db.session() as s:
+        from sqlalchemy import func
+
+        remaining = int(
+            (
+                await s.execute(
+                    select(func.count()).select_from(Credential).where(Credential.kek_id != current)
+                )
+            ).scalar_one()
+        )
+    return {"rewrapped": done, "failed": failed, "remaining": remaining}
+
+
 async def _quota_refresh(ctx: AppContext) -> Any:
     """Advance quota windows whose reset time has passed so capacity reports stay current."""
     from oasis_route.quota import ledger
@@ -219,6 +255,13 @@ def default_jobs(ctx: AppContext) -> list[Job]:
             _revalidate_connections,
             lease_s=600,
             description="Re-check provider credentials",
+        ),
+        Job(
+            "vault.rewrap",
+            3600,
+            rewrap_credentials,
+            lease_s=600,
+            description="Re-wrap credentials after a master key rotation",
         ),
         Job("retention.evidence", 86_400, _evidence_retention, description="Delete expired evidence"),
         Job("retention.records", 3600, _retention, description="Delete expired notifications and records"),
