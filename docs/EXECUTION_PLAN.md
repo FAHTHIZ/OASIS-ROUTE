@@ -64,18 +64,18 @@ This plan is deliberately sequential. A coding agent should deliver working vert
 - [x] Cooldowns and Retry-After handling.
 - [x] Reset-aware recovery checks.
 - [x] Advertised/verified/authorized/usable capacity calculations.
-- [ ] Usage and routing dashboard.
+- [x] Usage and routing dashboard.
 - [x] OpenTelemetry instrumentation.
 
 **Acceptance:** simulated outage, quota reset, auth expiry, and model removal behave correctly; dashboards reconcile with ledger.
 
 ## P7 — Product UX and deployment
-- [ ] Onboarding and provider connection UX.
-- [ ] API key management.
-- [ ] Model catalogue and route preview.
-- [ ] Usage/capacity dashboards.
-- [ ] Docker/dev deployment and production deployment guide.
-- [ ] Backup/restore and migration runbook.
+- [x] Onboarding and provider connection UX.
+- [x] API key management.
+- [x] Model catalogue and route preview.
+- [x] Usage/capacity dashboards.
+- [x] Docker/dev deployment and production deployment guide.
+- [x] Backup/restore and migration runbook.
 
 **Acceptance:** a new user can run locally, connect one eligible provider, create a key, and make a request using documented steps.
 
@@ -93,8 +93,8 @@ This plan is deliberately sequential. A coding agent should deliver working vert
 - [ ] Dependency, license, secret, and container scans.
 - [ ] SBOM and release provenance.
 - [ ] Load, soak, concurrency, and fault-injection tests.
-- [ ] Security policy, contribution guide, code of conduct, changelog.
-- [ ] Versioned API docs and honest feature matrix.
+- [x] Security policy, contribution guide, code of conduct, changelog.
+- [x] Versioned API docs and honest feature matrix.
 
 **Acceptance:** release checklist signed off; no critical/high unresolved security findings; install and upgrade paths verified.
 

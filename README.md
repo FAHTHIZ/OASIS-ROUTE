@@ -55,19 +55,57 @@ The discovery control plane is separate from the inference data plane. Finding a
 
 ## Project status
 
-This repository currently contains the architecture and implementation handoff. The runtime is **not yet implemented**. The documents define the target system, non-goals, safety boundaries, interfaces, data model, milestones, and acceptance criteria. Do not describe planned features as working software.
+Oasis Route is working software. The implementation roadmap in [docs/EXECUTION_PLAN.md](docs/EXECUTION_PLAN.md) is tracked phase by phase, and [docs/IMPLEMENTATION_AUDIT.md](docs/IMPLEMENTATION_AUDIT.md) records what is verified. The test suite runs on SQLite and PostgreSQL in CI.
 
-## Start here
+| Capability | Status |
+|---|---|
+| OpenAI-compatible gateway (`/v1/chat/completions`, `/v1/models`), streaming, idempotency | Implemented |
+| Adapters: OpenAI, Anthropic, Gemini (OpenAI-compatible endpoint), Groq, Mistral, OpenRouter, Cerebras, custom OpenAI-compatible | Implemented |
+| Encrypted credential vault (envelope encryption, KEK rotation with automatic re-wrap) | Implemented |
+| Atomic quota ledger: reservations, settlement, shared pools, windows, header learning | Implemented |
+| Strongest-suitable-first routing with explainable decisions and route preview | Implemented |
+| Automatic failover with circuit breakers, honest downgrade signalling | Implemented |
+| Discovery: safe fetcher, extraction, evidence, verification workflow, offer lifecycle | Implemented |
+| Capacity analytics and forecasting | Implemented |
+| Supervised background worker (leases, backoff, timeouts, crash recovery, stall alerts) | Implemented |
+| Web console with plain-language status | Implemented |
+| Optional mail notices (forwarded mail; Gmail behind a compliance attestation) | Implemented, off by default |
+| Official provider OAuth connection flows (OpenRouter PKCE) | In progress |
 
-1. [Architecture](docs/ARCHITECTURE.md)
-2. [Routing and quota engine](docs/ROUTING_AND_QUOTAS.md)
-3. [Discovery and offer verification](docs/DISCOVERY_AND_REGISTRY.md)
-4. [Security and compliance](docs/SECURITY_AND_COMPLIANCE.md)
-5. [Provider adapter contract](docs/PROVIDER_ADAPTERS.md)
-6. [Execution plan](docs/EXECUTION_PLAN.md)
-7. [Agent handoff](AGENT_HANDOFF.md)
-8. [Zero-operations autonomy requirement](docs/ZERO_OPERATIONS_AUTONOMY.md)
-9. [Research notes and references](docs/RESEARCH.md)
+## Quickstart
+
+Local, with deterministic mock providers and no network calls:
+
+```bash
+uv sync
+uv run oasis-route dev        # prints the console URL and your Oasis Key
+```
+
+Production-style, with PostgreSQL ([full guide](docs/DEPLOYMENT.md)):
+
+```bash
+# create .env with POSTGRES_PASSWORD, OASIS_ROUTE_MASTER_KEY, OASIS_ROUTE_API_KEY_PEPPER
+docker compose up -d --build
+docker compose run --rm api bootstrap --email you@example.com
+```
+
+Open `/console/`, sign in with the Oasis Key, add a provider API key under **Connections**, and call the gateway:
+
+```bash
+curl https://route.example.com/v1/chat/completions \
+  -H "Authorization: Bearer $OASIS_API_KEY" -H 'content-type: application/json' \
+  -d '{"model":"auto","messages":[{"role":"user","content":"hello"}]}'
+```
+
+Any OpenAI SDK works by setting its base URL to `https://route.example.com/v1` and its API key to the Oasis Key.
+
+## Documentation
+
+- Using it: [API guide](docs/API.md), [configuration](docs/CONFIGURATION.md)
+- Running it: [deployment](docs/DEPLOYMENT.md), [operations runbook](docs/OPERATIONS.md), [zero-operations requirement](docs/ZERO_OPERATIONS_AUTONOMY.md)
+- Building it: [development](docs/DEVELOPMENT.md), [architecture](docs/ARCHITECTURE.md), [routing and quotas](docs/ROUTING_AND_QUOTAS.md), [discovery and registry](docs/DISCOVERY_AND_REGISTRY.md), [provider adapter contract](docs/PROVIDER_ADAPTERS.md), [decision records](docs/adr/)
+- Trust: [security and compliance](docs/SECURITY_AND_COMPLIANCE.md), [threat model](docs/THREAT_MODEL.md), [implementation audit](docs/IMPLEMENTATION_AUDIT.md)
+- Planning: [execution plan](docs/EXECUTION_PLAN.md), [agent handoff](AGENT_HANDOFF.md), [research notes](docs/RESEARCH.md)
 
 ## Design principles
 
@@ -81,10 +119,10 @@ This repository currently contains the architecture and implementation handoff. 
 8. **Observable and testable.** Every route decision and quota reservation must be explainable.
 9. **Zero routine operations.** After adding an authorized provider credential, onboarding, discovery, quota synchronization, routing, health checks, and recovery should happen automatically in the background. See [the autonomy requirement](docs/ZERO_OPERATIONS_AUTONOMY.md).
 
-## Development
+## Contributing
 
-The implementation agent should follow [AGENT_HANDOFF.md](AGENT_HANDOFF.md) and execute [docs/EXECUTION_PLAN.md](docs/EXECUTION_PLAN.md) in order. It must inspect the repository and choose a coherent stack before adding dependencies. Prefer maintained OSS components where they solve a real problem, but do not wrap multiple competing gateways or duplicate their routing engines.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for setup and quality gates. Provider-specific behaviour belongs in adapters; do not wrap competing gateways or duplicate their routing engines.
 
 ## License
 
-No license has been selected in this architecture commit. Before public release, choose an OSI-approved license, add its complete license text, and ensure all dependencies are license-compatible.
+[Apache License 2.0](LICENSE).
