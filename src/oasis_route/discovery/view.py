@@ -148,7 +148,11 @@ async def discovery_status(session: AsyncSession) -> dict[str, Any]:
         )
     ).scalar_one()
     return {
-        "last_run_at": _iso(lease.last_success_at if lease else None),
+        # The scheduled job's last success, or the latest fetch when sources were run by hand.
+        "last_run_at": _iso(
+            (lease.last_success_at if lease else None)
+            or max((x.last_fetched_at for x in srcs if x.last_fetched_at), default=None)
+        ),
         "last_error": lease.last_error if lease else None,
         "next_scan_at": _iso(next_due),
         "sources": {

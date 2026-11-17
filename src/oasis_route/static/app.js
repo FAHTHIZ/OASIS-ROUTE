@@ -60,8 +60,252 @@ function errorBox(e) {
 
 const pid = () => state.me.project.id;
 
+const safeLink = (href, text) =>
+  typeof href === "string" && href.startsWith("https://")
+    ? el("a", { href, target: "_blank", rel: "noopener noreferrer" }, text)
+    : null;
+
+// Starts an official provider sign-in, opens the provider's page and waits for the flow to finish.
+async function startOAuth(provider, acceptTerms, msg, back) {
+  const pollFlow = async (flowId, deadline) => {
+    if (Date.now() > deadline) return msg.replaceChildren("Sign-in timed out. Try again.");
+    try {
+      const f = await api(`/api/v1/projects/${pid()}/connections/oauth/${flowId}`);
+      if (f.status === "completed") return render(back);
+      if (f.status === "failed" || f.status === "expired")
+        return msg.replaceChildren(errorBox(new Error(f.error || `Sign-in ${f.status}. Try again.`)));
+    } catch (e) {
+      return msg.replaceChildren(errorBox(e));
+    }
+    setTimeout(() => pollFlow(flowId, deadline), 2000);
+  };
+  try {
+    const f = await api(`/api/v1/projects/${pid()}/connections/oauth/start`, {
+      method: "POST",
+      body: { provider_id: provider.id, accept_terms: acceptTerms },
+    });
+    if (!String(f.authorization_url).startsWith("https://")) throw new Error("unexpected authorization URL");
+    window.open(f.authorization_url, "_blank", "noopener");
+    msg.replaceChildren(
+      `Waiting for you to approve access on ${provider.name}... `,
+      safeLink(f.authorization_url, `Open ${provider.name} again`)
+    );
+    pollFlow(f.flow_id, Date.now() + 10 * 60 * 1000);
+  } catch (e) {
+    msg.replaceChildren(errorBox(e));
+  }
+}
+
+const PERIOD = { minute: "min", hour: "hour", day: "day", week: "week", month: "month" };
+const UNIT = { total_tokens: "tokens", input_tokens: "input tokens", output_tokens: "output tokens" };
+function quotaText(q) {
+  const scope = q.model_scope && q.model_scope !== "*" ? ` · ${q.model_scope}` : "";
+  if (q.unit === "credits_usd_micros")
+    return `$${(q.limit / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })} credit${q.period === "one_time" ? " (one-time)" : ""}${scope}`;
+  const per = q.period && q.period !== "one_time" ? ` / ${PERIOD[q.period] || q.period}` : "";
+  return `${fmt(q.limit)} ${UNIT[q.unit] || q.unit || ""}${per}${scope}`;
+}
+
+function ago(v) {
+  if (!v) return null;
+  const s = Math.round((Date.now() - new Date(v).getTime()) / 1000);
+  if (s < 0) return `in ${Math.ceil(-s / 60)} min`;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} d ago`;
+}
+
+const ACCESS_LABEL = {
+  official_oauth: "Sign-in available",
+  api_key: "API key",
+  anonymous_public: "No account needed",
+};
+const BILLING_LABEL = { free_tier: "Free tier", paid: "Paid account", unknown: "Billing unknown", local: "Local" };
+
+function providerCard(p) {
+  const msg = el("div", { class: "msg" });
+  const tags = [
+    el("span", { class: `tag ${p.access_path}` }, ACCESS_LABEL[p.access_path] || p.access_path),
+    p.card_required === false
+      ? el("span", { class: "tag good", title: `Source: ${p.card_required_source}` }, "No card required")
+      : p.card_required === true
+        ? el("span", { class: "tag caution", title: `Source: ${p.card_required_source}` }, "Card required")
+        : el("span", { class: "tag", title: "Not documented and not yet extracted" }, "Card: unknown"),
+    p.models.free ? el("span", { class: "tag good" }, `${fmt(p.models.free)} free models`) : null,
+    p.pending_review ? el("span", { class: "tag", title: "Waiting for an administrator to verify" }, `${p.pending_review} unverified`) : null,
+  ];
+  const offers = p.offers.length
+    ? p.offers.map((o) =>
+        el(
+          "div",
+          { class: "offer" },
+          el("div", { class: "offer-head" }, el("strong", {}, o.title), " ", pill(o.state)),
+          o.quotas.length
+            ? el("ul", { class: "quotas" }, o.quotas.map((q) => el("li", {}, quotaText(q))))
+            : el("p", { class: "muted" }, "Limits: unknown"),
+          o.models.free.length
+            ? el("p", { class: "muted small" }, `Free models: ${o.models.free.slice(0, 5).join(", ")}`,
+                o.models.free.length > 5 ? ` and ${o.models.free.length - 5} more` : "")
+            : null,
+          el(
+            "p",
+            { class: "muted small" },
+            o.expires_at ? `Expires ${when(o.expires_at)} · ` : "",
+            `Checked ${when(o.last_observed_at)}`,
+            o.evidence.urls.length ? " · Evidence: " : "",
+            o.evidence.urls.flatMap((u, i) => [i ? ", " : "", safeLink(u, u.replace(/^https:\/\//, "").split("/")[0])])
+          )
+        )
+      )
+    : [el("p", { class: "muted" }, p.pending_review ? "Offers found, waiting for verification." : "No verified offer yet.")];
+
+  const na = p.next_action;
+  let action;
+  if (na.kind === "connect_oauth") {
+    const accept = el("input", { type: "checkbox" });
+    action = el(
+      "div",
+      { class: "action" },
+      el("label", { class: "check" }, accept, " I hold this account and accept the provider's terms"),
+      el("button", { type: "button", onclick: () => startOAuth(p, accept.checked, msg, "discover") }, na.label)
+    );
+  } else if (na.kind === "connect_api_key") {
+    const form = el(
+      "form",
+      {
+        class: "keyform",
+        hidden: true,
+        onsubmit: async (ev) => {
+          ev.preventDefault();
+          const f = new FormData(ev.target);
+          try {
+            await api(`/api/v1/projects/${pid()}/connections`, {
+              method: "POST",
+              body: { provider_id: p.id, api_key: f.get("api_key"), accept_terms: f.get("accept") === "on" },
+            });
+            render("discover");
+          } catch (e) {
+            msg.replaceChildren(errorBox(e));
+          }
+        },
+      },
+      el("input", { name: "api_key", type: "password", autocomplete: "off", placeholder: `${p.name} API key`, required: true }),
+      el("label", { class: "check" }, el("input", { type: "checkbox", name: "accept" }), " I hold this account and accept the provider's terms"),
+      el("button", { type: "submit" }, "Connect")
+    );
+    action = el(
+      "div",
+      { class: "action" },
+      el("p", { class: "muted small" }, na.label, " ", safeLink(na.url, "Get a key")),
+      el("button", { type: "button", class: "secondary", onclick: (ev) => { form.hidden = false; ev.target.hidden = true; } }, "Add API key"),
+      form
+    );
+  } else {
+    const tone = { connected: "ok", confirm_billing: "warn", fix_connection: "error" }[na.kind] || "muted";
+    action = el(
+      "div",
+      { class: "action" },
+      el("p", { class: tone }, na.label),
+      na.kind === "confirm_billing"
+        ? el("button", {
+            type: "button",
+            class: "secondary",
+            onclick: async () => {
+              if (!confirm(`Confirm ${p.name} has no billing attached? Free-only routing will then use it.`)) return;
+              try {
+                await api(`/api/v1/projects/${pid()}/connections/${na.connection_id}`, { method: "PATCH", body: { billing_mode: "free_tier" } });
+                render("discover");
+              } catch (e) {
+                msg.replaceChildren(errorBox(e));
+              }
+            },
+          }, "It's a free-tier account")
+        : safeLink(na.url, "Read the docs")
+    );
+  }
+  const links = Object.entries(p.links)
+    .filter(([k]) => ["signup", "pricing", "rate_limits", "docs", "terms"].includes(k))
+    .map(([k, v]) => safeLink(v, k.replace("_", " ")));
+  return el(
+    "article",
+    { class: `pcard${p.connection ? " connected" : ""}` },
+    el("div", { class: "pcard-head" }, el("h3", {}, p.name), p.connection ? pill(p.connection.status) : null),
+    el("div", { class: "tags" }, tags),
+    p.free_tier_hint ? el("p", { class: "hint" }, p.free_tier_hint) : null,
+    el("div", { class: "offers" }, offers),
+    el(
+      "p",
+      { class: "muted small" },
+      p.models.total ? `${fmt(p.models.total)} models in the catalogue` : "Models sync automatically once connected",
+      p.connection ? ` · ${BILLING_LABEL[p.connection.billing_mode] || p.connection.billing_mode}` : ""
+    ),
+    el("div", { class: "links" }, links),
+    action,
+    msg
+  );
+}
+
 // ---------------------------------------------------------------------------------------------- views
 const views = {
+  async discover() {
+    const d = await api(`/api/v1/discover?project_id=${encodeURIComponent(pid())}`);
+    const st = d.status;
+    const kpi = (l, v, sub) => el("div", { class: "kpi" }, el("div", { class: "v" }, fmt(v)), el("div", { class: "l" }, l), sub ? el("div", { class: "l" }, sub) : null);
+    const filters = { q: "", free: false, oauth: false, nocard: false, connected: false };
+    const grid = el("div", { class: "pgrid" });
+    const count = el("span", { class: "muted" });
+    const draw = () => {
+      const q = filters.q.toLowerCase();
+      const rows = d.providers.filter(
+        (p) =>
+          (!q || p.name.toLowerCase().includes(q) || p.id.includes(q) || (p.free_tier_hint || "").toLowerCase().includes(q)) &&
+          (!filters.free || p.models.free > 0 || p.offers.some((o) => o.verified)) &&
+          (!filters.oauth || p.oauth_available) &&
+          (!filters.nocard || p.card_required === false) &&
+          (!filters.connected || p.connection)
+      );
+      count.replaceChildren(`${rows.length} of ${d.providers.length} providers`);
+      grid.replaceChildren(...(rows.length ? rows.map(providerCard) : [el("p", { class: "muted" }, "No provider matches these filters.")]));
+    };
+    const chip = (key, label) =>
+      el("label", { class: "chip" }, el("input", { type: "checkbox", onchange: (ev) => { filters[key] = ev.target.checked; draw(); } }), ` ${label}`);
+    const bar = el(
+      "div",
+      { class: "filters" },
+      el("input", { type: "search", placeholder: "Search providers", "aria-label": "Search providers", oninput: (ev) => { filters.q = ev.target.value; draw(); } }),
+      chip("free", "Free capacity"),
+      chip("oauth", "Sign-in available"),
+      chip("nocard", "No card"),
+      chip("connected", "Connected"),
+      count
+    );
+    draw();
+    const proj = st.project || {};
+    return [
+      card(
+        null,
+        el("h1", {}, "Discover free AI capacity"),
+        el(
+          "p",
+          { class: "muted" },
+          "Providers, what they really require, and offers verified from official sources. Unknown means not yet confirmed, never assumed. ",
+          proj.spend_policy === "free_only" ? "Your project is in free-only mode, so nothing here can bill you without your confirmation." : "Your project allows paid routes."
+        )
+      ),
+      el(
+        "div",
+        { class: "kpis" },
+        kpi("Verified offers", st.offers.verified, `${fmt(st.offers.pending_review)} waiting for review`),
+        kpi("Your free-tier connections", proj.free_tier_connections, `${fmt(proj.connected)} connected in total`),
+        kpi("Sources monitored", st.sources.approved, st.sources.failing ? `${st.sources.failing} failing, retrying with backoff` : "all healthy"),
+        kpi("Last scan", ago(st.last_run_at) || "not yet", st.next_scan_at ? (new Date(st.next_scan_at) <= new Date() ? "next scan due now" : `next scan ${ago(st.next_scan_at)}`) : null)
+      ),
+      bar,
+      grid,
+    ];
+  },
+
   async overview() {
     const st = await api(`/api/v1/projects/${pid()}/status`);
     const tone = { Ready: "ok", Connected: "ok", "Action required": "error", "Temporarily degraded": "warn" };
@@ -254,18 +498,6 @@ const views = {
     );
     const oauthMsg = el("p", {});
     const oauthAccept = el("input", { type: "checkbox" });
-    const pollFlow = async (flowId, deadline) => {
-      if (Date.now() > deadline) return oauthMsg.replaceChildren("Sign-in timed out. Try again.");
-      try {
-        const f = await api(`/api/v1/projects/${pid()}/connections/oauth/${flowId}`);
-        if (f.status === "completed") return render("connections");
-        if (f.status === "failed" || f.status === "expired")
-          return oauthMsg.replaceChildren(errorBox(new Error(f.error || `Sign-in ${f.status}. Try again.`)));
-      } catch (e) {
-        return oauthMsg.replaceChildren(errorBox(e));
-      }
-      setTimeout(() => pollFlow(flowId, deadline), 2000);
-    };
     const oauthProviders = providers.filter((p) => p.oauth_available);
     const oauthCard = oauthProviders.length
       ? card(
@@ -280,23 +512,7 @@ const views = {
                 "button",
                 {
                   type: "button",
-                  onclick: async () => {
-                    try {
-                      const f = await api(`/api/v1/projects/${pid()}/connections/oauth/start`, {
-                        method: "POST",
-                        body: { provider_id: p.id, accept_terms: oauthAccept.checked },
-                      });
-                      if (!String(f.authorization_url).startsWith("https://")) throw new Error("unexpected authorization URL");
-                      window.open(f.authorization_url, "_blank", "noopener");
-                      oauthMsg.replaceChildren(
-                        `Waiting for you to approve access on ${p.name}... `,
-                        el("a", { href: f.authorization_url, target: "_blank", rel: "noopener noreferrer" }, `Open ${p.name} again`)
-                      );
-                      pollFlow(f.flow_id, Date.now() + 10 * 60 * 1000);
-                    } catch (e) {
-                      oauthMsg.replaceChildren(errorBox(e));
-                    }
-                  },
+                  onclick: () => startOAuth(p, oauthAccept.checked, oauthMsg, "connections"),
                 },
                 `Sign in with ${p.name}`
               )
@@ -634,7 +850,7 @@ async function start() {
     el("button", { class: "secondary", onclick: () => { sessionStorage.removeItem(KEY); location.reload(); } }, "Sign out")
   );
   if (state.me.user.role === "admin") document.querySelector('nav button[data-view="background"]').hidden = false;
-  render("overview");
+  render("discover");
 }
 
 document.addEventListener("DOMContentLoaded", () => {
