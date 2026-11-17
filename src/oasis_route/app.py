@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -24,6 +26,10 @@ from oasis_route.logging import configure_logging, get_logger, request_id_var
 
 log = get_logger("oasis_route.app")
 STATIC_DIR = Path(__file__).parent / "static"
+CONSOLE_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; "
+    "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+)
 
 
 def _error(
@@ -52,8 +58,38 @@ def create_app(settings: Settings | None = None, ctx: AppContext | None = None) 
             await sync_catalog(ctx.db, settings)
         except Exception as exc:  # schema not migrated yet: readiness reports it
             log.warning("catalog sync skipped", extra={"error": type(exc).__name__})
-        yield
-        await ctx.aclose()
+        stop = asyncio.Event()
+        tasks: list[asyncio.Task[object]] = []
+        if settings.worker_mode == "embedded":
+            from oasis_route.worker.runner import supervise
+
+            tasks.append(asyncio.create_task(supervise(ctx, stop, mode="embedded")))
+        if settings.worker_mode != "off":
+            tasks.append(asyncio.create_task(_watchdog_loop(stop)))
+        try:
+            yield
+        finally:
+            stop.set()
+            for t in tasks:
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(t, timeout=30)
+            await ctx.aclose()
+
+    async def _watchdog_loop(stop: asyncio.Event) -> None:
+        from oasis_route.worker.runner import watchdog
+
+        # Give a freshly started worker time to report in before judging it.
+        delay = settings.worker_stall_after_s
+        while not stop.is_set():
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(stop.wait(), timeout=delay)
+            if stop.is_set():
+                return
+            try:
+                await watchdog(ctx)
+            except Exception:  # pragma: no cover - never let monitoring take down the API
+                log.warning("watchdog check failed")
+            delay = 60.0
 
     app = FastAPI(
         title="Oasis Route",
@@ -88,6 +124,11 @@ def create_app(settings: Settings | None = None, ctx: AppContext | None = None) 
         path = getattr(route, "path", "unmatched")
         ctx.metrics.http_requests.labels(request.method, path, str(response.status_code)).inc()
         response.headers["x-request-id"] = rid
+        response.headers.setdefault("x-content-type-options", "nosniff")
+        if request.url.path.startswith("/console"):
+            response.headers["content-security-policy"] = CONSOLE_CSP
+            response.headers["x-frame-options"] = "DENY"
+            response.headers["referrer-policy"] = "no-referrer"
         log.debug(
             "http",
             extra={
@@ -135,7 +176,14 @@ def create_app(settings: Settings | None = None, ctx: AppContext | None = None) 
         except Exception as exc:
             log.warning("readiness check failed", extra={"error": type(exc).__name__})
             return JSONResponse(status_code=503, content={"status": "unavailable", "reason": "database"})
-        return JSONResponse(content={"status": "ready", "schema_revision": rev})
+        from oasis_route.worker.runner import worker_status
+
+        try:
+            worker = (await worker_status(ctx))["state"]
+        except Exception:
+            worker = "unknown"
+        # Background automation is reported but never fails readiness: the API keeps serving without it.
+        return JSONResponse(content={"status": "ready", "schema_revision": rev, "worker": worker})
 
     @app.get("/metrics", tags=["health"], include_in_schema=False)
     async def metrics() -> Response:

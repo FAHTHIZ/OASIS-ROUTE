@@ -1,1 +1,42 @@
-<!doctype html><title>Oasis Route</title><p>Console</p>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oasis Route console</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="brand">Oasis Route</div>
+    <nav id="nav" hidden>
+      <button data-view="overview" class="active">Overview</button>
+      <button data-view="capacity">Capacity</button>
+      <button data-view="connections">Connections</button>
+      <button data-view="keys">Oasis Keys</button>
+      <button data-view="models">Models</button>
+      <button data-view="route">Route preview</button>
+      <button data-view="usage">Usage</button>
+      <button data-view="offers">Offers</button>
+      <button data-view="notices">Notices</button>
+      <button data-view="background" hidden>Background</button>
+    </nav>
+    <div id="who"></div>
+  </header>
+  <main>
+    <section id="login" class="card narrow">
+      <h1>Sign in with an Oasis Key</h1>
+      <p class="muted">The key stays in this tab's session storage and is sent only to this server as
+        <code>Authorization: Bearer &lt;OASIS_API_KEY&gt;</code>.</p>
+      <form id="login-form">
+        <input id="key-input" type="password" autocomplete="off" placeholder="oasis_live_…" required>
+        <button type="submit">Continue</button>
+      </form>
+      <p id="login-error" class="error"></p>
+    </section>
+    <section id="view" hidden></section>
+  </main>
+  <footer class="muted">Oasis Route · <a href="/docs">API reference</a> · <a href="/metrics">metrics</a></footer>
+</body>
+</html>

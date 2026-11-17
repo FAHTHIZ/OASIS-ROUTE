@@ -56,7 +56,7 @@ async def test_job_not_rerun_until_due_and_expired_lease_is_taken_over(ctx: AppC
     async with ctx.db.transaction() as s:
         row = await s.get(WorkerLease, "test.due")
         assert row is not None and row.last_result is not None and '"ok": true' in row.last_result
-        row.last_run_at = utcnow() - timedelta(hours=2)
+        row.last_run_at = row.next_run_at = utcnow() - timedelta(hours=2)
         # Simulate a crashed holder: lease held by "a" but long expired.
         row.holder, row.lease_until = "a", utcnow() - timedelta(seconds=1)
     await runner.run_once(ctx, [job], holder="b")

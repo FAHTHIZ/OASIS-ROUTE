@@ -46,6 +46,12 @@ class Metrics:
         self.reservations = Counter(
             "oasis_quota_reservations_total", "Quota reservation attempts", ["result"], registry=r
         )
+        self.worker_jobs = Counter(
+            "oasis_worker_jobs_total", "Background job runs", ["job", "outcome"], registry=r
+        )
+        self.worker_restarts = Counter(
+            "oasis_worker_restarts_total", "Supervised worker restarts after a crash", registry=r
+        )
         self.breaker_open = Gauge("oasis_circuit_open", "Open circuit breakers", ["provider"], registry=r)
         self.discovery_fetches = Counter(
             "oasis_discovery_fetches_total", "Discovery fetch results", ["result"], registry=r

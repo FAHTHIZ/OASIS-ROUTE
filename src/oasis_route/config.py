@@ -10,6 +10,7 @@ import base64
 import binascii
 from enum import StrEnum
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -78,7 +79,15 @@ class Settings(BaseSettings):
     discovery_sources_per_tick: int = Field(default=10, ge=1)
     discovery_max_pending_submissions_per_user: int = Field(default=20, ge=1)
     offer_stale_after_days: int = Field(default=30, ge=1)
-    worker_interval_s: float = Field(default=30.0, gt=0)
+    worker_interval_s: float = Field(default=30.0, gt=0, description="Discovery scheduling interval.")
+    worker_mode: Literal["embedded", "external", "off"] = Field(
+        default="embedded",
+        description="embedded: the API process supervises the worker (default, zero-ops). external: a "
+        "dedicated `oasis-route worker` service runs it. off: no background jobs (tests only).",
+    )
+    worker_tick_s: float = Field(default=15.0, gt=0)
+    worker_stall_after_s: float = Field(default=180.0, gt=0)
+    worker_max_backoff_s: float = Field(default=3600.0, gt=0)
 
     # Optional integrations
     gmail_enabled: bool = False
