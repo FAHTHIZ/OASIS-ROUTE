@@ -161,6 +161,12 @@ async def _retention(ctx: AppContext) -> Any:
     }
 
 
+async def _oauth_refresh(ctx: AppContext) -> Any:
+    from oasis_route.connections import oauth
+
+    return await oauth.refresh_tokens(ctx)
+
+
 async def _mail_sync(ctx: AppContext) -> Any:
     from oasis_route.notifications import mail
 
@@ -270,6 +276,13 @@ def default_jobs(ctx: AppContext) -> list[Job]:
             description="Release reservations abandoned by crashed requests",
         ),
         Job("quota.refresh", 300, _quota_refresh, lease_s=120, description="Advance quota reset windows"),
+        Job(
+            "connections.oauth_refresh",
+            600,
+            _oauth_refresh,
+            lease_s=300,
+            description="Refresh expiring OAuth sign-ins with the provider's refresh_token grant",
+        ),
         Job(
             "providers.health_probe",
             300,

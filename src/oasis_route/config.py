@@ -90,6 +90,11 @@ class Settings(BaseSettings):
     discovery_max_pending_submissions_per_user: int = Field(default=20, ge=1)
     offer_stale_after_days: int = Field(default=30, ge=1)
     # Built-in, maintainer-reviewed official sources (discovery/seeds.py), inserted at startup if missing.
+    hf_oauth_client_id: str = Field(
+        default="",
+        description="Client id of a public Hugging Face OAuth app for 'Sign in with Hugging Face'. Empty "
+        "uses this deployment's Client ID Metadata Document when public_url is https; otherwise API keys.",
+    )
     discovery_seed_sources: bool = True
     # Bounded link-following from approved official pages to more official pages (same provider domains).
     discovery_frontier_enabled: bool = True

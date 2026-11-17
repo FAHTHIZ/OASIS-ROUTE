@@ -153,6 +153,8 @@ class AccountStatus:
     usage_total: float | None = None
     free_model_daily_limit: int | None = None
     free_model_daily_used: int | None = None
+    payment_method: bool | None = None  # provider says a payment method is on file
+    plan: str | None = None
     source: str = ""
 
 

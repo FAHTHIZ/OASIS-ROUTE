@@ -239,12 +239,26 @@ class OpenAICompatibleAdapter:
                 )
         return out
 
+    async def _hf_account(self, conn: ConnectionContext) -> AccountStatus | None:
+        key = conn.secret.get("api_key")
+        if not key:
+            return None
+        try:
+            r = await conn.client.get(
+                HF_WHOAMI, headers={"authorization": f"Bearer {key}"}, timeout=timeout_for(conn)
+            )
+            return _hf_status(json.loads(r.content)) if r.status_code == 200 else None
+        except (httpx.HTTPError, ValueError):
+            return None
+
     async def account_status(self, conn: ConnectionContext) -> AccountStatus | None:
         """Read the account's own credit/free-tier status where the provider documents an endpoint for it.
 
         OpenRouter: ``GET /api/v1/key`` (https://openrouter.ai/docs/api/reference/limits). Failures return
         ``None``; validation never depends on this call.
         """
+        if conn.provider_id == "huggingface":
+            return await self._hf_account(conn)
         if conn.provider_id != "openrouter":
             return None
         try:
@@ -470,6 +484,24 @@ def infer_capabilities(item: dict[str, Any]) -> tuple[dict[str, Any], int | None
             max_out = raw
             break
     return caps, max_out
+
+
+HF_WHOAMI = "https://huggingface.co/api/whoami-v2"
+
+
+def _hf_status(data: Any) -> AccountStatus | None:
+    """Hugging Face ``whoami-v2``: ``canPay`` false means no payment method, so usage cannot be billed."""
+    if not isinstance(data, dict):
+        return None
+    can_pay = data.get("canPay")
+    can_pay = can_pay if isinstance(can_pay, bool) else None
+    is_pro = data.get("isPro")
+    return AccountStatus(
+        free_tier=(not can_pay) if can_pay is not None else None,
+        payment_method=can_pay,
+        plan=("pro" if is_pro else "free") if isinstance(is_pro, bool) else None,
+        source=HF_WHOAMI,
+    )
 
 
 def _is_zero(v: Any) -> bool:
