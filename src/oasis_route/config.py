@@ -59,6 +59,11 @@ class Settings(BaseSettings):
         description="Allow upstream endpoints on private networks (local models). Off by default.",
     )
 
+    enable_mock_providers: bool | None = Field(
+        default=None,
+        description="Seed the deterministic mock providers. Defaults to on outside production.",
+    )
+
     # Circuit breaker
     breaker_failure_threshold: int = Field(default=5, ge=1)
     breaker_base_cooldown_s: float = Field(default=15.0, gt=0)
@@ -124,6 +129,12 @@ class Settings(BaseSettings):
         return self
 
     # Derived helpers -------------------------------------------------------------------------
+    @property
+    def mock_providers_enabled(self) -> bool:
+        if self.enable_mock_providers is not None:
+            return self.enable_mock_providers
+        return self.environment is not Environment.PRODUCTION
+
     def kek_bytes(self) -> bytes:
         if self.master_key is not None:
             return base64.b64decode(self.master_key.get_secret_value())

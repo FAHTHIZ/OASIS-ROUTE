@@ -43,8 +43,14 @@ def create_app(settings: Settings | None = None, ctx: AppContext | None = None) 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         log.info("startup", extra={"version": __version__, "environment": settings.environment.value})
+        from oasis_route.registry.catalog import sync_catalog
+
+        try:
+            await sync_catalog(ctx.db, settings)
+        except Exception as exc:  # schema not migrated yet: readiness reports it
+            log.warning("catalog sync skipped", extra={"error": type(exc).__name__})
         yield
-        await ctx.db.dispose()
+        await ctx.aclose()
 
     app = FastAPI(
         title="Oasis Route",

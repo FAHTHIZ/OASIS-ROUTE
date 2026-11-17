@@ -67,9 +67,12 @@ def settings(db_url: str) -> Settings:
 
 @pytest.fixture
 async def ctx(settings: Settings) -> AsyncIterator[AppContext]:
+    from oasis_route.registry.catalog import sync_catalog
+
     c = AppContext(settings=settings, db=Database(settings.database_url))
+    await sync_catalog(c.db, settings)
     yield c
-    await c.db.dispose()
+    await c.aclose()
 
 
 @pytest.fixture
@@ -80,3 +83,34 @@ async def client(ctx: AppContext) -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as c:
         yield c
+
+
+class HostRouterTransport(httpx.AsyncBaseTransport):
+    """Routes upstream requests to per-host in-process ASGI apps (deterministic, no network)."""
+
+    def __init__(self, apps: dict[str, httpx.AsyncBaseTransport]) -> None:
+        self.apps = apps
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        t = self.apps.get(request.url.host)
+        if t is None:
+            raise httpx.ConnectError(f"no route to {request.url.host}", request=request)
+        return await t.handle_async_request(request)
+
+
+@pytest.fixture
+def upstreams(ctx: AppContext) -> dict[str, object]:
+    """Two independent mock providers reachable as http://mock-a.test/v1 and http://mock-b.test/v1."""
+    from oasis_route.devtools.mock_provider import MockProviderState, create_mock_provider
+
+    states = {"mock-a.test": MockProviderState(), "mock-b.test": MockProviderState()}
+    ctx.upstream_transport = HostRouterTransport(
+        {h: httpx.ASGITransport(app=create_mock_provider(st)) for h, st in states.items()}
+    )
+
+    async def resolver(host: str, port: int) -> list[str]:
+        return ["127.0.0.1"]
+
+    ctx.resolver = resolver
+    ctx.settings.allow_private_upstreams = True
+    return states  # type: ignore[return-value]
