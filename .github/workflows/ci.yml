@@ -81,6 +81,32 @@ jobs:
           name: sbom
           path: sbom.cdx.json
 
+  install-and-upgrade:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: oasis
+          POSTGRES_PASSWORD: oasis
+          POSTGRES_DB: oasis_route_install
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U oasis" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install from the built wheel with pip (production mode, PostgreSQL)
+        env:
+          OASIS_INSTALL_DATABASE_URL: postgresql+asyncpg://oasis:oasis@localhost:5432/oasis_route_install
+        run: scripts/install_check.sh
+      - name: Upgrade from the previous release with live data
+        run: scripts/upgrade_check.sh
+
   docker:
     runs-on: ubuntu-latest
     steps:

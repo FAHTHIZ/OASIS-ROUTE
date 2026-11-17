@@ -1,4 +1,4 @@
-.PHONY: install dev fmt lint type test test-pg check migrate serve worker docker up audit
+.PHONY: install dev fmt lint type test test-pg check migrate serve worker docker up audit install-check upgrade-check release-check
 
 install:
 	uv sync
@@ -46,3 +46,11 @@ audit:  ## dependency vulnerabilities, licenses, secrets
 	UV_PROJECT_ENVIRONMENT=/tmp/oasis-runtime uv sync --frozen --no-dev --all-extras
 	/tmp/oasis-runtime/bin/python scripts/check_licenses.py
 	gitleaks git --no-banner --redact --config .gitleaks.toml .
+
+install-check:  ## build the wheel, pip-install it into a clean venv, migrate, bootstrap, serve
+	scripts/install_check.sh
+
+upgrade-check:  ## run the previous release with data, upgrade to this tree, verify nothing broke
+	scripts/upgrade_check.sh
+
+release-check: check audit install-check upgrade-check  ## everything in docs/RELEASE_CHECKLIST.md that can be automated

@@ -89,12 +89,13 @@ This plan is deliberately sequential. A coding agent should deliver working vert
 **Acceptance:** no production enablement until all applicable Google verification/security assessment requirements are satisfied.
 
 ## P9 — Release readiness
-- [ ] Threat-model review and remediation.
-- [ ] Dependency, license, secret, and container scans.
-- [ ] SBOM and release provenance.
-- [ ] Load, soak, concurrency, and fault-injection tests.
+- [x] Threat-model review and remediation.
+- [x] Dependency, license, secret, and container scans.
+- [x] SBOM and release provenance.
+- [x] Load, soak, concurrency, and fault-injection tests.
 - [x] Security policy, contribution guide, code of conduct, changelog.
 - [x] Versioned API docs and honest feature matrix.
+- [x] Install and upgrade paths verified in CI; account data export and erasure; release checklist ([RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)).
 
 **Acceptance:** release checklist signed off; no critical/high unresolved security findings; install and upgrade paths verified.
 

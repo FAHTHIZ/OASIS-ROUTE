@@ -1,7 +1,7 @@
 # Threat Model
 
 Method: STRIDE over the main trust boundaries. Each threat lists the control that implements the mitigation and
-where it is tested. This document is reviewed at every release (see `docs/RELEASE_CHECKLIST.md`).
+where it is tested. This document is reviewed at every release (see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)).
 
 ## Assets
 1. Oasis Route API keys (caller credentials).
@@ -48,6 +48,7 @@ where it is tested. This document is reviewed at every release (see `docs/RELEAS
 | T18 | I/D | Master key rotation leaves credentials undecryptable, or the old key is kept forever | Previous keys accepted for decryption; automatic `vault.rewrap` job and `rotate-kek` report `remaining`; runbook removes the old key only at zero | `tests/test_kek_rotation.py` |
 | T19 | T | Compromised dependency, leaked secret in history, or vulnerable base image in a release | CI pip-audit, license policy, gitleaks over full history, Trivy image scan (fails on fixable HIGH/CRITICAL), CycloneDX SBOM; releases carry signed build provenance | `.github/workflows/ci.yml`, `.github/workflows/release.yml` |
 | T20 | D/T | Failover storm or partial upstream failure corrupts the ledger | Every reservation reaches a terminal state on success, failure, timeout or cancellation; seeded fault injection under concurrency | `tests/test_resilience.py` |
+| T21 | I/E | Account export leaks secrets, or erasure leaves credentials behind / lets one tenant delete another | Export is built from an explicit column exclusion list (no key hashes, credentials, OAuth state/verifier, browser bindings) and audited; deletion requires owner role, `manage` scope and a `confirm` equal to the id, destroys vault rows before deleting, refuses the last administrator and shared projects; other tenants get 404 | `tests/test_data_rights.py` |
 
 ## Residual risks
 - A compromised host with access to both DB and KEK can decrypt credentials. Use a KMS-backed key provider in
@@ -64,3 +65,4 @@ where it is tested. This document is reviewed at every release (see `docs/RELEAS
 | Date | Version | Reviewer | Outcome |
 |---|---|---|---|
 | 2026-11-17 | 0.1.0 | Release review | T14 found during review (OAuth consent phishing) and fixed before release. No open critical or high findings. Dependency audit clean, no secrets in history, container scan clean of fixable HIGH/CRITICAL. |
+| 2026-11-17 | 0.1.0 + unreleased | Release checklist | T21 added with account export/erasure. Install from wheel and upgrade from 0.1.0 with live data verified and enforced in CI. No open critical or high findings. |
