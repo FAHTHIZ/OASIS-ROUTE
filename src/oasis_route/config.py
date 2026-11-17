@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     discovery_user_agent: str = "OasisRouteDiscovery/0.1 (+https://github.com/FAHTHIZ/OASIS-ROUTE)"
     discovery_max_bytes: int = Field(default=2_000_000, ge=1024)
     discovery_timeout_s: float = Field(default=20.0, gt=0)
+    discovery_max_redirects: int = Field(default=3, ge=0, le=10)
+    discovery_robots_ttl_s: int = Field(default=86_400, ge=60)
+    discovery_sources_per_tick: int = Field(default=10, ge=1)
+    discovery_max_pending_submissions_per_user: int = Field(default=20, ge=1)
+    offer_stale_after_days: int = Field(default=30, ge=1)
     worker_interval_s: float = Field(default=30.0, gt=0)
 
     # Optional integrations

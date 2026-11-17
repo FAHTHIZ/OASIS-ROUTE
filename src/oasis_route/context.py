@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 
@@ -28,6 +29,8 @@ class AppContext:
     discovery_transport: httpx.AsyncBaseTransport | None = None
     # DNS resolver used by SSRF checks (tests inject a fake resolver).
     resolver: Resolver | None = None
+    # Process-local helpers (e.g. the discovery fetcher with robots cache and per-domain budgets).
+    extras: dict[str, Any] = field(default_factory=dict, repr=False)
     _upstream_client: httpx.AsyncClient | None = field(default=None, repr=False)
     _discovery_client: httpx.AsyncClient | None = field(default=None, repr=False)
 
