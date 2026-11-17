@@ -6,6 +6,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- [docs/FREE_TIER_CAPACITY.md](docs/FREE_TIER_CAPACITY.md) and `scripts/free_tier_capacity.py`: reproducible monthly token-capacity maths from published free-tier limits (one account per provider, binding-limit per request size).
 - Anthropic Messages API: `POST /v1/messages` (text, images, tools, streaming) and `POST /v1/messages/count_tokens`, routed through the same engine as chat completions. Unconnected `claude-*` names route as `auto`, so Claude Code works against any provider.
 - `auto/<task>` model aliases (`auto/coding`, `auto/reasoning`, ...) and listing in `/v1/models`.
 - [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md): cURL, Python, Node, Anthropic SDK, Claude Code, Aider, Continue, Cline, OpenCode, Open WebUI.
