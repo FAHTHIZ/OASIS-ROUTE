@@ -32,7 +32,7 @@ Oasis Route is independent of Oasis. Oasis may be a first-party client, but no c
 ## Hard boundaries
 
 The system may:
-- Create and manage a user's Oasis Route account and API keys.
+- Create and manage a user's Oasis Route account and **Oasis Keys** (the unified credentials applications use to call the Oasis Route gateway).
 - Discover public provider offers, official signup pages, documentation, public model endpoints, and advertised quota details.
 - Help a user understand and complete provider onboarding.
 - Connect provider accounts using official OAuth or user-supplied API credentials, where the provider supports this and the user is eligible.
@@ -64,8 +64,8 @@ If an offer depends on prohibited account cycling or unclear terms, mark it inel
 - Add local development instructions and a one-command development startup where practical.
 
 ### Phase 2 — Identity, keys, and credential vault
-- Implement user identity and scoped ZEUS/Oasis Route API keys (project name remains Oasis Route).
-- Hash application API keys; show secret material only once.
+- Implement user identity and scoped **Oasis Keys** for authenticating applications to the Oasis Route gateway. Use `OASIS_API_KEY` as the documented client environment-variable name.
+- Hash Oasis Keys; show secret material only once. Keep Oasis Keys distinct from upstream provider credentials, which are encrypted in the vault.
 - Encrypt upstream credentials at rest using a managed key or envelope-encryption design.
 - Redact secrets from logs, traces, errors, and support exports.
 - Add revocation, rotation, and audit events.
