@@ -50,6 +50,10 @@ The system must not:
 
 If an offer depends on prohibited account cycling or unclear terms, mark it ineligible and explain why. Do not implement a workaround.
 
+## Live provider discovery and onboarding
+
+For work on the discovery engine, provider catalogue, free-tier intelligence, or connection onboarding, read [the live provider discovery and onboarding specification](docs/LIVE_PROVIDER_DISCOVERY_AND_ONBOARDING.md) and use the [dedicated implementation agent prompt](docs/LIVE_PROVIDER_DISCOVERY_AGENT_PROMPT.md). Implement against the existing fetcher, evidence model, worker, offer lifecycle, vault, OAuth, quota ledger, and console. The prompt is an execution brief, not evidence that these features are already implemented. Preserve the consent, provider-policy, and anti-abuse boundaries in the security documents.
+
 ## Mandatory product requirement: zero-operations autonomy
 
 Read [docs/ZERO_OPERATIONS_AUTONOMY.md](docs/ZERO_OPERATIONS_AUTONOMY.md) before further implementation. This is a core product requirement and takes precedence over treating automation as optional polish. The user should add an authorized upstream API key (or complete official OAuth) once; Oasis Route must then validate and connect it, synchronize models/capabilities/quotas, initialize safe routing, and run discovery, health checks, quota refresh, connection revalidation, offer reconciliation, and recovery in the background. The user should not have to configure providers, routing rules, quota pools, schedules, or worker processes. The application’s default deployment must actually start and supervise the worker; dormant worker functions do not satisfy this requirement. Add lease renewal/heartbeats, graceful shutdown, crash recovery, job observability, and end-to-end tests. Keep user consent for paid usage, provider authorization, privacy choices, and policy exceptions explicit. The Oasis Key remains distinct from the upstream provider credential. Treat the document’s acceptance criteria as release gates.
