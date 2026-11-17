@@ -9,7 +9,7 @@ It is not an account farm, credential marketplace, anonymous proxy, or quota-eva
 ## 2. System planes
 
 ### Control plane
-Responsible for users, projects, API keys, provider connections, discovery jobs, offer review, policy decisions, routing configuration, quota pools, and administration.
+Responsible for users, projects, **Oasis Keys**, provider connections, discovery jobs, offer review, policy decisions, routing configuration, quota pools, and administration.
 
 ### Data plane
 Responsible for authenticated inference requests, task/capability constraints, model selection, quota reservations, provider adapter calls, streaming, retries, and usage reconciliation.
@@ -18,7 +18,7 @@ Keep the planes logically separate. The first implementation should be a modular
 
 ## 3. Logical components
 
-- **Identity & Projects:** users, organizations if later needed, projects, roles, sessions, API keys, audit events.
+- **Identity & Projects:** users, organizations if later needed, projects, roles, sessions, Oasis Keys, audit events.
 - **Credential Vault:** provider connections, OAuth grants, encrypted API credentials, key rotation and revocation.
 - **Source Discovery:** source catalogue, scheduled fetches, crawl policy, change detection, candidate extraction.
 - **Offer Verification:** evidence review, terms and eligibility checks, confidence, reviewer history, expiry.
@@ -35,7 +35,7 @@ Keep the planes logically separate. The first implementation should be a modular
 
 ## 4. Request lifecycle
 
-1. Authenticate the caller's Oasis Route API key and resolve project policy.
+1. Authenticate the caller's **Oasis Key** and resolve project policy.
 2. Validate request size, model alias, requested features, streaming mode, and idempotency key.
 3. Resolve the caller's data policy, region restrictions, and any provider allow/deny lists.
 4. Build candidate models from the registry.
