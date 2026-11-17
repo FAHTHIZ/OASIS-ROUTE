@@ -9,7 +9,7 @@ SECRETS = [
     "sk-ant-api03-abcdefghijklmnopqrstuv",
     "AIzaSyA1234567890abcdefghijklmnopqrstuv",
     "gsk_abcdefghijklmnopqrstuvwxyz1234",
-    "or_live_abcdefghijkl_ZZZZZZZZZZZZZZZZZZZZZZ",
+    "oasis_live_abcdefghijkl_ZZZZZZZZZZZZZZZZZZZZZZ",
     "ya29.a0AfH6SMBabcdefghijklmnopqrstu",
 ]
 

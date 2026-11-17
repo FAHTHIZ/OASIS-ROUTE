@@ -1,6 +1,9 @@
-"""Oasis Route API keys.
+"""Oasis Keys — the unified gateway credentials applications present to Oasis Route.
 
-Format: ``or_<env>_<lookup>_<secret>`` where ``lookup`` is 12 random base32 chars (stored, indexed) and
+Clients conventionally read the key from ``OASIS_API_KEY`` and send ``Authorization: Bearer <key>``.
+Oasis Keys are distinct from upstream provider credentials, which live encrypted in the vault.
+
+Format: ``oasis_<env>_<lookup>_<secret>`` where ``lookup`` is 12 random base32 chars (stored, indexed) and
 ``secret`` is 32 random bytes (urlsafe base64). The full key is hashed with HMAC-SHA256 under a server pepper;
 because keys carry 256 bits of entropy, a keyed hash is appropriate (no password stretching needed).
 The plaintext key is returned exactly once, at creation/rotation time.
@@ -34,7 +37,7 @@ def hash_key(plaintext: str, pepper: bytes) -> str:
 
 def issue_key(pepper: bytes, env: str = "live") -> IssuedKey:
     env = "test" if env != "live" else "live"
-    prefix = f"or_{env}_{_lookup()}"
+    prefix = f"oasis_{env}_{_lookup()}"
     secret = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("=")
     plaintext = f"{prefix}_{secret}"
     return IssuedKey(plaintext=plaintext, prefix=prefix, key_hash=hash_key(plaintext, pepper))
@@ -42,7 +45,7 @@ def issue_key(pepper: bytes, env: str = "live") -> IssuedKey:
 
 def parse_prefix(plaintext: str) -> str | None:
     parts = plaintext.split("_", 3)
-    if len(parts) != 4 or parts[0] != "or" or parts[1] not in {"live", "test"} or len(parts[2]) != 12:
+    if len(parts) != 4 or parts[0] != "oasis" or parts[1] not in {"live", "test"} or len(parts[2]) != 12:
         return None
     return "_".join(parts[:3])
 
