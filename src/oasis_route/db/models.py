@@ -571,3 +571,15 @@ class OAuthFlow(Base):
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     created_at: Mapped[datetime] = _created()
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class RateLimitWindow(Base):
+    """Per-minute request counter shared by every replica (database rate-limit backend).
+
+    ``window`` is the Unix minute. Rows older than two minutes are deleted as new windows start.
+    """
+
+    __tablename__ = "rate_limit_windows"
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    window: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

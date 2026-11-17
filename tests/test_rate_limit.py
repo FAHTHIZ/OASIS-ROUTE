@@ -6,10 +6,13 @@ from typing import Any
 
 import httpx
 import pytest
+from sqlalchemy import delete, select
 
+from oasis_route.config import Settings
 from oasis_route.context import AppContext
-from oasis_route.db.models import Project
-from oasis_route.security.rate_limit import TokenBucketLimiter
+from oasis_route.db.models import Project, RateLimitWindow
+from oasis_route.db.session import Database
+from oasis_route.security.rate_limit import DatabaseRateLimiter, TokenBucketLimiter
 from tests.helpers import auth, chat, gateway_setup
 
 
@@ -36,6 +39,7 @@ async def test_per_key_limit_returns_429_with_retry_after(client: httpx.AsyncCli
         p = await s.get(Project, g["pid"])
         assert p is not None
         p.rate_limit_rpm = 3
+        await s.execute(delete(RateLimitWindow))  # shared-counter backend: forget setup traffic
     codes = [(await chat(client, g["key"])).status_code for _ in range(3)]
     assert codes == [200, 200, 200]
     r = await chat(client, g["key"])
@@ -79,3 +83,62 @@ async def test_fallback_hops_are_bounded(
     assert r.status_code >= 400
     total = len(upstreams["mock-a.test"].calls) + len(upstreams["mock-b.test"].calls)
     assert total <= ctx.settings.max_fallback_hops + 1
+
+
+async def test_database_limiter_sliding_window(ctx: AppContext) -> None:
+    lim = DatabaseRateLimiter()
+    t0 = 6_000_000 * 60.0  # start of a minute
+
+    async def hit(now: float, key: str = "k") -> tuple[bool, float]:
+        async with ctx.db.transaction() as s:
+            return await lim.check(s, key, 4, now=now)
+
+    assert [(await hit(t0 + i))[0] for i in range(4)] == [True] * 4
+    ok, retry = await hit(t0 + 5)
+    assert not ok and 0 < retry <= 55
+    assert (await hit(t0 + 5, key="other"))[0]  # counters are per key
+    # 30 s into the next minute half of the previous minute still counts: 4 * 0.5 = 2, so two more fit.
+    assert [(await hit(t0 + 90 + i / 10))[0] for i in range(3)] == [True, True, False]
+    # Rejected requests are not counted, and stale windows are deleted when a new minute starts.
+    assert (await hit(t0 + 60 * 5))[0]
+    async with ctx.db.session() as s:
+        windows = sorted(
+            (await s.execute(select(RateLimitWindow.window).where(RateLimitWindow.key == "k"))).scalars()
+        )
+    assert windows == [int(t0 // 60) + 5]
+
+
+async def test_database_limiter_is_shared_between_replicas(settings: Settings) -> None:
+    """Two app contexts (two replicas) on one database share the same per-key budget."""
+    s = settings.model_copy(update={"rate_limit_backend": "database"})
+    a = AppContext(settings=s, db=Database(s.database_url))
+    b = AppContext(settings=s, db=Database(s.database_url))
+    try:
+        assert a.shared_rate_limits and b.shared_rate_limits
+        results = []
+        for i in range(6):
+            c = a if i % 2 == 0 else b
+            async with c.db.transaction() as sess:
+                results.append((await c.db_limiter.check(sess, "key:x", 4, now=600.0 + i))[0])
+        assert results == [True, True, True, True, False, False]
+    finally:
+        await a.aclose()
+        await b.aclose()
+
+
+def test_auto_backend_uses_memory_on_sqlite(ctx: AppContext) -> None:
+    assert ctx.settings.rate_limit_backend == "auto"
+    assert ctx.shared_rate_limits is (not ctx.db.is_sqlite)
+
+
+@pytest.mark.usefixtures("upstreams")
+async def test_per_key_limit_with_database_backend(client: httpx.AsyncClient, ctx: AppContext) -> None:
+    ctx.settings = ctx.settings.model_copy(update={"rate_limit_backend": "database"})
+    g = await gateway_setup(client, two_providers=False)
+    async with ctx.db.transaction() as s:
+        p = await s.get(Project, g["pid"])
+        assert p is not None
+        p.rate_limit_rpm = 2
+        await s.execute(delete(RateLimitWindow))  # forget the requests made during setup
+    codes = [(await chat(client, g["key"])).status_code for _ in range(3)]
+    assert codes == [200, 200, 429]

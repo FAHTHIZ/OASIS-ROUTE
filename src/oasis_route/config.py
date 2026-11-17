@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     upstream_max_response_bytes: int = Field(default=20_000_000, ge=1024)
     reservation_ttl_s: int = Field(default=900, ge=10)
     rate_limit_per_key_rpm: int = Field(default=600, ge=1)
+    rate_limit_backend: Literal["auto", "memory", "database"] = Field(
+        default="auto",
+        description="Where per-key request counters live. `auto`: the database on PostgreSQL (shared by "
+        "every replica), in memory on SQLite.",
+    )
     allow_private_upstreams: bool = Field(
         default=False,
         description="Allow upstream endpoints on private networks (local models). Off by default.",

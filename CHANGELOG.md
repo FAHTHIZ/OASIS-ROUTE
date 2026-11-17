@@ -6,6 +6,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- Per-key rate limits now hold across replicas: on PostgreSQL the counters live in the database (sliding one-minute window, migration `0005`). Previously N replicas allowed up to N times the limit. `OASIS_ROUTE_RATE_LIMIT_BACKEND` selects `auto`, `database` or `memory`.
 - `oasis-route dev` crashed inside the container image, which sets production mode; `dev` now always runs in development mode and keeps state in `/data/dev` (`OASIS_ROUTE_DEV_STATE_DIR`).
 - Image names in the release workflow are lowercased; GHCR rejects the mixed-case owner name.
 

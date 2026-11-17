@@ -49,6 +49,7 @@ Production also refuses `OASIS_ROUTE_GMAIL_ENABLED=true` without `OASIS_ROUTE_GM
 | `OASIS_ROUTE_UPSTREAM_MAX_RESPONSE_BYTES` | `20000000` | Upstream responses larger than this are rejected. |
 | `OASIS_ROUTE_RESERVATION_TTL_S` | `900` | Quota reservations not settled within this time are released by the worker. |
 | `OASIS_ROUTE_RATE_LIMIT_PER_KEY_RPM` | `600` | Per-Oasis-Key requests per minute (a project can set a lower limit). |
+| `OASIS_ROUTE_RATE_LIMIT_BACKEND` | `auto` | Where per-key counters live. `auto`: in the database on PostgreSQL, so the limit holds across every replica (sliding one-minute window, one upsert per request); in memory on SQLite. `database` or `memory` forces one. |
 | `OASIS_ROUTE_ALLOW_PRIVATE_UPSTREAMS` | `false` | Allow upstream base URLs on private or loopback networks (local model servers). Keep off on shared hosts: it disables SSRF protection for connections. |
 | `OASIS_ROUTE_ENABLE_MOCK_PROVIDERS` | unset | Seeds the deterministic `mock` and `mock_alt` providers. Unset means on outside production, off in production. |
 

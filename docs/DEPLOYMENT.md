@@ -59,7 +59,7 @@ route.example.com {
 
 - **More API capacity:** run more `api` replicas behind the proxy. Every replica supervises a worker, and leases in the database ensure each job runs on only one of them at a time, so replicas never duplicate work.
 - **Dedicated worker:** for large installs, set `OASIS_ROUTE_WORKER_MODE=external` on the API and start the worker service with `docker compose --profile scale up -d`. Any number of workers is safe.
-- The per-key rate limiter is per process. With N replicas the effective limit is up to N times `OASIS_ROUTE_RATE_LIMIT_PER_KEY_RPM`; quota reservations are always global and atomic in PostgreSQL.
+- Per-key rate limits are global on PostgreSQL: the counters live in the database (`OASIS_ROUTE_RATE_LIMIT_BACKEND=auto`), so N replicas still enforce `OASIS_ROUTE_RATE_LIMIT_PER_KEY_RPM` once, not N times. Quota reservations are always global and atomic.
 
 ## Other platforms
 

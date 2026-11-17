@@ -15,11 +15,11 @@ layer, scheduler approach, and UI strategy, as a modular monolith, with PostgreS
   back. This is atomic on PostgreSQL (row lock + re-evaluated predicate under READ COMMITTED) and on SQLite
   (database-level write lock), and is idempotent via a unique `(request_id)` reservation key.
 - A single process image provides `serve` (API + gateway + static admin console) and `worker` (DB-leased jobs).
-- No external broker. Redis is not required; in-process token-bucket rate limiting is used per instance and is
-  documented as per-instance.
+- No external broker. Redis is not required. Per-key rate limits use an in-process token bucket on SQLite and
+  shared per-minute counters in the database on PostgreSQL (amended 2026-11-17).
 - Apache-2.0 license.
 
 ## Consequences
 - One-command local start (`make dev` / `uv run oasis-route dev`) with SQLite and a bundled mock provider.
 - CI runs the suite against both SQLite and PostgreSQL to prove ledger concurrency on the production engine.
-- Multi-instance deployments must use PostgreSQL; per-instance rate limits are additive across instances.
+- Multi-instance deployments must use PostgreSQL; per-key rate limits are then shared by every instance.
