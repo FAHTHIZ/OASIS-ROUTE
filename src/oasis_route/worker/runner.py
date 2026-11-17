@@ -122,7 +122,13 @@ async def _retention(ctx: AppContext) -> Any:
         i = await s.execute(
             delete(IdempotencyRecord).where(IdempotencyRecord.created_at < now - timedelta(days=1))
         )
-    return {"notifications": getattr(n, "rowcount", 0), "idempotency": getattr(i, "rowcount", 0)}
+    from oasis_route.connections import oauth
+
+    return {
+        "notifications": getattr(n, "rowcount", 0),
+        "idempotency": getattr(i, "rowcount", 0),
+        "oauth_flows_expired": await oauth.purge_expired(ctx),
+    }
 
 
 async def _mail_sync(ctx: AppContext) -> Any:

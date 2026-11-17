@@ -546,3 +546,25 @@ class WorkerInstance(Base):
     started_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     heartbeat_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     stopped_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class OAuthFlow(Base):
+    """A pending official provider OAuth (PKCE) connection. The verifier is sealed in the vault."""
+
+    __tablename__ = "oauth_flows"
+    id: Mapped[str] = _id()
+    state_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    provider_id: Mapped[str] = mapped_column(ForeignKey("providers.id"), nullable=False)
+    verifier_credential_id: Mapped[str | None] = mapped_column(
+        ForeignKey("credentials.id", ondelete="SET NULL")
+    )
+    display_name: Mapped[str] = mapped_column(String(200), default="")
+    priority: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|completed|failed|expired
+    connection_id: Mapped[str | None] = mapped_column(String(36))
+    error: Mapped[str | None] = mapped_column(String(300))
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    created_at: Mapped[datetime] = _created()
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)

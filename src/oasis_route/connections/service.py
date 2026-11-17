@@ -131,7 +131,13 @@ async def check_url(ctx: AppContext, url: str) -> None:
 
 
 async def create_connection(
-    ctx: AppContext, session: AsyncSession, *, project_id: str, user: User, data: ConnectionInput
+    ctx: AppContext,
+    session: AsyncSession,
+    *,
+    project_id: str,
+    user: User,
+    data: ConnectionInput,
+    oauth_flow: bool = False,
 ) -> Connection:
     provider = await session.get(Provider, data.provider_id)
     if provider is None:
@@ -153,7 +159,13 @@ async def create_connection(
                 details={"terms_url": provider.terms_url},
             )
     elif data.auth_method == AuthMethod.OAUTH.value:
-        raise ValidationFailed("OAuth connections are created through the provider OAuth flow")
+        if not oauth_flow:
+            raise ValidationFailed(
+                "OAuth connections are created through the provider OAuth flow",
+                details={"start": f"/api/v1/projects/{project_id}/connections/oauth/start"},
+            )
+        if not data.secret:
+            raise ValidationFailed("OAuth flow did not produce a credential")
 
     # Multi-account guard: one upstream account per provider per user unless the provider allows more.
     existing = (

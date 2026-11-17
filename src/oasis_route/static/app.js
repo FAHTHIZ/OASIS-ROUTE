@@ -252,7 +252,58 @@ const views = {
       { class: "muted" },
       "Only connect accounts you hold yourself. Oasis Route never creates accounts, cycles trials, or rotates identities to extend quota."
     );
+    const oauthMsg = el("p", {});
+    const oauthAccept = el("input", { type: "checkbox" });
+    const pollFlow = async (flowId, deadline) => {
+      if (Date.now() > deadline) return oauthMsg.replaceChildren("Sign-in timed out. Try again.");
+      try {
+        const f = await api(`/api/v1/projects/${pid()}/connections/oauth/${flowId}`);
+        if (f.status === "completed") return render("connections");
+        if (f.status === "failed" || f.status === "expired")
+          return oauthMsg.replaceChildren(errorBox(new Error(f.error || `Sign-in ${f.status}. Try again.`)));
+      } catch (e) {
+        return oauthMsg.replaceChildren(errorBox(e));
+      }
+      setTimeout(() => pollFlow(flowId, deadline), 2000);
+    };
+    const oauthProviders = providers.filter((p) => p.oauth_available);
+    const oauthCard = oauthProviders.length
+      ? card(
+          "Sign in with a provider",
+          el("p", { class: "muted" }, "No key to copy: approve access on the provider's own site and come back. The connection is checked and ready automatically."),
+          el("label", {}, el("span", {}, oauthAccept, " I own this account and accept the provider's terms")),
+          el(
+            "p",
+            {},
+            oauthProviders.map((p) =>
+              el(
+                "button",
+                {
+                  type: "button",
+                  onclick: async () => {
+                    try {
+                      const f = await api(`/api/v1/projects/${pid()}/connections/oauth/start`, {
+                        method: "POST",
+                        body: { provider_id: p.id, accept_terms: oauthAccept.checked },
+                      });
+                      if (!String(f.authorization_url).startsWith("https://")) throw new Error("unexpected authorization URL");
+                      window.open(f.authorization_url, "_blank", "noopener");
+                      oauthMsg.replaceChildren(`Waiting for you to approve access on ${p.name}...`);
+                      pollFlow(f.flow_id, Date.now() + 10 * 60 * 1000);
+                    } catch (e) {
+                      oauthMsg.replaceChildren(errorBox(e));
+                    }
+                  },
+                },
+                `Sign in with ${p.name}`
+              )
+            )
+          ),
+          oauthMsg
+        )
+      : null;
     return [
+      oauthCard,
       card("Connect a provider", termsList, form, msg),
       card(
         "Connections",
@@ -557,7 +608,7 @@ async function render(name) {
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
   view.replaceChildren(el("p", { class: "muted" }, "Loading…"));
   try {
-    view.replaceChildren(...(await views[name]()));
+    view.replaceChildren(...[await views[name]()].flat().filter(Boolean));
   } catch (e) {
     view.replaceChildren(card(null, errorBox(e)));
   }

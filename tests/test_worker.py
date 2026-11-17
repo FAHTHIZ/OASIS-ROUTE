@@ -276,6 +276,6 @@ async def test_retention_job_removes_expired_records(ctx: AppContext) -> None:
         )
         s.add(IdempotencyRecord(project_id=pid, key="y", request_hash="h"))
     out = await runner.run_once(ctx, [j for j in runner.default_jobs(ctx) if j.name == "retention.records"])
-    assert out["retention.records"] == {"notifications": 1, "idempotency": 1}
+    assert out["retention.records"] == {"notifications": 1, "idempotency": 1, "oauth_flows_expired": 0}
     async with ctx.db.session() as s:
         assert [n.title for n in (await s.execute(select(Notification))).scalars()] == ["new"]
