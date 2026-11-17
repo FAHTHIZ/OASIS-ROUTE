@@ -12,7 +12,7 @@ Reviewed on 2026-11-17 against the most-starred open-source LLM gateways and rou
 | [Portkey Gateway](https://github.com/Portkey-AI/gateway) | TypeScript | 13.4k | `npx @portkey-ai/gateway` | Edge gateway with guardrails and conditional routing |
 | [TensorZero](https://github.com/tensorzero/tensorzero) | Rust | 11.7k | Docker container | Gateway plus observability, evaluations, A/B experiments, fine-tuning loop |
 | [Bifrost](https://github.com/maximhq/bifrost) | Go | 9.7k | `npx -y @maximhq/bifrost` or `docker run -p 8080:8080 maximhq/bifrost` | Low-latency gateway, semantic caching, budgets |
-| **Oasis Route** | Python | new | `uvx --from git+https://github.com/FAHTHIZ/OASIS-ROUTE oasis-route dev` | Provider intelligence: evidence-backed offers, terms and data-policy gates, quota-aware routing |
+| **Oasis Route** | Python | new | `uvx --from git+https://github.com/FAHTHIZ/OASIS-ROUTE oasis-route dev` or `docker run -p 8080:8080 ghcr.io/fahthiz/oasis-route:edge dev` | Provider intelligence: evidence-backed offers, terms and data-policy gates, quota-aware routing |
 
 ## Feature matrix
 
@@ -31,7 +31,7 @@ Reviewed on 2026-11-17 against the most-starred open-source LLM gateways and rou
 | Response caching | Yes | Yes | — | Yes | — | Yes | No |
 | Guardrails or PII masking | Yes | Yes | — | Yes | — | Yes | No |
 | Web dashboard | Yes | Yes | Yes | — | Yes | Yes | Yes (`/console/`) |
-| Published container image | Yes | Yes | Yes | — | Yes | Yes | No (build from `Dockerfile`) |
+| Published container image | Yes | Yes | Yes | — | Yes | Yes | Yes (`ghcr.io/fahthiz/oasis-route:edge`) |
 | Quotas learned from response headers | — | — | — | — | — | — | Yes |
 | Provider terms, age and multi-account checks | — | — | — | — | — | — | Yes |
 | Data-policy gating (no-training, zero-retention) | — | — | — | — | — | — | Yes, unknown never passes |
@@ -41,7 +41,7 @@ Reviewed on 2026-11-17 against the most-starred open-source LLM gateways and rou
 ## Where the others are ahead
 
 - **Surface area.** LiteLLM and new-api cover embeddings, images, audio, batches and rerank. Oasis Route only routes text generation.
-- **Install.** OmniRoute, Bifrost and Portkey start with one `npx` or `docker run`. Oasis Route needs `uv` (one command) or a Docker build.
+- **Install.** OmniRoute, Bifrost and Portkey start with one `npx` or `docker run`. Oasis Route needs `uv` or Docker (one command each), but has no npm package.
 - **Provider count.** OmniRoute lists hundreds of providers and LiteLLM over a hundred. Oasis Route seeds ten real providers and accepts any OpenAI-compatible endpoint.
 - **Operations features.** Caching, guardrails, cost and spend analytics, and experiment tooling (TensorZero) are not in scope yet. The built-in console covers overview, capacity, connections, keys, models, route preview, usage, offers and notices.
 
@@ -54,7 +54,7 @@ Reviewed on 2026-11-17 against the most-starred open-source LLM gateways and rou
 
 ## Gaps closed after this review
 
-Found by this comparison and implemented on `main` the same day: per-model `429` handling, the Anthropic Messages API, the OpenAI Responses API, `auto/<task>` aliases, coding-tool setup guides ([INTEGRATIONS.md](INTEGRATIONS.md)), local model guides ([LOCAL_MODELS.md](LOCAL_MODELS.md)), one-command `uvx` install, quality priors for well-known models, free-tier capacity maths, and seeds for NVIDIA, SambaNova and Hugging Face.
+Found by this comparison and implemented on `main` the same day: per-model `429` handling, the Anthropic Messages API, the OpenAI Responses API, `auto/<task>` aliases, coding-tool setup guides ([INTEGRATIONS.md](INTEGRATIONS.md)), local model guides ([LOCAL_MODELS.md](LOCAL_MODELS.md)), one-command `uvx` and `docker run` installs, shared rate limits across replicas, quality priors for well-known models, free-tier capacity maths, and seeds for NVIDIA, SambaNova and Hugging Face.
 
 ## Deliberately not done
 
