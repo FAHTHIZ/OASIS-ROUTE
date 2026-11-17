@@ -1,4 +1,5 @@
-"""Unified gateway: OpenAI ``POST /v1/chat/completions``, Anthropic ``POST /v1/messages``, ``GET /v1/models``.
+"""Unified gateway: OpenAI ``POST /v1/chat/completions`` and ``POST /v1/responses``, Anthropic
+``POST /v1/messages``, ``GET /v1/models``.
 
 Authenticate with an Oasis Key: ``Authorization: Bearer $OASIS_API_KEY`` (or ``x-api-key``).
 """
@@ -19,6 +20,7 @@ from oasis_route.context import AppContext
 from oasis_route.db.models import Connection, Model
 from oasis_route.domain.enums import ApiKeyScope, ConnectionStatus, Task
 from oasis_route.gateway import anthropic_compat as ac
+from oasis_route.gateway import responses_compat as rc
 from oasis_route.gateway.engine import (
     Engine,
     GatewayError,
@@ -204,6 +206,44 @@ async def anthropic_messages(
     message = ac.to_message(dict(result.payload), requested)
     message["oasis_route"] = st.meta()
     return JSONResponse(content=message, headers=_headers(st))
+
+
+@router.post("/responses", response_model=None)
+async def openai_responses(
+    request: Request,
+    p: Principal = Depends(require_scope(ApiKeyScope.INFERENCE)),
+    ctx: AppContext = Depends(get_ctx),
+) -> Response:
+    """OpenAI Responses API (stateless), routed through the same engine as ``/v1/chat/completions``."""
+    request_id: str = request.state.request_id
+    try:
+        body = await _read_json(request, ctx)
+        try:
+            chat_body = rc.to_chat_body(body)
+        except rc.TranslationError as exc:
+            raise GatewayError(400, "invalid_request", str(exc), type_="invalid_request_error") from exc
+        parsed = parse_body(chat_body, p.project, ctx.settings.default_max_output_tokens)
+    except GatewayError as err:
+        return _error_response(err, request_id)
+
+    st = RequestState(request_id=request_id, project=p.project, api_key_id=p.key.id, parsed=parsed)
+    engine = Engine(ctx)
+    try:
+        await engine.begin(st)
+        if parsed.chat.stream:
+            d, handle, first = await engine.open_stream(st)
+            st.served = d.cand
+            headers = {**_headers(st), "cache-control": "no-cache", "x-accel-buffering": "no"}
+            stream = rc.translate_stream(
+                engine.relay(st, d, handle, first), body, parsed.options.input_tokens
+            )
+            return StreamingResponse(stream, media_type="text/event-stream", headers=headers)
+        result = await engine.complete(st)
+    except GatewayError as err:
+        return _error_response(err, request_id)
+    resp = rc.to_response(dict(result.payload), body)
+    resp["oasis_route"] = st.meta()
+    return JSONResponse(content=resp, headers=_headers(st))
 
 
 @router.post("/messages/count_tokens")
