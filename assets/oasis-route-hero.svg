@@ -170,6 +170,7 @@
     @keyframes selected { 0%,100% { stroke-opacity: .28; } 50% { stroke-opacity: .95; } }
     @media (prefers-reduced-motion: reduce) {
       .route-line, .hub-ring, .hub-halo, .selected-glow, .packet { animation: none !important; }
+      animateMotion, .packet { display: none !important; }
     }
   </style>
 </svg>
