@@ -89,12 +89,28 @@ Oasis Route is working software. The implementation roadmap in [docs/EXECUTION_P
 
 ## Quickstart
 
-Local, with deterministic mock providers and no network calls:
+Try it in one command, with deterministic mock providers and no upstream calls (needs [uv](https://docs.astral.sh/uv/)):
+
+```bash
+uvx --from git+https://github.com/FAHTHIZ/OASIS-ROUTE oasis-route dev
+# prints the console URL, your project ID and your Oasis Key
+```
+
+Install it as a command instead (`oasis-route` on your PATH):
+
+```bash
+uv tool install git+https://github.com/FAHTHIZ/OASIS-ROUTE     # or: pipx install git+https://github.com/FAHTHIZ/OASIS-ROUTE
+oasis-route dev --port 8080
+```
+
+From a clone, for development:
 
 ```bash
 uv sync
-uv run oasis-route dev        # prints the console URL and your Oasis Key
+uv run oasis-route dev
 ```
+
+Add a real model in a minute with a free local server: see [local models](docs/LOCAL_MODELS.md).
 
 Production-style, with PostgreSQL ([full guide](docs/DEPLOYMENT.md)):
 
