@@ -59,7 +59,7 @@ Optional routing controls go in an `oasis_route` object:
 
 | Field | Default | Meaning |
 |---|---|---|
-| `task` | `general` | `general`, `coding`, `reasoning`, `creative`, `extraction`, `vision`. Selects which quality evidence ranks models. |
+| `task` | `general` | `general`, `coding`, `reasoning`, `creative`, `extraction`, `vision`. Selects which quality evidence ranks models. The model names `auto/coding`, `auto/reasoning`, ... are shorthand for `"model": "auto"` plus this task, for clients that can only set a model name. |
 | `mode` | project `routing_mode` | `strict_quality`: strongest first, cost and latency only break ties. `balanced`: quality still dominates, with more weight on health and headroom. |
 | `min_quality` | none | Never route below this score. |
 | `allow_fallback` | `true` | Fail over to other eligible candidates on retryable errors. |
@@ -122,9 +122,22 @@ Gateway errors use the OpenAI error envelope plus routing metadata:
 | 503 | `no_eligible_route` | Nothing eligible can serve the request (no active connection, policy excludes all candidates, required capability missing). |
 | 503 | `project_disabled` | The project kill switch is on. |
 
+### `POST /v1/messages` (Anthropic Messages API)
+
+Anthropic Messages request and response format, for Anthropic SDKs and tools such as Claude Code. Requests are translated to the internal chat-completion shape and routed exactly like `/v1/chat/completions` (same quota, health, fallback, audit and `x-oasis-route-*` headers), so any connected provider can serve them. Authenticate with `x-api-key: <Oasis Key>` or `Authorization: Bearer <Oasis Key>`.
+
+- Translated: `system` (string or text blocks), text and image (`base64`/`url`) content, `tool_use` / `tool_result` blocks, custom `tools` with `input_schema`, `tool_choice` (`auto`, `any`, `tool`, `none`), `stop_sequences`, `temperature`, `top_p`, `max_tokens`, `metadata.user_id`, and `stream: true` (`message_start`, `content_block_start/delta/stop` with `text_delta` and `input_json_delta`, `message_delta`, `message_stop`).
+- Model names: a `claude-*` name that is not a connected model is routed as `auto`, so clients with hard-coded Claude names work against any provider. Other unknown names return `404 not_found_error`. `auto/<task>` works here too, and so does an `oasis_route` object.
+- Not translated: Anthropic server tools (web search, computer use), documents/PDF blocks, prompt-cache controls. Thinking blocks in history are dropped, and responses contain no thinking blocks.
+- Errors use the Anthropic shape: `{"type": "error", "error": {"type": "invalid_request_error", "message": "..."}}`.
+
+### `POST /v1/messages/count_tokens`
+
+Returns `{"input_tokens": N}` for a Messages request, using the same estimate the router uses for admission (about four characters per token plus per-message overhead). This is an estimate, not the upstream tokenizer.
+
 ### `GET /v1/models`
 
-Lists models reachable through the project's active connections, plus `auto`, in OpenAI list format.
+Lists models reachable through the project's active connections, plus `auto` and the `auto/<task>` aliases, in OpenAI list format. Each model's `oasis_route` object carries `quality_general` and `quality_source` when quality evidence exists, otherwise `quality_prior`: the heuristic ordering hint described in [Routing](ROUTING_AND_QUOTAS.md#unrated-models-and-name-based-priors).
 
 ## Status and automation
 

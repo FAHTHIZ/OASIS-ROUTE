@@ -60,6 +60,8 @@ Oasis Route is working software. The implementation roadmap in [docs/EXECUTION_P
 | Capability | Status |
 |---|---|
 | OpenAI-compatible gateway (`/v1/chat/completions`, `/v1/models`), streaming, idempotency | Implemented |
+| Anthropic Messages API (`/v1/messages`, streaming, tool use) for Claude Code and Anthropic SDKs | Implemented |
+| `auto` / `auto/<task>` model aliases; heuristic priors order unrated models strongest-first | Implemented |
 | Adapters: OpenAI, Anthropic, Gemini (OpenAI-compatible endpoint), Groq, Mistral, OpenRouter, Cerebras, custom OpenAI-compatible | Implemented |
 | Encrypted credential vault (envelope encryption, KEK rotation with automatic re-wrap) | Implemented |
 | Atomic quota ledger: reservations, settlement, shared pools, windows, header learning | Implemented |
@@ -114,7 +116,7 @@ Any OpenAI SDK works by setting its base URL to `https://route.example.com/v1` a
 
 ## Documentation
 
-- Using it: [API guide](docs/API.md), [configuration](docs/CONFIGURATION.md)
+- Using it: [API guide](docs/API.md), [SDKs and coding tools](docs/INTEGRATIONS.md) (Claude Code, Aider, Continue, Cline, OpenCode), [configuration](docs/CONFIGURATION.md)
 - Running it: [deployment](docs/DEPLOYMENT.md), [operations runbook](docs/OPERATIONS.md), [zero-operations requirement](docs/ZERO_OPERATIONS_AUTONOMY.md)
 - Building it: [development](docs/DEVELOPMENT.md), [architecture](docs/ARCHITECTURE.md), [routing and quotas](docs/ROUTING_AND_QUOTAS.md), [discovery and registry](docs/DISCOVERY_AND_REGISTRY.md), [provider adapter contract](docs/PROVIDER_ADAPTERS.md), [decision records](docs/adr/)
 - Trust: [security and compliance](docs/SECURITY_AND_COMPLIANCE.md), [threat model](docs/THREAT_MODEL.md), [implementation audit](docs/IMPLEMENTATION_AUDIT.md), [release checklist](docs/RELEASE_CHECKLIST.md)

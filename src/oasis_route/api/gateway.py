@@ -1,6 +1,6 @@
-"""OpenAI-compatible gateway: ``POST /v1/chat/completions`` and ``GET /v1/models``.
+"""Unified gateway: OpenAI ``POST /v1/chat/completions``, Anthropic ``POST /v1/messages``, ``GET /v1/models``.
 
-Authenticate with an Oasis Key: ``Authorization: Bearer $OASIS_API_KEY``.
+Authenticate with an Oasis Key: ``Authorization: Bearer $OASIS_API_KEY`` (or ``x-api-key``).
 """
 
 from __future__ import annotations
@@ -13,10 +13,12 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy import select
 
+from oasis_route.adapters.base import estimate_tokens_from_messages
 from oasis_route.api.deps import Principal, get_ctx, require_scope
 from oasis_route.context import AppContext
 from oasis_route.db.models import Connection, Model
 from oasis_route.domain.enums import ApiKeyScope, ConnectionStatus, Task
+from oasis_route.gateway import anthropic_compat as ac
 from oasis_route.gateway.engine import (
     Engine,
     GatewayError,
@@ -130,6 +132,98 @@ async def chat_completions(
     return JSONResponse(content=payload, headers=_headers(st))
 
 
+def _anthropic_error(
+    status: int, message: str, code: str | None, retry_after_s: float | None
+) -> JSONResponse:
+    headers = {}
+    if retry_after_s is not None:
+        headers["retry-after"] = str(max(1, int(retry_after_s + 0.999)))
+    return JSONResponse(status_code=status, content=ac.error_body(status, message, code), headers=headers)
+
+
+async def _map_requested_model(ctx: AppContext, name: str) -> str:
+    """Anthropic clients send Claude model names; route them as ``auto`` unless such a model is connected."""
+    if not name.startswith("claude"):
+        return name
+    async with ctx.db.session() as session:
+        found = (
+            await session.execute(
+                select(Model.id).where(Model.upstream_id == name, Model.lifecycle != "removed").limit(1)
+            )
+        ).first()
+    return name if found is not None else "auto"
+
+
+async def _read_json(request: Request, ctx: AppContext) -> Any:
+    raw = await request.body()
+    if len(raw) > ctx.settings.max_request_bytes:
+        raise GatewayError(413, "payload_too_large", "request body too large", type_="invalid_request_error")
+    try:
+        return json.loads(raw or b"null")
+    except ValueError as exc:
+        raise GatewayError(
+            400, "invalid_json", "request body is not valid JSON", type_="invalid_request_error"
+        ) from exc
+
+
+@router.post("/messages", response_model=None)
+async def anthropic_messages(
+    request: Request,
+    p: Principal = Depends(require_scope(ApiKeyScope.INFERENCE)),
+    ctx: AppContext = Depends(get_ctx),
+) -> Response:
+    """Anthropic Messages API, routed through the same engine as ``/v1/chat/completions``."""
+    request_id: str = request.state.request_id
+    try:
+        body = await _read_json(request, ctx)
+        try:
+            chat_body = ac.to_chat_body(body)
+        except ac.TranslationError as exc:
+            raise GatewayError(400, "invalid_request", str(exc), type_="invalid_request_error") from exc
+        requested = chat_body["model"]
+        chat_body["model"] = await _map_requested_model(ctx, requested)
+        parsed = parse_body(chat_body, p.project, ctx.settings.default_max_output_tokens)
+    except GatewayError as err:
+        return _anthropic_error(err.status, err.message, err.code, err.retry_after_s)
+
+    st = RequestState(request_id=request_id, project=p.project, api_key_id=p.key.id, parsed=parsed)
+    engine = Engine(ctx)
+    try:
+        await engine.begin(st)
+        if parsed.chat.stream:
+            d, handle, first = await engine.open_stream(st)
+            st.served = d.cand
+            headers = {**_headers(st), "cache-control": "no-cache", "x-accel-buffering": "no"}
+            stream = ac.translate_stream(
+                engine.relay(st, d, handle, first), requested, parsed.options.input_tokens
+            )
+            return StreamingResponse(stream, media_type="text/event-stream", headers=headers)
+        result = await engine.complete(st)
+    except GatewayError as err:
+        return _anthropic_error(err.status, err.message, err.code, err.retry_after_s)
+    message = ac.to_message(dict(result.payload), requested)
+    message["oasis_route"] = st.meta()
+    return JSONResponse(content=message, headers=_headers(st))
+
+
+@router.post("/messages/count_tokens")
+async def anthropic_count_tokens(
+    request: Request,
+    p: Principal = Depends(require_scope(ApiKeyScope.INFERENCE)),
+    ctx: AppContext = Depends(get_ctx),
+) -> JSONResponse:
+    """Estimate input tokens for a Messages request (the same estimate the router uses for admission)."""
+    try:
+        body = await _read_json(request, ctx)
+        chat_body = ac.to_chat_body(body)
+    except GatewayError as err:
+        return _anthropic_error(err.status, err.message, err.code, None)
+    except ac.TranslationError as exc:
+        return _anthropic_error(400, str(exc), "invalid_request", None)
+    tokens = estimate_tokens_from_messages(chat_body["messages"], chat_body.get("tools"))
+    return JSONResponse(content={"input_tokens": tokens})
+
+
 @router.get("/models")
 async def list_models(
     p: Principal = Depends(require_scope(ApiKeyScope.INFERENCE)), ctx: AppContext = Depends(get_ctx)
@@ -168,6 +262,17 @@ async def list_models(
             "owned_by": "oasis-route",
             "oasis_route": {"description": "strongest suitable eligible model, with failover"},
         }
+    ]
+    data += [
+        {
+            "id": f"auto/{t.value}",
+            "object": "model",
+            "created": now,
+            "owned_by": "oasis-route",
+            "oasis_route": {"description": f"auto, ranked by {t.value} quality evidence", "task": t.value},
+        }
+        for t in Task
+        if t is not Task.GENERAL
     ]
     for m in sorted(models, key=lambda x: (x.provider_id, x.upstream_id)):
         allow = allowed.get(m.provider_id)
