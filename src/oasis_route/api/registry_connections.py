@@ -627,3 +627,42 @@ async def delete_pool(
         target_id=pool_id,
     )
     return Response(status_code=204)
+
+
+# ------------------------------------------------------------------------------------------- route preview
+class RoutePreviewIn(BaseModel):
+    model: str = "auto"
+    messages: list[dict[str, Any]] = Field(default_factory=lambda: [{"role": "user", "content": "hello"}])
+    max_tokens: int | None = Field(default=None, ge=1)
+    stream: bool = False
+    tools: list[dict[str, Any]] | None = None
+    response_format: dict[str, Any] | None = None
+    oasis_route: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/projects/{project_id}/route-preview")
+async def route_preview(
+    project_id: str,
+    body: RoutePreviewIn,
+    p: Principal = Depends(require_scope(ApiKeyScope.READ)),
+    ctx: AppContext = Depends(get_ctx),
+) -> dict[str, Any]:
+    """Explain how a request would be routed right now, without calling any provider or reserving quota."""
+    from oasis_route.gateway.engine import GatewayError, parse_body
+    from oasis_route.routing.router import build_plan
+
+    async with ctx.db.session() as session:
+        project = await project_access(project_id, p, session)
+        try:
+            parsed = parse_body(
+                body.model_dump(exclude_none=True), project, ctx.settings.default_max_output_tokens
+            )
+        except GatewayError as err:
+            raise ValidationFailed(err.message) from err
+        plan = await build_plan(session, project, parsed.options)
+    out = plan.describe()
+    out["downgrade_flags"] = [plan.is_downgrade(c) for c in plan.candidates]
+    out["max_fallback_hops"] = (
+        project.max_fallback_hops if project.max_fallback_hops is not None else ctx.settings.max_fallback_hops
+    )
+    return out
