@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
@@ -232,6 +232,12 @@ class ConnectionCreate(BaseModel):
         default=False,
         description="Confirms you hold this provider account yourself and accept the provider's terms.",
     )
+    billing_mode: Literal["free_tier", "paid", "unknown"] | None = Field(
+        default=None,
+        description="free_tier: the upstream account has no billing / is on a free plan, so it can never be "
+        "charged. Under a free_only project only free_tier connections or zero-priced models are routed. "
+        "Defaults to the provider's documented mode (paid for billed-only providers, otherwise unknown).",
+    )
     validate_now: bool = True
 
 
@@ -255,6 +261,8 @@ class ConnectionOut(ORM):
     display_name: str
     upstream_account_ref: str
     auth_method: str
+    billing_mode: str
+    account_status: dict[str, Any] = {}
     status: str
     priority: int
     allowed_models: list[str]
@@ -305,6 +313,7 @@ async def create_connection(
                 priority=body.priority,
                 allowed_models=body.allowed_models,
                 accept_terms=body.accept_terms,
+                billing_mode=body.billing_mode,
             ),
         )
         cid = conn.id
@@ -368,6 +377,7 @@ class ConnectionPatch(BaseModel):
     display_name: str | None = None
     priority: int | None = Field(default=None, ge=-100, le=100)
     allowed_models: list[str] | None = None
+    billing_mode: Literal["free_tier", "paid", "unknown"] | None = None
 
 
 @router.patch("/projects/{project_id}/connections/{connection_id}", response_model=ConnectionOut)

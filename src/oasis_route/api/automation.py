@@ -61,7 +61,12 @@ def _connection_label(c: Connection, health: list[HealthRecord], now: datetime) 
     return CONNECTED, "Working."
 
 
+_SPEND_REASONS = {"cost_unknown", "paid_route_blocked"}
+
+
 async def _routing_ready(session: AsyncSession, project: Any, ctx: AppContext) -> dict[str, Any] | None:
+    """The first candidate ``auto`` would use, or ``{"spend_blocked": True}`` when only the spend policy
+    stands in the way, or ``None``."""
     from oasis_route.gateway.engine import GatewayError, parse_body
     from oasis_route.routing.router import build_plan
 
@@ -75,6 +80,8 @@ async def _routing_ready(session: AsyncSession, project: Any, ctx: AppContext) -
     except GatewayError:
         return None
     if not plan.candidates:
+        if plan.rejected and all(r.reason in _SPEND_REASONS for r in plan.rejected):
+            return {"spend_blocked": True}
         return None
     c = plan.candidates[0]
     return {"provider": c.provider_id, "model": c.upstream_model}
@@ -127,7 +134,9 @@ async def project_status(
                 .where(ApiKey.project_id == project_id, ApiKey.revoked_at.is_(None))
             )
         ).scalar_one() > 0
-        serving = await _routing_ready(session, project, ctx) if active_providers else None
+        ready = await _routing_ready(session, project, ctx) if active_providers else None
+        spend_blocked = bool(ready and ready.get("spend_blocked"))
+        serving = None if spend_blocked else ready
         last = (
             await session.execute(
                 select(RouteDecision)
@@ -171,6 +180,12 @@ async def project_status(
     labels = {i["status"] for i in items}
     if not items:
         overall, summary = NOT_CONNECTED, "Add a provider API key to get started."
+    elif spend_blocked:
+        overall, summary = (
+            ACTION,
+            "Free-only mode is on and no connected model is confirmed free. Mark a connection as a "
+            "free-tier account, connect a provider with free models, or allow paid usage for this project.",
+        )
     elif serving is not None:
         overall = READY
         summary = "Ready. Requests are routed automatically to the strongest available model."
@@ -216,6 +231,7 @@ async def project_status(
             "oasis_key_issued": bool(has_key),
             "complete": bool(active_providers) and models > 0 and serving is not None and bool(has_key),
         },
+        "spend_policy": project.spend_policy,
         "connections": items,
         "serving": {
             "next_request": serving,

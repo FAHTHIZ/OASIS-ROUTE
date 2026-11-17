@@ -57,12 +57,24 @@ class QuotaUnavailable(Exception):
         self.retry_at = retry_at
 
 
+# Pool scope shared by every ":free" model variant of one account (OpenRouter's free-model daily ceiling).
+FREE_MODELS_SCOPE = "*:free"
+
+
+def scopes_for(upstream_model: str) -> list[str]:
+    """Pool scopes that apply to ``upstream_model``: account-wide, its own, and the free-variant pool."""
+    out = ["*", upstream_model]
+    if upstream_model.endswith(":free"):
+        out.append(FREE_MODELS_SCOPE)
+    return out
+
+
 def pool_filter(project_id: str, provider_id: str, account_scope: str, upstream_model: str) -> Any:
     return and_(
         QuotaPool.project_id == project_id,
         QuotaPool.provider_id == provider_id,
         QuotaPool.account_scope == account_scope,
-        or_(QuotaPool.model_scope == "*", QuotaPool.model_scope == upstream_model),
+        QuotaPool.model_scope.in_(scopes_for(upstream_model)),
     )
 
 
@@ -362,7 +374,7 @@ async def apply_observations(
                     QuotaPool.account_scope == account_scope,
                     QuotaPool.unit == ob.unit.value,
                     QuotaPool.period == ob.period.value,
-                    or_(QuotaPool.model_scope == upstream_model, QuotaPool.model_scope == "*"),
+                    QuotaPool.model_scope.in_(scopes_for(upstream_model)),
                 )
                 .order_by(QuotaPool.model_scope.desc())
                 .with_for_update()  # row lock: header folding must not clobber concurrent reservations

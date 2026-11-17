@@ -14,6 +14,30 @@ Reject a candidate before scoring if any of these apply:
 - Region, age/audience, data residency, or privacy policy conflicts.
 - Provider is unhealthy, in cooldown, or has no reservable quota.
 - Request exceeds model or provider limits.
+- The project's spend policy is `free_only` and the pair is not provably free (see §2.1).
+
+### 2.1 Spend policy: never silently incur paid usage
+
+Every project has a `spend_policy`. New projects start as **`free_only`**; projects that existed before
+migration 0006 were backfilled as `allow_paid` so upgrades do not change behaviour.
+
+Under `free_only` a (connection, model) pair is routable only when its `cost_basis` is one of:
+
+| `cost_basis` | Meaning |
+|---|---|
+| `free_model` | The provider's own catalogue or authenticated model list prices the model at zero (`Model.pricing.free`, e.g. OpenRouter `:free` variants). Cleared automatically when the model is delisted as free. |
+| `free_tier_account` | The upstream account cannot be billed: the owner declared `billing_mode: free_tier`, or the provider reported it (OpenRouter `GET /api/v1/key` `is_free_tier: true`). |
+| `local` | A local development mock. |
+
+Everything else is rejected with a visible reason: `paid_route_blocked` (connection is `billing_mode: paid`;
+the default for billed-only providers such as OpenAI and Anthropic) or `cost_unknown`. Route previews and
+`/projects/{id}/status` surface this ("Free-only mode is on and no connected model is confirmed free").
+
+- Switching to `allow_paid` requires `acknowledge_paid_usage: true` and is audited as
+  `project.spend_policy_changed`.
+- A request may tighten the policy with `"oasis_route": {"free_only": true}`; it can never loosen it.
+- Provider-reported account status may only fill an `unknown` billing mode or revoke a stale `free_tier`
+  (when the account has purchased credits); it never relaxes a user-declared `paid`.
 
 ## 3. Quality-first ranking
 

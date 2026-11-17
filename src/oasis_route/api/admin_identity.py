@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hmac
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
@@ -61,6 +61,7 @@ class ProjectOut(ORM):
     max_fallback_hops: int | None
     allow_downgrade: bool
     allow_unknown_quota: bool
+    spend_policy: str
     kill_switch: bool
     rate_limit_rpm: int | None
     created_at: datetime
@@ -305,6 +306,12 @@ class ProjectPatch(BaseModel):
     max_fallback_hops: int | None = Field(default=None, ge=0, le=10)
     allow_downgrade: bool | None = None
     allow_unknown_quota: bool | None = None
+    spend_policy: Literal["free_only", "allow_paid"] | None = Field(
+        default=None,
+        description="free_only (default) routes only provably free capacity; allow_paid requires "
+        "acknowledge_paid_usage=true and is audited.",
+    )
+    acknowledge_paid_usage: bool = False
     kill_switch: bool | None = None
     rate_limit_rpm: int | None = Field(default=None, ge=1)
 
@@ -320,8 +327,23 @@ async def patch_project(
     role = await service.member_role(session, project.id, p.user.id)
     service.require_project_role(role, {ProjectRole.OWNER}, p.user)
     changes = body.model_dump(exclude_unset=True, mode="json")
+    ack = bool(changes.pop("acknowledge_paid_usage", False))
+    if changes.get("spend_policy") == "allow_paid" and project.spend_policy != "allow_paid" and not ack:
+        raise ValidationFailed(
+            "allow_paid lets the router use billed capacity; "
+            "resend with acknowledge_paid_usage=true to consent"
+        )
     for k, v in changes.items():
         setattr(project, k, v)
+    if "spend_policy" in changes:
+        await audit.record(
+            session,
+            "project.spend_policy_changed",
+            actor_user_id=p.user.id,
+            actor_key_id=p.key.id,
+            project_id=project.id,
+            details={"spend_policy": changes["spend_policy"], "acknowledged_paid_usage": ack},
+        )
     await audit.record(
         session,
         "project.updated",

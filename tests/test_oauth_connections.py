@@ -52,6 +52,19 @@ class FakeOpenRouter:
         bearer = request.headers.get("authorization", "")[7:]
         if bearer not in self.issued:
             return httpx.Response(401, json={"error": {"message": "No auth credentials found", "code": 401}})
+        if path == "/api/v1/key":  # documented account status endpoint
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "label": "oasis",
+                        "limit": None,
+                        "usage": 0,
+                        "is_free_tier": True,
+                        "free_model_daily_requests": {"used": 3, "limit": 50, "remaining": 47},
+                    }
+                },
+            )
         if path == "/api/v1/models":
             return httpx.Response(
                 200,
@@ -139,6 +152,22 @@ async def test_redirect_flow_connects_validates_and_serves(
         ("openrouter", "oauth", "active")
     ]
     assert openrouter.issued[0] not in json.dumps(conns)
+
+    # Provider-reported account status: a never-paid OpenRouter account cannot be billed, so the
+    # connection is free-tier and the documented free-model daily ceiling is mirrored into the ledger.
+    assert conns[0]["billing_mode"] == "free_tier"
+    assert conns[0]["account_status"]["free_model_daily_limit"] == 50
+    async with ctx.db.session() as s:
+        from oasis_route.db.models import Model, QuotaPool
+
+        pool = (await s.execute(select(QuotaPool).where(QuotaPool.model_scope == "*:free"))).scalar_one()
+        free_model = (
+            await s.execute(
+                select(Model).where(Model.upstream_id == "meta-llama/llama-3.3-70b-instruct:free")
+            )
+        ).scalar_one()
+    assert (pool.limit_value, pool.used, pool.source) == (50, 3, "provider_api")
+    assert free_model.pricing["free"] is True
 
     st = (await client.get(f"/api/v1/projects/{pid}/status", headers=auth(key))).json()
     assert st["status"] == "Ready", st
