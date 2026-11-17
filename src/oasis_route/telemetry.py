@@ -78,7 +78,10 @@ def configure_tracing(enabled: bool, service_name: str = "oasis-route") -> bool:
 
         logging.getLogger(__name__).warning("otel_enabled but the 'otel' extra is not installed")
         return False
-    provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
+    import os
+
+    name = os.environ.get("OTEL_SERVICE_NAME") or service_name
+    provider = TracerProvider(resource=Resource.create({"service.name": name}))
     provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
     trace.set_tracer_provider(provider)
     return True
