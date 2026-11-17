@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     master_key: SecretStr | None = Field(
         default=None, description="Base64 32-byte key-encryption key (KEK) for the credential vault."
     )
+    previous_master_keys: list[SecretStr] = Field(
+        default_factory=list, description="Retired KEKs still accepted for decryption during rotation."
+    )
     api_key_pepper: SecretStr | None = Field(
         default=None, description="Secret used for HMAC hashing of Oasis Route API keys."
     )
@@ -101,6 +104,13 @@ class Settings(BaseSettings):
             raise ValueError("master_key must decode to 32 bytes")
         return v
 
+    @field_validator("previous_master_keys")
+    @classmethod
+    def _prev(cls, v: list[SecretStr]) -> list[SecretStr]:
+        for item in v:
+            cls._kek(item)
+        return v
+
     @model_validator(mode="after")
     def _production_requirements(self) -> Settings:
         if self.environment is Environment.PRODUCTION:
@@ -121,6 +131,9 @@ class Settings(BaseSettings):
             raise RuntimeError("master_key required")
         # Insecure, deterministic development key. Never used in production (validator above).
         return b"oasis-route-dev-insecure-kek-32b"
+
+    def previous_kek_bytes(self) -> list[bytes]:
+        return [base64.b64decode(k.get_secret_value()) for k in self.previous_master_keys]
 
     def pepper_bytes(self) -> bytes:
         if self.api_key_pepper is not None:

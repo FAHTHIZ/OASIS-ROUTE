@@ -50,7 +50,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "RUF", "SIM", "PT"]
-ignore = ["S101", "B008", "RUF012", "S311"]
+ignore = ["S101", "B008", "RUF012", "S311", "PT018"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106", "S107", "S108", "B017", "PT011"]
@@ -73,4 +73,5 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 addopts = "-q"
+pythonpath = ["."]
 filterwarnings = ["ignore::DeprecationWarning"]

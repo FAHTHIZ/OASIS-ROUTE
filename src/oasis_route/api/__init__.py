@@ -6,5 +6,6 @@ from fastapi import FastAPI
 
 
 def register_routers(app: FastAPI) -> None:
-    """Attach all routers. Imported lazily to keep module import order simple."""
-    return None
+    from oasis_route.api import admin_identity
+
+    app.include_router(admin_identity.router)
