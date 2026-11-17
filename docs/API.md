@@ -220,6 +220,7 @@ All paths are under `/api/v1`. Project-scoped endpoints require the key's own pr
 
 | Method | Path | Purpose |
 |---|---|---|
+| `GET` | `/discover` | The Discover catalogue in one call. Optional `project_id` (defaults to the key's project). Returns `status` (last discovery run, next scan, source counts, verified / pending / expired offers, provider candidates, and for the project its spend policy, free-tier connections and providers needing action) and `providers[]`, most useful first. Each provider has `access_path` (`official_oauth`, `api_key`, `anonymous_public`), `oauth_available`, `free_tier_hint`, `card_required` with `card_required_source` (`evidence`, `documented` or `unknown`), `default_billing_mode`, official `links` (signup, console, API key page, docs, pricing, rate limits, terms), model counts (`total`, `free`), `offers[]` (state, class, quotas, models, billing, expiry, evidence count and URLs, `verified`), `pending_review`, the project's `connection` and a `next_action` (`connect_oauth`, `connect_api_key`, `connected`, `confirm_billing`, `fix_connection`, `learn_more`, `unavailable`) with a label. Non-admins only see offers a reviewer made `connectable` or `active`; unreviewed ones are only counted. Read-only: it never fetches or changes anything. |
 | `GET`, `POST` | `/sources` | Administrators register approved sources; other users submit leads for review. |
 | `POST` | `/admin/sources/{id}/review` | Approve or reject a source. |
 | `POST` | `/admin/sources/{id}/run` | Fetch now (robots, budgets and SSRF checks still apply). |
