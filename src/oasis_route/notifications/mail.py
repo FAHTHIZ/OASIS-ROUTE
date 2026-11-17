@@ -88,7 +88,8 @@ _CATEGORIES: tuple[tuple[str, str, re.Pattern[str]], ...] = (
         "info",
         re.compile(
             r"\b(approaching|nearing|close to)\b.{0,30}\b(quota|limit)\b|\b\d{1,3}\s?% of (your )?"
-            r"(quota|limit|credits|budget)\b|\busage (alert|warning)\b",
+            r"(?:(?:usage|rate|spending|monthly|daily) )?(quota|limit|credits|budget)\b|"
+            r"\busage (alert|warning)\b",
             re.I | re.S,
         ),
     ),

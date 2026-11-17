@@ -50,3 +50,29 @@ class Metrics:
         self.discovery_fetches = Counter(
             "oasis_discovery_fetches_total", "Discovery fetch results", ["result"], registry=r
         )
+
+
+def configure_tracing(enabled: bool, service_name: str = "oasis-route") -> bool:
+    """Install an OTLP/HTTP exporting tracer provider when enabled and the ``otel`` extra is installed.
+
+    Endpoint, headers, and sampling come from the standard ``OTEL_EXPORTER_OTLP_*`` / ``OTEL_TRACES_SAMPLER``
+    environment variables. Returns True if tracing was installed.
+    """
+    if not enabled:
+        return False
+    try:
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # type: ignore[import-not-found]
+            OTLPSpanExporter,
+        )
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    except ImportError:  # pragma: no cover - extra not installed
+        import logging
+
+        logging.getLogger(__name__).warning("otel_enabled but the 'otel' extra is not installed")
+        return False
+    provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    trace.set_tracer_provider(provider)
+    return True

@@ -608,6 +608,9 @@ class Engine:
                 continue
             dispatched += 1
             handle: StreamHandle | None = None
+            span = tracer.start_span("oasis.upstream.chat_stream")
+            span.set_attribute("gen_ai.system", c.provider_id)
+            span.set_attribute("gen_ai.request.model", c.upstream_model)
             try:
                 target = await self._target(c)
                 adapter = self.ctx.adapters.for_provider(target.provider_id, target.adapter_key)
@@ -622,6 +625,7 @@ class Engine:
                     first = None
                 return d, handle, first
             except UpstreamError as err:
+                span.set_attribute("error.type", err.category.value)
                 if handle is not None:
                     await handle.close()
                 await self._on_failure(st, d, err, streamed=True)
@@ -633,6 +637,8 @@ class Engine:
                     await handle.close()
                 await ledger.release(self.ctx.db, d.reservation_id)
                 raise
+            finally:
+                span.end()  # covers dispatch and first chunk (time to first token)
         err_out = self._no_route(st)
         await self._decision(st, "failed")
         raise err_out
