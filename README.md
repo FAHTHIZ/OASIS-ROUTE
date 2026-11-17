@@ -96,6 +96,12 @@ uvx --from git+https://github.com/FAHTHIZ/OASIS-ROUTE oasis-route dev
 # prints the console URL, your project ID and your Oasis Key
 ```
 
+Or with Docker, no Python needed (rolling image of `main`):
+
+```bash
+docker run --rm -p 8080:8080 ghcr.io/fahthiz/oasis-route:edge dev
+```
+
 Install it as a command instead (`oasis-route` on your PATH):
 
 ```bash
