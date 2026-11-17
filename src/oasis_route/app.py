@@ -38,6 +38,9 @@ def _error(
 def create_app(settings: Settings | None = None, ctx: AppContext | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level, settings.log_json)
+    from oasis_route.telemetry import configure_tracing
+
+    configure_tracing(settings.otel_enabled)
     ctx = ctx or AppContext(settings=settings, db=Database(settings.database_url))
 
     @asynccontextmanager

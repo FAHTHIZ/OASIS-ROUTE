@@ -65,7 +65,7 @@ This plan is deliberately sequential. A coding agent should deliver working vert
 - [x] Reset-aware recovery checks.
 - [x] Advertised/verified/authorized/usable capacity calculations.
 - [ ] Usage and routing dashboard.
-- [ ] OpenTelemetry instrumentation.
+- [x] OpenTelemetry instrumentation.
 
 **Acceptance:** simulated outage, quota reset, auth expiry, and model removal behave correctly; dashboards reconcile with ledger.
 
@@ -80,11 +80,11 @@ This plan is deliberately sequential. A coding agent should deliver working vert
 **Acceptance:** a new user can run locally, connect one eligible provider, create a key, and make a request using documented steps.
 
 ## P8 — Optional Gmail integration
-- [ ] Compliance review and approval gate.
-- [ ] Narrow OAuth scopes and consent UX.
-- [ ] Provider notification classifier.
-- [ ] Minimal extraction, retention and deletion.
-- [ ] Revocation and security tests.
+- [x] Compliance review and approval gate.
+- [x] Narrow OAuth scopes and consent UX.
+- [x] Provider notification classifier.
+- [x] Minimal extraction, retention and deletion.
+- [x] Revocation and security tests.
 
 **Acceptance:** no production enablement until all applicable Google verification/security assessment requirements are satisfied.
 
