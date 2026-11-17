@@ -224,12 +224,15 @@ class OpenAICompatibleAdapter:
         out = []
         for it in items:
             if isinstance(it, dict) and isinstance(it.get("id"), str):
+                caps, max_out = infer_capabilities(it)
                 out.append(
                     ModelInfo(
                         upstream_id=it["id"],
                         display_name=str(it.get("name") or it["id"]),
                         context_window=to_int(str(it.get("context_length") or it.get("context_window") or ""))
                         or None,
+                        max_output_tokens=max_out,
+                        capabilities=caps,
                     )
                 )
         return out
@@ -338,3 +341,94 @@ class OpenAICompatibleAdapter:
                 await r.aclose()
 
         return StreamHandle(chunks=gen(), observations=observations, upstream_model=req.model, _response=r)
+
+
+_TOOL_PARAMS = {"tools", "tool_choice", "function_calling", "functions"}
+_JSON_PARAMS = {"response_format", "structured_outputs", "json_mode", "json_schema"}
+_CAP_ALIASES = {
+    "tools": (
+        "tools",
+        "tool_use",
+        "tool_calling",
+        "function_calling",
+        "functions",
+        "supports_tools",
+        "supports_function_calling",
+    ),
+    "json_mode": (
+        "json_mode",
+        "json",
+        "response_format",
+        "structured_outputs",
+        "supports_json_mode",
+        "supports_response_schema",
+    ),
+    "vision": ("vision", "image_input", "supports_vision", "multimodal"),
+    "streaming": ("streaming", "supports_streaming"),
+}
+
+
+def _flag(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.lower() in ("true", "false"):
+        return value.lower() == "true"
+    return None
+
+
+def infer_capabilities(item: dict[str, Any]) -> tuple[dict[str, Any], int | None]:
+    """Capabilities a provider states in its /models listing, and the output cap.
+
+    OpenAI-compatible listings carry this in several shapes: OpenRouter's
+    ``supported_parameters`` and ``architecture.input_modalities``, Mistral's
+    ``capabilities`` object, Pollinations' top-level ``tools``/``vision``
+    flags, LiteLLM-style ``supports_*`` keys, and ``features`` lists. Only what
+    the listing states is returned; anything it does not mention stays unknown.
+    """
+    caps: dict[str, Any] = {}
+    params = item.get("supported_parameters")
+    if isinstance(params, list) and params:
+        names = {str(p).lower() for p in params}
+        caps["tools"] = bool(names & _TOOL_PARAMS)
+        caps["json_mode"] = bool(names & _JSON_PARAMS)
+    features = item.get("features")
+    if isinstance(features, list):
+        names = {str(f).lower() for f in features}
+        if names & _TOOL_PARAMS or "tool_use" in names:
+            caps["tools"] = True
+        if names & _JSON_PARAMS:
+            caps["json_mode"] = True
+        if "vision" in names or "image_input" in names:
+            caps["vision"] = True
+    sources = [item]
+    nested = item.get("capabilities")
+    if isinstance(nested, dict):
+        sources.insert(0, nested)
+    for source in sources:
+        for cap, keys in _CAP_ALIASES.items():
+            if cap in caps:
+                continue
+            for key in keys:
+                flag = _flag(source.get(key))
+                if flag is not None:
+                    caps[cap] = flag
+                    break
+    arch = item.get("architecture")
+    modalities = (arch or {}).get("input_modalities") if isinstance(arch, dict) else None
+    if modalities is None:
+        modalities = item.get("input_modalities")
+    if isinstance(modalities, list) and modalities and "vision" not in caps:
+        caps["vision"] = "image" in {str(m).lower() for m in modalities}
+    if isinstance(nested, dict) and _flag(nested.get("completion_chat")) is False:
+        caps["chat"] = False
+    max_out = None
+    top = item.get("top_provider")
+    for raw in (
+        (top or {}).get("max_completion_tokens") if isinstance(top, dict) else None,
+        item.get("max_completion_tokens"),
+        item.get("max_output_tokens"),
+    ):
+        if isinstance(raw, int) and raw > 0:
+            max_out = raw
+            break
+    return caps, max_out

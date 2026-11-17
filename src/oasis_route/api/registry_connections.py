@@ -193,7 +193,11 @@ async def patch_model(
     changes = body.model_dump(exclude_unset=True, mode="json")
     for k, v in changes.items():
         if k == "capabilities":
+            # Marked as an operator's edit, so a later model sync does not
+            # overwrite it with what the provider's listing says.
             v = {**m.capabilities, **v}
+            if "source" not in changes["capabilities"]:
+                v["source"] = "admin"
         setattr(m, k, v)
     await audit.record(
         session,

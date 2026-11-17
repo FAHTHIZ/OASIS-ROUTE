@@ -150,13 +150,19 @@ def _policy_reason(project: Project, provider: Provider) -> str | None:
     return None
 
 
-def _capability_reason(m: Model, opts: RouteOptions) -> str | None:
+def _capability_reason(m: Model, opts: RouteOptions, explicit: bool = False) -> str | None:
     caps = m.capabilities or {}
     if caps.get("chat") is False:
         return "not_a_chat_model"
     if m.lifecycle == "removed":
         return "model_removed"
     for feat in sorted(opts.require):
+        # A model the caller named explicitly is tried when a capability is
+        # merely unknown (many listings, e.g. custom OpenAI-compatible servers,
+        # say nothing about tools); only a stated lack rules it out. "auto"
+        # stays strict and picks models known to have the capability.
+        if explicit and caps.get(feat) is None:
+            continue
         if caps.get(feat) is not True:
             return f"missing_capability:{feat}"
     if m.context_window and opts.input_tokens + opts.max_output_tokens > m.context_window:
@@ -305,7 +311,7 @@ async def build_plan(
             if conn_reason:
                 rejected.append(Rejection(prov.id, m.upstream_id, c.id, conn_reason))
                 continue
-            reason = _capability_reason(m, opts)
+            reason = _capability_reason(m, opts, explicit=not auto)
             q, q_src = quality_of(m, opts.task)
             if reason is None and opts.min_quality is not None and (q is None or q < opts.min_quality):
                 reason = "below_min_quality"
