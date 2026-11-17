@@ -288,7 +288,10 @@ const views = {
                       });
                       if (!String(f.authorization_url).startsWith("https://")) throw new Error("unexpected authorization URL");
                       window.open(f.authorization_url, "_blank", "noopener");
-                      oauthMsg.replaceChildren(`Waiting for you to approve access on ${p.name}...`);
+                      oauthMsg.replaceChildren(
+                        `Waiting for you to approve access on ${p.name}... `,
+                        el("a", { href: f.authorization_url, target: "_blank", rel: "noopener noreferrer" }, `Open ${p.name} again`)
+                      );
                       pollFlow(f.flow_id, Date.now() + 10 * 60 * 1000);
                     } catch (e) {
                       oauthMsg.replaceChildren(errorBox(e));
