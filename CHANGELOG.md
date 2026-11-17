@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- The discovery fetcher decoded gzip responses twice, so every site that compresses robots.txt was recorded as `disallowed_by_robots`. Found by running discovery against the live seeds.
+- Rate-limit tables of providers documented as billed (OpenAI, Anthropic) are no longer labelled as a free tier; price schedules ("$2.00 through November 30") are no longer read as an offer's expiry date.
+- The Gemini rate-limits seed moved to `aistudio.google.com`; moved seeds now migrate automatically.
 - Per-key rate limits now hold across replicas: on PostgreSQL the counters live in the database (sliding one-minute window, migration `0005`). Previously N replicas allowed up to N times the limit. `OASIS_ROUTE_RATE_LIMIT_BACKEND` selects `auto`, `database` or `memory`.
 - `oasis-route dev` crashed inside the container image, which sets production mode; `dev` now always runs in development mode and keeps state in `/data/dev` (`OASIS_ROUTE_DEV_STATE_DIR`).
 - Image names in the release workflow are lowercased; GHCR rejects the mixed-case owner name.
@@ -16,6 +19,11 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Live provider discovery: 17 maintainer-reviewed seed sources (official docs and public catalogues), a bounded frontier that follows related pages on official domains, OpenRouter and Hugging Face catalogue extractors, HTML rate-limit table extraction, credit, trial, card and usage-scope claims, and provider candidates from catalogues (`/api/v1/admin/provider-candidates`). `POST /api/v1/admin/discovery/run` runs due sources now. See [docs/DISCOVERY_AND_REGISTRY.md](docs/DISCOVERY_AND_REGISTRY.md).
+- Free-only spend policy, the default for new projects: routes are classified `local`, `free_model`, `free_tier_account`, `paid` or `unknown`, and the last two are rejected (`paid_route_blocked`, `cost_unknown`) unless the project allows paid usage with an audited acknowledgement. Connections have a `billing_mode`. See [ADR-0002](docs/adr/0002-free-only-spend-policy.md).
+- Account sync: OpenRouter key status (free tier, credits, free-model daily quota as a `*:free` pool) and Hugging Face billing status.
+- Sign in with Hugging Face: OAuth 2.0 authorization code + PKCE, a Client ID Metadata Document at `/.well-known/oauth-cimd`, and the `connections.oauth_refresh` worker job.
+- `GET /api/v1/discover` and the console's Discover tab: providers with access requirements, verified offers, evidence links, model counts and the next step, with search and filters.
 - CI publishes `ghcr.io/fahthiz/oasis-route:edge` from every green push to `main`, and smoke-tests `docker run <image> dev`.
 - `docs/COMPARISON.md`: dated comparison with LiteLLM, OmniRoute, new-api, Portkey, TensorZero and Bifrost, including where they are ahead.
 - Provider seeds: NVIDIA API Catalog (`https://integrate.api.nvidia.com/v1`, data policy recorded from its trial terms: inputs are used to improve NVIDIA models, so privacy-restricted projects exclude it), SambaNova Cloud and the Hugging Face Inference Providers router.

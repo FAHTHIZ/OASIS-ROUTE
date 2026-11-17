@@ -4,6 +4,43 @@
 
 Continuously discover legitimate public inference offers and changes to existing offers. No crawler can guarantee coverage of the entire internet; use targeted source discovery, incremental crawling, search/index integrations where permitted, and community-reviewed submissions.
 
+## 1.1 What runs today
+
+Everything below is implemented and covered by tests (`tests/test_live_discovery.py`, `tests/test_discovery_review.py`, `tests/test_discover_view.py`). It was last exercised against the live seed sources on 2026-11-17: 16 of 17 seeds were fetched. The Gemini rate-limits page had moved to another host (`ai.google.dev` now redirects to `aistudio.google.com`); the fetcher refuses cross-host redirects by design, so the seed was updated and moved seeds are migrated automatically (`seeds.MOVED`).
+
+```mermaid
+flowchart LR
+  seeds["Seed sources<br/>(maintainer-reviewed)"] --> fetch
+  admin["Admin-added sources"] --> fetch
+  frontier["Frontier links<br/>(same official domains)"] --> fetch
+  fetch["Safe fetcher<br/>SSRF + robots.txt + budgets"] --> detect{"Content type"}
+  detect -->|"OpenRouter / HF router JSON"| cat["Catalogue extractor<br/>models, free flags, pricing"]
+  detect -->|"HTML"| tables["Table extractor<br/>per-model rate limits"]
+  detect -->|"HTML"| text["Pattern extractor<br/>quotas, credits, trials, card, expiry, regions"]
+  cat --> ingest
+  tables --> ingest
+  text --> ingest
+  ingest["Offers + evidence<br/>(needs_review)"] --> review["Human review<br/>evidence required"]
+  review --> discover["Discover catalogue<br/>GET /api/v1/discover"]
+  ingest --> cand["Provider candidates"]
+  fetch -.->|"html links"| frontier
+```
+
+| Piece | Where | What it does |
+|---|---|---|
+| Seed sources | `discovery/seeds.py` | 17 official pages and catalogues (OpenRouter, Hugging Face, Groq, Gemini, Cerebras, SambaNova, Mistral, NVIDIA, OpenAI, Anthropic). Inserted only if missing, so an admin's block or edit sticks. `OASIS_ROUTE_DISCOVERY_SEED_SOURCES=false` turns them off. |
+| Safe fetcher | `discovery/fetcher.py` | https only, SSRF check on every hop, redirects limited to the source's host, robots.txt before every fetch (unreachable robots means disallow), per-origin interval and `Crawl-delay`, conditional requests, size cap, content-type allow-list. |
+| Structured extractors | `discovery/structured.py` | OpenRouter `/api/v1/models` (free models, `:free` variants, pricing, context, tool support) and the Hugging Face router catalogue (models and the inference providers behind them). HTML tables are parsed into per-model request and token limits, tagged with the tier named by the nearest heading. |
+| Pattern extractor | `discovery/extraction.py` | Quotas, credits (`$5 in trial credits`), trial lengths, "no card required", expiry dates (price schedules such as "$2.00 through November 30" are ignored), age and region restrictions, evaluation-only wording. Page text is data: instructions inside it cannot change offer state. |
+| Offer grouping | `discovery/service.py` | Claims become one offer per provider and access mode: `free_tier`, `credits`, `rate_limits` (published limits of a provider documented as billed, class `paid`), or `unspecified`. Each source owns its own quota rows, so two pages never erase each other. |
+| Frontier | `discovery/urls.py`, `service.py` | Links from an official HTML page are followed when they stay on the provider's official domains, mention pricing, limits, free tiers, models, terms or changelogs, and are not account, settings, login, upgrade, privacy or cookie pages. Depth 1 and 25 pages per provider by default. |
+| Provider candidates | `ProviderCandidate` | Inference providers seen in a catalogue (for example behind the Hugging Face router) that are not in the registry yet. Admins accept or dismiss them at `/api/v1/admin/provider-candidates`. |
+| Review | `discovery/review.py` | `needs_review -> verified_eligible -> connectable -> active`. Verification must cite evidence records. Material changes on a later fetch move an offer back to review. |
+| Discover catalogue | `discovery/view.py` | Read model behind the console's Discover tab. Users see only reviewed offers; unreviewed ones are counted. |
+| Scheduling | `worker/runner.py` | `discovery.seed_sources` keeps seeds present; `discovery.sources` fetches what is due, with exponential backoff per source. `POST /api/v1/admin/discovery/run` runs due sources now. |
+
+Not implemented: general web search (no search API is configured and none is used), GitHub release and announcement feeds, and re-extraction of unchanged pages after an extractor upgrade (a page is re-read only when its content changes).
+
 ## 2. Source classes
 
 Prioritize:

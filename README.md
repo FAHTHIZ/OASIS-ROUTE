@@ -19,6 +19,7 @@
 
 <p align="center">
   <a href="#quickstart">Quickstart</a> ·
+  <a href="#discover-free-capacity">Discover</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#capabilities">Capabilities</a> ·
   <a href="#api-compatibility">API compatibility</a> ·
@@ -47,6 +48,21 @@ It is designed around one important distinction:
 | Retrying blindly after a rate limit | Uses quota reservations, cooldowns, health state, and bounded failover |
 | Treating public announcements as usable capacity | Preserves evidence and requires verification plus user authorization |
 | Hiding a fallback or quality downgrade | Makes routing decisions explainable and signals downgrades honestly |
+
+## Discover free capacity
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./assets/console-discover-dark.webp" />
+  <img src="./assets/console-discover-light.webp" alt="The Discover tab of the OASIS Route console: provider cards for Cerebras, Google Gemini and Groq showing access requirements, verified free-tier limits, evidence links and a button to connect" width="100%" />
+</picture>
+
+The console opens on **Discover**: every provider, what it really takes to get access, and the offers OASIS Route has found on official pages. The screenshot is a real run against the live seed sources on 2026-11-17.
+
+- **Live sources.** Seventeen maintainer-reviewed official pages and public catalogues are checked on a schedule, plus related pages on the same official domains. robots.txt is honoured on every fetch.
+- **Real requirements.** Access path (sign-in, API key or none), whether a card is needed (and whether that comes from evidence or documentation), per-model limits, free models, credits, trial length and expiry. Anything not confirmed is shown as unknown.
+- **Verified before shown.** Extracted offers wait for a reviewer, who must cite the evidence. Users only see reviewed offers.
+- **One click to connect.** Sign in with OpenRouter or Hugging Face through their official OAuth, or paste a key from the provider's console. Models and quotas then sync on their own.
+- **Free-only by default.** New projects never route to a connection whose cost is paid or unknown. Allowing paid routes needs an explicit, audited acknowledgement.
 
 ## How it works
 
@@ -125,6 +141,8 @@ An Oasis Key is **not** an upstream provider credential. Provider API keys and O
 | **Explainable decisions** | Provides route previews, routing reasons, and model/fallback metadata |
 | **Background autonomy** | Supervises discovery, synchronization, health, recovery, and maintenance jobs with leases and crash recovery |
 | **Operational visibility** | Tracks usage, capacity, health, forecasts, and plain-language system status |
+| **Free-only spend policy** | Classifies every route as local, free model, free-tier account, paid or unknown, and blocks the last two unless the owner allows paid usage |
+| **Official sign-in** | OpenRouter (PKCE key exchange) and Hugging Face (OAuth 2.0 + PKCE, refreshed in the background); API keys for everything else |
 
 ## API compatibility
 
@@ -154,7 +172,7 @@ Implemented adapters include:
 - Hugging Face router
 - Custom OpenAI-compatible endpoints, including llama.cpp, Ollama, and vLLM
 
-OAuth authorization is currently available for OpenRouter, including PKCE, redirect, and headless modes. Other listed providers use API credentials supplied by the user.
+Official sign-in is available for OpenRouter (PKCE, redirect and headless modes) and Hugging Face (OAuth 2.0 + PKCE; needs an https `public_url` or a registered app). Other providers use API keys supplied by the account owner. Connected OpenRouter and Hugging Face accounts report whether they are free tier, so free-only routing can use them without manual confirmation.
 
 ## Quickstart
 
@@ -198,7 +216,7 @@ uv run oasis-route dev
 
 ### 5. Connect a provider and make a request
 
-Open <code>/console/</code>, sign in with the Oasis Key, and add an upstream provider credential under **Connections**.
+Open <code>/console/</code> and sign in with the Oasis Key. **Discover** lists the providers with verified free capacity; use **Sign in with ...** or **Add API key** on a card (or the **Connections** tab).
 
 Then call the gateway:
 
@@ -240,7 +258,8 @@ OASIS Route is working software. The implementation roadmap is tracked phase by 
 | **Identity and security** | Project isolation, scoped Oasis Keys, encrypted credential vault, envelope encryption, KEK rotation, audit trails, and redaction |
 | **Routing and quotas** | Capability-aware quality-first routing, route preview, atomic reservations, idempotency, shared quota pools, and usage settlement |
 | **Recovery** | Circuit breakers, cooldowns, Retry-After handling, reset-aware recovery, and honest downgrade signalling |
-| **Discovery** | Safe fetcher, extraction, evidence provenance, verification workflow, offer lifecycle, and human review |
+| **Discovery** | Seed sources, bounded frontier, catalogue and rate-limit-table extraction, provider candidates, safe fetcher, evidence provenance, review workflow, and the Discover catalogue |
+| **Onboarding and spend** | OpenRouter and Hugging Face sign-in, token refresh, account free-tier detection, per-connection billing modes, and the free-only spend policy |
 | **Capacity and telemetry** | Capacity analytics and forecasting, usage ledger, health metrics, Prometheus metrics, and OpenTelemetry instrumentation |
 | **Worker** | Database-leased jobs, backoff, timeouts, crash recovery, and stall alerts |
 | **Console and deployment** | Web console, onboarding, Docker deployment, backup/restore guidance, and production runbooks |
@@ -254,9 +273,11 @@ OASIS Route is deliberately explicit about what it does not serve or guarantee t
 - **Inference endpoints:** Chat Completions, Responses, Anthropic Messages, and Models are supported. Embeddings, images, audio, and legacy completions are not served.
 - **Responses state:** the Responses API is currently stateless; <code>previous_response_id</code> is not supported.
 - **Mid-stream recovery:** failover is possible only before the first response byte. A stream that fails midway ends with an error event rather than being spliced into another model's output.
-- **OAuth coverage:** OpenRouter is the only provider with OAuth sign-in at present. Other providers use API credentials supplied by the user.
+- **Sign-in coverage:** OpenRouter and Hugging Face only. Hugging Face sign-in needs an https `public_url` (for its Client ID Metadata Document) or `OASIS_ROUTE_HF_OAUTH_CLIENT_ID`; device-code sign-in is not wired yet. Other providers use API keys.
+- **Billing detection:** only OpenRouter and Hugging Face expose whether an account can be billed. For other providers a connection stays `unknown` (blocked in free-only projects) until the owner confirms it is free tier.
+- **Discovery reach:** official pages and catalogues only. No general web search, GitHub release feeds or announcement feeds yet. A page is re-extracted only when its content changes, so extractor improvements apply on the next change.
 - **Provider data policies:** training and retention facts remain unknown for seeded providers until an operator records them with evidence. Providers are excluded from projects that require no-training or zero-retention when those facts are unknown. NVIDIA is seeded as training on inputs because its own pages state that inputs are used to improve its models.
-- **Discovery activation:** extraction is deterministic pattern matching. It proposes candidates for human review; it never activates an offer by itself.
+- **Discovery activation:** extraction is deterministic (structured catalogues, HTML tables and patterns). It proposes offers for human review; it never activates an offer by itself.
 - **Gmail:** off by default and must remain off in production until Google's verification and security assessment are complete.
 - **Metrics exposure:** <code>/metrics</code> is unauthenticated and must remain on a private network.
 
@@ -283,7 +304,7 @@ Read the [security and compliance model](docs/SECURITY_AND_COMPLIANCE.md), [thre
 | **Understand discovery** | [Discovery and registry](docs/DISCOVERY_AND_REGISTRY.md) · [Live provider discovery and onboarding](docs/LIVE_PROVIDER_DISCOVERY_AND_ONBOARDING.md) · [Agent implementation prompt](docs/LIVE_PROVIDER_DISCOVERY_AGENT_PROMPT.md) · [Free-tier capacity maths](docs/FREE_TIER_CAPACITY.md) |
 | **Configure the service** | [Configuration](docs/CONFIGURATION.md) · [Deployment](docs/DEPLOYMENT.md) |
 | **Operate it** | [Operations runbook](docs/OPERATIONS.md) · [Zero-operations autonomy](docs/ZERO_OPERATIONS_AUTONOMY.md) |
-| **Explore the design** | [Architecture](docs/ARCHITECTURE.md) · [Decision records](docs/adr/) |
+| **Explore the design** | [Architecture](docs/ARCHITECTURE.md) · [Decision records](docs/adr/): [stack](docs/adr/0001-stack-and-architecture.md), [free-only spend](docs/adr/0002-free-only-spend-policy.md), [seed sources and frontier](docs/adr/0003-seed-sources-and-frontier.md) |
 | **Review the project** | [Implementation audit](docs/IMPLEMENTATION_AUDIT.md) · [Release checklist](docs/RELEASE_CHECKLIST.md) |
 | **Compare alternatives** | [Comparison with LiteLLM, OmniRoute, and others](docs/COMPARISON.md) |
 | **Contribute** | [Development guide](docs/DEVELOPMENT.md) · [Agent handoff](AGENT_HANDOFF.md) |
