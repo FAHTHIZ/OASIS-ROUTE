@@ -154,7 +154,7 @@ async def test_redirect_flow_connects_validates_and_serves(
 
     # The state is single use: replaying the callback cannot create a second connection.
     replay = await client.get("/api/v1/oauth/callback", params={"code": code, "state": q["state"][0]})
-    assert replay.status_code == 422 and "already completed" in replay.text
+    assert replay.status_code in (403, 422)  # binding cookie cleared on success; flow already completed
     assert openrouter.exchanges == 1
 
 
@@ -280,3 +280,38 @@ async def test_public_url_overrides_callback(
     start = (await _start(client, key, pid)).json()
     q = parse_qs(urlsplit(start["authorization_url"]).query)
     assert q["callback_url"] == ["https://route.example.com/api/v1/oauth/callback"]
+
+
+async def test_redirect_flow_is_bound_to_the_starting_browser(
+    client: httpx.AsyncClient, ctx: AppContext, openrouter: FakeOpenRouter
+) -> None:
+    """Consent phishing: an attacker starts a flow and sends the link to a victim. The victim's browser
+    lacks the attacker's binding cookie, so the victim's account never lands in the attacker's project."""
+    key, pid = await _user(client)
+    r = await _start(client, key, pid)
+    cookie = r.headers["set-cookie"]
+    assert (
+        "oasis_oauth_binding=" in cookie and "HttpOnly" in cookie and "Path=/api/v1/oauth/callback" in cookie
+    )
+    assert "samesite=lax" in cookie.lower()
+    assert "_browser_binding" not in r.text
+    start = r.json()
+    q = parse_qs(urlsplit(start["authorization_url"]).query)
+    code = openrouter.authorize(start["authorization_url"])
+
+    victim = httpx.AsyncClient(transport=client._transport, base_url=str(client.base_url))  # no cookies
+    async with victim:
+        page = await victim.get("/api/v1/oauth/callback", params={"code": code, "state": q["state"][0]})
+    assert page.status_code == 403 and "same browser" in page.text
+    assert openrouter.exchanges == 0
+    flow = (
+        await client.get(f"/api/v1/projects/{pid}/connections/oauth/{start['flow_id']}", headers=auth(key))
+    ).json()
+    assert flow["status"] == "pending"
+
+    # The browser that started it still completes it, and the binding cookie is cleared.
+    ok = await client.get("/api/v1/oauth/callback", params={"code": code, "state": q["state"][0]})
+    assert ok.status_code == 200, ok.text
+    assert 'oasis_oauth_binding=""' in ok.headers.get("set-cookie", "") or "Max-Age=0" in ok.headers.get(
+        "set-cookie", ""
+    )
