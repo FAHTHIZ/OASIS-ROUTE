@@ -88,6 +88,33 @@ def _cmd_worker(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_rotate_kek(_args: argparse.Namespace) -> int:
+    """Re-wrap all credentials under the current master key (run after moving the old key to previous)."""
+    import json
+
+    from oasis_route.worker.runner import rewrap_credentials
+
+    s = get_settings()
+
+    async def _run() -> dict[str, int]:
+        ctx = _context(s)
+        try:
+            total = {"rewrapped": 0, "failed": 0, "remaining": 0}
+            while True:
+                r = await rewrap_credentials(ctx)
+                total["rewrapped"] += r["rewrapped"]
+                total["failed"] = r["failed"]
+                total["remaining"] = r["remaining"]
+                if r["rewrapped"] == 0:
+                    return total
+        finally:
+            await ctx.aclose()
+
+    out = asyncio.run(_run())
+    print(json.dumps(out))
+    return 0 if out["remaining"] == 0 else 2
+
+
 def _cmd_mock_provider(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -255,6 +282,9 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--email", required=True)
     b.add_argument("--project", default="default")
     b.set_defaults(func=_cmd_bootstrap)
+
+    rk = sub.add_parser("rotate-kek", help="re-wrap stored credentials under the current master key")
+    rk.set_defaults(func=_cmd_rotate_kek)
 
     mp = sub.add_parser("mock-provider", help="run the deterministic OpenAI-compatible mock provider")
     mp.add_argument("--host", default="127.0.0.1")
