@@ -137,7 +137,7 @@ Any OpenAI SDK works by setting its base URL to `https://route.example.com/v1` a
 - Running it: [deployment](docs/DEPLOYMENT.md), [operations runbook](docs/OPERATIONS.md), [zero-operations requirement](docs/ZERO_OPERATIONS_AUTONOMY.md)
 - Building it: [development](docs/DEVELOPMENT.md), [architecture](docs/ARCHITECTURE.md), [routing and quotas](docs/ROUTING_AND_QUOTAS.md), [discovery and registry](docs/DISCOVERY_AND_REGISTRY.md), [provider adapter contract](docs/PROVIDER_ADAPTERS.md), [decision records](docs/adr/)
 - Trust: [security and compliance](docs/SECURITY_AND_COMPLIANCE.md), [threat model](docs/THREAT_MODEL.md), [implementation audit](docs/IMPLEMENTATION_AUDIT.md), [release checklist](docs/RELEASE_CHECKLIST.md)
-- Planning: [execution plan](docs/EXECUTION_PLAN.md), [agent handoff](AGENT_HANDOFF.md), [research notes](docs/RESEARCH.md)
+- Planning: [comparison with LiteLLM, OmniRoute and others](docs/COMPARISON.md), [execution plan](docs/EXECUTION_PLAN.md), [agent handoff](AGENT_HANDOFF.md), [research notes](docs/RESEARCH.md)
 
 ## Design principles
 
