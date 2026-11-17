@@ -133,7 +133,7 @@ async def rotate_api_key(
         name=key.name,
         scopes=list(key.scopes),
         rotated_from=key.id,
-        env="live" if key.prefix.startswith("or_live_") else "test",
+        env="live" if key.prefix.startswith("oasis_live_") else "test",
     )
     if grace_hours > 0:
         key.expires_at = utcnow() + timedelta(hours=grace_hours)

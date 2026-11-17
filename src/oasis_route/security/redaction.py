@@ -20,7 +20,7 @@ _SENSITIVE_KEYS = re.compile(
 
 _PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]{8,}"),
-    re.compile(r"\bor_(?:live|test)_[A-Za-z0-9_-]{16,}"),  # Oasis Route keys
+    re.compile(r"\boasis_(?:live|test)_[A-Za-z0-9_-]{16,}"),  # Oasis Keys
     re.compile(r"\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{16,}"),  # OpenAI / Anthropic style
     re.compile(r"\bAIza[0-9A-Za-z_-]{30,}"),  # Google API keys
     re.compile(r"\bgsk_[A-Za-z0-9]{20,}"),  # Groq

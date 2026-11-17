@@ -6,7 +6,7 @@ from tests.helpers import auth, bootstrap
 
 def test_issue_and_verify() -> None:
     k = issue_key(b"pepper")
-    assert k.plaintext.startswith("or_live_")
+    assert k.plaintext.startswith("oasis_live_")
     assert parse_prefix(k.plaintext) == k.prefix
     assert verify_key(k.plaintext, k.key_hash, b"pepper")
     assert not verify_key(k.plaintext + "x", k.key_hash, b"pepper")
@@ -17,12 +17,12 @@ def test_issue_and_verify() -> None:
 
 def test_parse_prefix_rejects_garbage() -> None:
     assert parse_prefix("sk-abc") is None
-    assert parse_prefix("or_live_short_x") is None
+    assert parse_prefix("oasis_live_short_x") is None
 
 
 async def test_bootstrap_once_only(client: httpx.AsyncClient) -> None:
     data = await bootstrap(client)
-    assert data["api_key"]["secret"].startswith("or_live_")
+    assert data["api_key"]["secret"].startswith("oasis_live_")
     r = await client.post(
         "/api/v1/bootstrap", json={"token": "bootstrap-test-token", "email": "x@example.com"}
     )
@@ -83,7 +83,7 @@ async def test_scope_enforced(client: httpx.AsyncClient) -> None:
 
 async def test_missing_and_malformed_keys(client: httpx.AsyncClient) -> None:
     assert (await client.get("/api/v1/me")).status_code == 401
-    assert (await client.get("/api/v1/me", headers=auth("or_live_aaaaaaaaaaaa_zzz"))).status_code == 401
+    assert (await client.get("/api/v1/me", headers=auth("oasis_live_aaaaaaaaaaaa_zzz"))).status_code == 401
     r = await client.get("/api/v1/me", headers=auth("garbage"))
     assert r.status_code == 401
     assert r.json()["error"]["code"] == "unauthorized"
