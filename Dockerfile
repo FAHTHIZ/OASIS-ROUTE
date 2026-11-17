@@ -11,6 +11,9 @@ COPY src ./src
 RUN uv sync --locked --no-dev --extra otel --no-editable
 
 FROM python:3.12-slim AS runtime
+# Security updates for the base OS; drop the unused system installer tooling from the final image.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
+RUN python -m pip uninstall -y pip setuptools wheel || true
 RUN groupadd --system --gid 10001 oasis \
  && useradd --system --uid 10001 --gid oasis --home-dir /app --shell /usr/sbin/nologin oasis
 WORKDIR /app
