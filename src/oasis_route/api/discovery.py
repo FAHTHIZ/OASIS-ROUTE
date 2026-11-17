@@ -10,7 +10,14 @@ from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oasis_route.api.deps import Principal, get_ctx, get_session, require_admin, require_scope
+from oasis_route.api.deps import (
+    Principal,
+    get_ctx,
+    get_session,
+    project_access,
+    require_admin,
+    require_scope,
+)
 from oasis_route.context import AppContext
 from oasis_route.db.models import (
     ChangeEvent,
@@ -23,6 +30,7 @@ from oasis_route.db.models import (
 )
 from oasis_route.discovery import review
 from oasis_route.discovery import service as disc
+from oasis_route.discovery import view as discover_view
 from oasis_route.domain.enums import ApiKeyScope, OfferState, SourceClass, SourceReviewStatus
 from oasis_route.domain.errors import Conflict, NotFound, ValidationFailed
 from oasis_route.identity import audit
@@ -33,6 +41,21 @@ PUBLIC_OFFER_STATES = {OfferState.CONNECTABLE.value, OfferState.ACTIVE.value}
 
 class ORM(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
+
+# ------------------------------------------------------------------------------------------ discover
+@router.get("/discover")
+async def discover(
+    project_id: str | None = Query(
+        None, description="Project whose connections to show (defaults to the key's)"
+    ),
+    p: Principal = Depends(require_scope(ApiKeyScope.READ)),
+    ctx: AppContext = Depends(get_ctx),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Every provider with its real access requirements, verified offers, models and the next step to take."""
+    project = await project_access(project_id or p.project.id, p, session)
+    return await discover_view.discover(ctx, session, project=project, admin=p.is_admin)
 
 
 # ------------------------------------------------------------------------------------------- sources
