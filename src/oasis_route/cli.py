@@ -178,7 +178,10 @@ def _cmd_dev(args: argparse.Namespace) -> int:
     state = Path(args.state_dir).resolve()
     state.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("OASIS_ROUTE_DATABASE_URL", f"sqlite+aiosqlite:///{state / 'dev.db'}")
-    os.environ.setdefault("OASIS_ROUTE_ENVIRONMENT", "development")
+    # `dev` is development by definition, even inside the production image (which sets production).
+    if os.environ.get("OASIS_ROUTE_ENVIRONMENT", "development") != "development":
+        print("oasis-route dev: forcing OASIS_ROUTE_ENVIRONMENT=development", file=sys.stderr)
+    os.environ["OASIS_ROUTE_ENVIRONMENT"] = "development"
     os.environ.setdefault("OASIS_ROUTE_ALLOW_PRIVATE_UPSTREAMS", "true")
     os.environ.setdefault("OASIS_ROUTE_ENABLE_MOCK_PROVIDERS", "true")
     get_settings.cache_clear()
@@ -294,7 +297,7 @@ def build_parser() -> argparse.ArgumentParser:
     d = sub.add_parser("dev", help="local all-in-one: SQLite, mock providers, API, worker, admin key")
     d.add_argument("--port", type=int, default=8080)
     d.add_argument("--mock-port", type=int, default=9100)
-    d.add_argument("--state-dir", default=".oasis-dev")
+    d.add_argument("--state-dir", default=os.environ.get("OASIS_ROUTE_DEV_STATE_DIR", ".oasis-dev"))
     d.set_defaults(func=_cmd_dev)
     return p
 

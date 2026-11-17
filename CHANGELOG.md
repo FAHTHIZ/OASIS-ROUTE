@@ -4,12 +4,18 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+### Fixed
+
+- `oasis-route dev` crashed inside the container image, which sets production mode; `dev` now always runs in development mode and keeps state in `/data/dev` (`OASIS_ROUTE_DEV_STATE_DIR`).
+- Image names in the release workflow are lowercased; GHCR rejects the mixed-case owner name.
+
 ### Changed
 
 - Rate limits (`429`) now cool down only the affected model on that connection, escalating to the whole connection when a second model is also limited. Previously one model's per-model limit blocked every model on the account. Account hopping within a request is still refused.
 
 ### Added
 
+- CI publishes `ghcr.io/fahthiz/oasis-route:edge` from every green push to `main`, and smoke-tests `docker run <image> dev`.
 - `docs/COMPARISON.md`: dated comparison with LiteLLM, OmniRoute, new-api, Portkey, TensorZero and Bifrost, including where they are ahead.
 - Provider seeds: NVIDIA API Catalog (`https://integrate.api.nvidia.com/v1`, data policy recorded from its trial terms: inputs are used to improve NVIDIA models, so privacy-restricted projects exclude it), SambaNova Cloud and the Hugging Face Inference Providers router.
 - OpenAI Responses API: `POST /v1/responses` (string or item input, function calls, JSON formats, images, streaming events with sequence numbers), stateless, routed through the same engine as chat completions. Codex CLI now works with `wire_api = "responses"`; see [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).

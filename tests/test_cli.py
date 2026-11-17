@@ -25,6 +25,13 @@ def test_parser_commands() -> None:
         p.parse_args(["serve", "--with-worker"])  # worker is on by default now
 
 
+def test_dev_state_dir_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert cli.build_parser().parse_args(["dev"]).state_dir == ".oasis-dev"
+    monkeypatch.setenv("OASIS_ROUTE_DEV_STATE_DIR", "/data/dev")
+    assert cli.build_parser().parse_args(["dev"]).state_dir == "/data/dev"
+    assert cli.build_parser().parse_args(["dev", "--state-dir", "x"]).state_dir == "x"
+
+
 async def test_bootstrap_admin_once(ctx: AppContext) -> None:
     out = await cli._bootstrap_admin(ctx, "admin@example.com", "main")
     assert out is not None
