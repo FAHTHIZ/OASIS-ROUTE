@@ -58,7 +58,7 @@ ACCESS: dict[str, AccessInfo] = {
         api_key="https://aistudio.google.com/apikey",
         docs="https://ai.google.dev/gemini-api/docs",
         pricing="https://aistudio.google.com/docs/pricing",
-        rate_limits="https://ai.google.dev/gemini-api/docs/rate-limits",
+        rate_limits="https://aistudio.google.com/docs/rate-limits",
         free_tier_hint="Projects without billing enabled use the free tier with per-model limits.",
         card_required=False,
     ),

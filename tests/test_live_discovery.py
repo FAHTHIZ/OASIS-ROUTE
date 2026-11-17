@@ -85,6 +85,29 @@ async def test_seed_sources_are_inserted_once_and_respect_admin_decisions(ctx: A
     assert blocked.review_status == "blocked"
 
 
+async def test_moved_seed_follows_the_new_url_once(ctx: AppContext) -> None:
+    old, new = next(iter(seeds.MOVED.items()))
+    async with ctx.db.transaction() as s:
+        s.add(
+            Source(
+                url=old,
+                domain="ai.google.dev",
+                provider_id="gemini",
+                source_class="official_docs",
+                review_status="approved",
+                origin="seed",
+                content_hash="x" * 64,
+                failure_count=4,
+            )
+        )
+    await seeds.sync_seed_sources(ctx.db)
+    async with ctx.db.session() as s:
+        urls = list((await s.execute(select(Source.url))).scalars())
+        moved = (await s.execute(select(Source).where(Source.url == new))).scalar_one()
+    assert old not in urls and urls.count(new) == 1
+    assert moved.content_hash is None and moved.failure_count == 0 and moved.domain == "aistudio.google.com"
+
+
 # ------------------------------------------------------------------------------------------ catalogues
 async def _seed_one(ctx: AppContext, url: str) -> str:
     await seeds.sync_seed_sources(ctx.db)
@@ -393,3 +416,12 @@ async def test_paid_provider_rate_limits_are_not_called_a_free_tier(
     offer = (await client.get(f"/api/v1/offers/{body['offers'][0]}", headers=auth(admin))).json()
     assert offer["access_mode"] == "rate_limits" and offer["offer_class"] == "paid"
     assert "free tier" not in offer["title"].lower()
+
+
+def test_price_schedules_are_not_offer_expiry() -> None:
+    from oasis_route.discovery.extraction import extract
+
+    ex = extract("Input price: Free of charge (free tier). Paid tier: $2.00 through November 30, 2026.")
+    assert ex.of("expiry") == []
+    ex = extract("New accounts get $300 in free credits, valid until March 1, 2027.")
+    assert [c.value["date"] for c in ex.of("expiry")] == ["2027-03-01"]
