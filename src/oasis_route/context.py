@@ -10,7 +10,7 @@ import httpx
 from oasis_route.adapters.registry import AdapterRegistry
 from oasis_route.config import Settings
 from oasis_route.db.session import Database
-from oasis_route.security.rate_limit import TokenBucketLimiter
+from oasis_route.security.rate_limit import DatabaseRateLimiter, TokenBucketLimiter
 from oasis_route.security.ssrf import Resolver
 from oasis_route.security.vault import LocalKeyProvider, Vault
 from oasis_route.telemetry import Metrics
@@ -22,6 +22,7 @@ class AppContext:
     db: Database
     metrics: Metrics = field(default_factory=Metrics)
     limiter: TokenBucketLimiter = field(default_factory=TokenBucketLimiter)
+    db_limiter: DatabaseRateLimiter = field(default_factory=DatabaseRateLimiter)
     vault: Vault | None = None
     adapters: AdapterRegistry = field(default_factory=AdapterRegistry)
     # Upstream HTTP transport override (tests inject deterministic mock transports here).
@@ -35,6 +36,11 @@ class AppContext:
     _upstream_client: httpx.AsyncClient | None = field(default=None, repr=False)
     _discovery_client: httpx.AsyncClient | None = field(default=None, repr=False)
     _google_client: httpx.AsyncClient | None = field(default=None, repr=False)
+
+    @property
+    def shared_rate_limits(self) -> bool:
+        mode = self.settings.rate_limit_backend
+        return mode == "database" or (mode == "auto" and not self.db.is_sqlite)
 
     def __post_init__(self) -> None:
         if self.vault is None:

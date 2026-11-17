@@ -82,8 +82,7 @@ Oasis Route is working software. The implementation roadmap in [docs/EXECUTION_P
 - Inference endpoints are `POST /v1/chat/completions`, `POST /v1/responses` (stateless: no `previous_response_id`), `POST /v1/messages` and `GET /v1/models`. Embeddings, images, audio and legacy completions are not served.
 - Streaming failover happens only before the first byte; a stream that fails midway ends with an error event rather than being spliced with another model's output.
 - OAuth sign-in is available for OpenRouter only. Other providers use an API key that the user pastes once.
-- Data-policy facts (training on inputs, retention) are unknown for every seeded provider until an operator records them with evidence, so projects that require no-training or zero-retention exclude those providers.
-- The per-key rate limiter is per process; with N replicas the effective limit is up to N times the setting. Quota reservations are global.
+- Data-policy facts (training on inputs, retention) are unknown for seeded providers until an operator records them with evidence, so projects that require no-training or zero-retention exclude those providers. The exception is NVIDIA, whose own pages say inputs are used to improve its models; it is seeded as training on inputs.
 - Discovery extraction is deterministic pattern matching. It proposes candidates for human review and never activates an offer by itself.
 - Gmail is off by default and must stay off in production until Google's verification and security assessment are complete.
 - `/metrics` is unauthenticated and must stay on a private network.

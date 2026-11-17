@@ -77,8 +77,11 @@ async def get_principal(request: Request, ctx: AppContext = Depends(get_ctx)) ->
     # validation) never hold a database write transaction open across network I/O.
     async with ctx.db.transaction() as session:
         p = await authenticate_key(ctx, session, extract_bearer(request))
-    limit = p.project.rate_limit_rpm or ctx.settings.rate_limit_per_key_rpm
-    ok, retry = ctx.limiter.check(f"key:{p.key.id}", limit)
+        limit = p.project.rate_limit_rpm or ctx.settings.rate_limit_per_key_rpm
+        if ctx.shared_rate_limits:
+            ok, retry = await ctx.db_limiter.check(session, f"key:{p.key.id}", limit)
+    if not ctx.shared_rate_limits:
+        ok, retry = ctx.limiter.check(f"key:{p.key.id}", limit)
     if not ok:
         raise RateLimited("rate limit exceeded for this API key", details={"retry_after_s": round(retry, 2)})
     request.state.principal = p
