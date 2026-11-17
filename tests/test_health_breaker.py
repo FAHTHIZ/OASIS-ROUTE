@@ -59,7 +59,14 @@ async def test_success_closes_circuit_and_tracks_latency(ctx: AppContext) -> Non
     await breaker.record_success(ctx.db, cid, "m", 100.0)
     await breaker.record_success(ctx.db, cid, "m", 200.0)
     async with ctx.db.session() as s:
-        rec = (await s.execute(select(HealthRecord).where(HealthRecord.connection_id == cid))).scalar_one()
+        recs = {
+            r.model_scope: r
+            for r in (
+                await s.execute(select(HealthRecord).where(HealthRecord.connection_id == cid))
+            ).scalars()
+        }
+    model_rec, rec = recs["m"], recs[breaker.CONNECTION_SCOPE]
+    assert model_rec.state == HealthState.HEALTHY.value and model_rec.consecutive_failures == 0
     assert (
         rec.state == HealthState.HEALTHY.value and rec.consecutive_failures == 0 and rec.cooldown_level == 0
     )
@@ -119,3 +126,19 @@ async def test_release_probe_allows_new_probe(ctx: AppContext) -> None:
     assert await breaker.claim_probe(ctx.db, cid, "m")
     await breaker.release_probe(ctx.db, cid, "m")
     assert await breaker.claim_probe(ctx.db, cid, "m")
+
+
+async def test_rate_limit_cools_only_that_model(ctx: AppContext) -> None:
+    cid = await _conn(ctx)
+    await breaker.record_failure(ctx.db, ctx.settings, cid, "a", ErrorCategory.RATE_LIMITED, retry_after_s=30)
+    assert not (await _avail(ctx, cid, "a")).routable
+    assert (await _avail(ctx, cid, "b")).routable  # per-model limits leave other models usable
+
+
+async def test_second_rate_limited_model_escalates_to_connection(ctx: AppContext) -> None:
+    cid = await _conn(ctx)
+    await breaker.record_failure(ctx.db, ctx.settings, cid, "a", ErrorCategory.RATE_LIMITED, retry_after_s=30)
+    await breaker.record_failure(ctx.db, ctx.settings, cid, "b", ErrorCategory.RATE_LIMITED, retry_after_s=30)
+    # Two models limited at once: the limit is account-wide, so a third model is cooled down as well.
+    av = await _avail(ctx, cid, "c")
+    assert not av.routable and av.reason == "circuit_open"

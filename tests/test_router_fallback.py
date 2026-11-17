@@ -115,6 +115,32 @@ async def test_rate_limit_does_not_hop_accounts(
     assert len(upstreams["mock-b.test"].calls) == 0
 
 
+async def test_rate_limit_falls_back_to_other_model_on_same_account(
+    client: httpx.AsyncClient, upstreams: dict[str, Any]
+) -> None:
+    g = await gateway_setup(client, two_providers=False)
+    await connect_mock(
+        client, g["key"], g["pid"], provider="mock", host="mock-b.test", upstream_account_ref="acct2"
+    )
+    await client.patch(
+        "/api/v1/admin/providers/mock", json={"multi_account_permitted": False}, headers=auth(g["admin"])
+    )
+    upstreams["mock-a.test"].fail_next("mock-large", 429, retry_after=30)
+    upstreams["mock-b.test"].fail_next("mock-large", 429, retry_after=30)
+    r = await chat(client, g["key"])
+    assert r.status_code == 200, r.text
+    meta = r.json()["oasis_route"]
+    # The rate limit was per model: the same account's next model serves, and the second account is untouched.
+    assert meta["model"] == "mock-medium" and meta["downgraded"] is True
+    assert [(a["model"], a["outcome"]) for a in meta["attempts"]] == [
+        ("mock-large", "error"),
+        ("mock-medium", "success"),
+    ]
+    a_calls, b_calls = upstreams["mock-a.test"].calls, upstreams["mock-b.test"].calls
+    served_by_a = len(a_calls) == 2
+    assert len(a_calls) + len(b_calls) == 2 and (served_by_a or len(b_calls) == 2)  # one account only
+
+
 async def test_rate_limit_respects_retry_after_cooldown(
     client: httpx.AsyncClient, upstreams: dict[str, Any]
 ) -> None:
