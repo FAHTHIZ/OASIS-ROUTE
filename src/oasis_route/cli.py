@@ -72,7 +72,14 @@ def _cmd_worker(args: argparse.Namespace) -> int:
             if args.once:
                 print(json.dumps(await run_once(ctx), default=str, indent=2))
             else:
-                await run_forever(ctx, mode="standalone")
+                import signal
+
+                stop = asyncio.Event()
+                loop = asyncio.get_running_loop()
+                for sig in (signal.SIGTERM, signal.SIGINT):
+                    with contextlib.suppress(NotImplementedError):
+                        loop.add_signal_handler(sig, stop.set)
+                await run_forever(ctx, stop, mode="standalone")
         finally:
             await ctx.aclose()
 

@@ -1,0 +1,63 @@
+# Default self-hosted deployment. `docker compose up -d` starts PostgreSQL, applies migrations once, and
+# starts the API. The API supervises the background worker itself (OASIS_ROUTE_WORKER_MODE=embedded), so
+# discovery, quota refresh, health checks, revalidation and retention run with no extra command.
+#
+# Required: create .env next to this file (see docs/DEPLOYMENT.md):
+#   OASIS_ROUTE_MASTER_KEY=<base64 32 bytes>   e.g. `python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"`
+#   OASIS_ROUTE_API_KEY_PEPPER=<random 32+ chars>
+#   OASIS_ROUTE_ADMIN_BOOTSTRAP_TOKEN=<random token, remove after bootstrap>
+#   POSTGRES_PASSWORD=<strong password>
+
+x-app: &app
+  build: .
+  image: oasis-route:local
+  env_file: .env
+  environment:
+    OASIS_ROUTE_DATABASE_URL: postgresql+asyncpg://oasis:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/oasis_route
+    OASIS_ROUTE_ENVIRONMENT: production
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: oasis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: oasis_route
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oasis -d oasis_route"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["migrate", "up"]
+    restart: "no"
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    <<: *app
+    command: ["serve"]
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  # Optional: a dedicated worker for larger installs. Enable with `docker compose --profile scale up -d`
+  # and set OASIS_ROUTE_WORKER_MODE=external on the api service. Leases make any number of workers safe.
+  worker:
+    <<: *app
+    command: ["worker"]
+    profiles: ["scale"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  pgdata:

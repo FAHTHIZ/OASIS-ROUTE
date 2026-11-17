@@ -366,13 +366,12 @@ const views = {
                   { label: "Provider", get: (c) => c.provider_id },
                   { label: "Model", get: (c) => c.upstream_model },
                   { label: "Quality", num: true, get: (c) => fmt(c.quality) },
-                  { label: "Score", num: true, get: (c) => fmt(c.score !== undefined ? Math.round(c.score * 1000) / 1000 : null) },
                   { label: "Downgrade", get: (c) => (r.downgrade_flags[r.candidates.indexOf(c)] ? el("span", { class: "warn" }, "yes") : "no") },
                 ],
                 r.candidates,
                 "No eligible candidate."
               ),
-              el("h2", {}, "Rejected"),
+              el("h2", { class: "spaced" }, "Rejected"),
               table(
                 [
                   { label: "Provider", get: (x) => x.provider_id },

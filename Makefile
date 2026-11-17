@@ -1,4 +1,4 @@
-.PHONY: install dev fmt lint type test test-pg check migrate serve worker
+.PHONY: install dev fmt lint type test test-pg check migrate serve worker docker up
 
 install:
 	uv sync
@@ -30,3 +30,12 @@ serve:
 
 dev:
 	uv run oasis-route dev
+
+worker:
+	uv run oasis-route worker
+
+docker:
+	docker build -t oasis-route:local .
+
+up:
+	docker compose up -d --build

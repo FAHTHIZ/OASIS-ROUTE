@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+.oasis-dev
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+*.db
+.env
+.env.*
+tests
+docs

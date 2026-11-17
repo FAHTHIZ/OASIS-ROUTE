@@ -39,3 +39,4 @@ pre { background:var(--bg); padding:10px; border-radius:6px; overflow:auto; font
 ul.checks { list-style:none; padding:0; margin:8px 0 0; display:grid; gap:4px; }
 .note { padding:8px 0; border-bottom:1px solid var(--line); } .note:last-child { border-bottom:0; }
 [hidden] { display:none !important; }
+h2.spaced { margin-top:18px; }
