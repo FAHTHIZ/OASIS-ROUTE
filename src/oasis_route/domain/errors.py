@@ -88,6 +88,8 @@ class UpstreamError(Exception):
         self.status = status
         self.retry_after_s = retry_after_s
         self.retryable = retryable if retryable is not None else category in _RETRYABLE_ELSEWHERE
+        # Provider quota observations attached to the failed response (headers), if any.
+        self.observations: list[Any] = []
 
     def __repr__(self) -> str:
         return f"UpstreamError({self.category}, status={self.status})"
