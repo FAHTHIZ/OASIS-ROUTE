@@ -6,9 +6,13 @@ Oasis Route handles application API keys, upstream provider credentials, user pr
 
 ## 2. Credentials
 
-- Hash Oasis Route API keys with a password-grade one-way hash or keyed hash suitable for high-entropy tokens; store a prefix for lookup and show full value only once.
+### Oasis Key
+
+Oasis Key is the user-facing name for the unified API credential that applications present to the Oasis Route gateway. The documented client environment variable is `OASIS_API_KEY`, sent with `Authorization: Bearer <OASIS_API_KEY>`. A user can use this gateway credential across connected providers; it does not replace or expose the user's separate upstream provider credentials.
+
+- Hash Oasis Keys with a password-grade one-way hash or keyed hash suitable for high-entropy tokens; store a prefix for lookup and show full value only once.
 - Encrypt upstream API keys and refresh tokens at rest using envelope encryption with a separately managed key-encryption key.
-- Support revocation and rotation.
+- Support revocation, rotation, scopes, and expiry for Oasis Keys.
 - Separate encryption keys by environment; never commit secrets.
 - Redact credentials in logs, traces, exception reports, analytics, and exports.
 - Restrict access to vault operations and record audit events.
