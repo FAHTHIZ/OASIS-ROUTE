@@ -12,7 +12,9 @@ import re
 import sys
 from importlib import metadata
 
-DENY = re.compile(r"\b(A?GPL|GNU (Affero )?General Public|SSPL|Server Side Public|BUSL|Commons Clause)\b", re.I)
+DENY = re.compile(
+    r"\b(A?GPL|GNU (Affero )?General Public|SSPL|Server Side Public|BUSL|Commons Clause)\b", re.I
+)
 LESSER = re.compile(r"\b(LGPL|Lesser General Public|Library General Public)\b", re.I)
 ALLOW = re.compile(
     r"\b(MIT|BSD|Apache|ISC|PSF|Python Software Foundation|MPL|Mozilla|LGPL|Lesser|Unlicense|CC0|Zlib|"
