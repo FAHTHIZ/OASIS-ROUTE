@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     port: int = Field(default=8080, ge=1, le=65535)
     log_level: str = "INFO"
     log_json: bool = True
+    public_url: str | None = Field(
+        default=None,
+        description="External base URL (e.g. https://route.example.com) used for OAuth callbacks. "
+        "Defaults to the URL of the incoming request.",
+    )
 
     # Key material. In development a deterministic insecure key is generated if unset; production refuses.
     master_key: SecretStr | None = Field(
@@ -146,6 +151,10 @@ class Settings(BaseSettings):
                 raise ValueError("production requires PostgreSQL (database_url)")
             if self.gmail_enabled and not self.gmail_compliance_attestation:
                 raise ValueError("Gmail cannot be enabled in production without gmail_compliance_attestation")
+            if self.public_url is not None and not self.public_url.startswith("https://"):
+                raise ValueError("public_url must use https:// in production")
+        if self.public_url is not None and not self.public_url.startswith(("https://", "http://")):
+            raise ValueError("public_url must be an http(s) URL")
         return self
 
     # Derived helpers -------------------------------------------------------------------------

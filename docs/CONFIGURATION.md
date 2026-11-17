@@ -26,6 +26,7 @@ Production also refuses `OASIS_ROUTE_GMAIL_ENABLED=true` without `OASIS_ROUTE_GM
 | `OASIS_ROUTE_PORT` | `8080` | |
 | `OASIS_ROUTE_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
 | `OASIS_ROUTE_LOG_JSON` | `true` | Structured JSON logs with request ids; secrets are redacted. |
+| `OASIS_ROUTE_PUBLIC_URL` | unset | External base URL, e.g. `https://route.example.com`. Used to build provider OAuth callback URLs (`<public_url>/api/v1/oauth/callback`). Must be `https://` in production. When unset, the URL of the incoming request is used. |
 
 ## Keys and bootstrap
 

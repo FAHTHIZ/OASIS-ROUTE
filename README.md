@@ -70,7 +70,7 @@ Oasis Route is working software. The implementation roadmap in [docs/EXECUTION_P
 | Supervised background worker (leases, backoff, timeouts, crash recovery, stall alerts) | Implemented |
 | Web console with plain-language status | Implemented |
 | Optional mail notices (forwarded mail; Gmail behind a compliance attestation) | Implemented, off by default |
-| Official provider OAuth connection flows (OpenRouter PKCE) | In progress |
+| Official provider OAuth connections (OpenRouter PKCE; redirect and headless modes) | Implemented |
 
 ## Quickstart
 
