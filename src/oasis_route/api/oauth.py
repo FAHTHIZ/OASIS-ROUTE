@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -43,13 +43,18 @@ async def start(
     project_id: str,
     body: OAuthStartIn,
     request: Request,
+    response: Response,
     p: Principal = MANAGE,
     ctx: AppContext = Depends(get_ctx),
 ) -> dict[str, Any]:
-    """Begin an official OAuth connection. Open ``authorization_url`` in the user's browser."""
+    """Begin an official OAuth connection. Open ``authorization_url`` in the same browser.
+
+    ``redirect`` flows are bound to the calling browser with an HttpOnly cookie, so a link started by one
+    person cannot be completed by someone else. API clients without a browser should use ``manual``.
+    """
     async with ctx.db.session() as session:
         await project_access(project_id, p, session, write=True)
-    return await oauth.start(
+    out = await oauth.start(
         ctx,
         project_id=project_id,
         user=p.user,
@@ -60,6 +65,18 @@ async def start(
         redirect=body.mode == "redirect",
         request_base_url=str(request.base_url),
     )
+    binding = out.pop("_browser_binding", None)
+    if binding:
+        response.set_cookie(
+            oauth.BINDING_COOKIE,
+            binding,
+            max_age=int(oauth.FLOW_TTL.total_seconds()),
+            path=oauth.CALLBACK_PATH,
+            httponly=True,
+            secure=oauth.callback_url(ctx, str(request.base_url)).startswith("https://"),
+            samesite="lax",  # sent on the provider's top-level redirect back to us
+        )
+    return out
 
 
 @router.get("/projects/{project_id}/connections/oauth/{flow_id}")
@@ -95,8 +112,15 @@ def _page(title: str, message: str, status: int) -> HTMLResponse:
     return HTMLResponse(body, status_code=status, headers=_PAGE_HEADERS)
 
 
+def _bound_page(title: str, message: str, status: int) -> HTMLResponse:
+    page = _page(title, message, status)
+    page.delete_cookie(oauth.BINDING_COOKIE, path=oauth.CALLBACK_PATH)
+    return page
+
+
 @router.get("/oauth/callback", response_class=HTMLResponse)
 async def callback(
+    request: Request,
     ctx: AppContext = Depends(get_ctx),
     code: str | None = Query(default=None, max_length=2048),
     state: str | None = Query(default=None, max_length=512),
@@ -106,13 +130,13 @@ async def callback(
     if error or not code or not state:
         return _page("Connection not completed", "The provider did not authorize the connection.", 400)
     try:
-        result = await oauth.complete_redirect(ctx, code, state)
+        result = await oauth.complete_redirect(ctx, code, state, request.cookies.get(oauth.BINDING_COOKIE))
     except AppError as exc:
         return _page("Connection not completed", exc.message, exc.status_code)
     v = result.get("validation") or {}
     if v.get("status") == "active":
-        return _page("Connected", "Your provider is connected and its models are ready to use.", 200)
-    return _page(
+        return _bound_page("Connected", "Your provider is connected and its models are ready to use.", 200)
+    return _bound_page(
         "Connected, checking provider",
         "The connection was created. Oasis Route will keep checking it; see the console for status.",
         200,

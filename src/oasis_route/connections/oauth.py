@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import secrets
 from dataclasses import dataclass
 from datetime import timedelta
@@ -30,12 +31,13 @@ from oasis_route.connections import service as conns
 from oasis_route.context import AppContext
 from oasis_route.db.models import Credential, OAuthFlow, Provider, User, utcnow
 from oasis_route.domain.enums import AuthMethod
-from oasis_route.domain.errors import AppError, NotFound, PolicyViolation, ValidationFailed
+from oasis_route.domain.errors import AppError, Forbidden, NotFound, PolicyViolation, ValidationFailed
 from oasis_route.identity import audit
 from oasis_route.security.vault import SealedSecret
 
 FLOW_TTL = timedelta(minutes=10)
 CALLBACK_PATH = "/api/v1/oauth/callback"
+BINDING_COOKIE = "oasis_oauth_binding"
 
 
 @dataclass(frozen=True)
@@ -110,8 +112,10 @@ async def start(
             raise PolicyViolation("not eligible to connect this provider", details={"reasons": reasons})
         state = secrets.token_urlsafe(32)
         verifier = secrets.token_urlsafe(64)
+        binding = secrets.token_urlsafe(32) if redirect else None
         flow = OAuthFlow(
             state_hash=_hash_state(state),
+            browser_binding_hash=_hash_state(binding) if binding else None,
             project_id=project_id,
             user_id=user.id,
             provider_id=provider_id,
@@ -151,6 +155,7 @@ async def start(
             "authorization_url": f"{spec.authorize_url}?{urlencode(params)}",
             "mode": "redirect" if redirect else "manual",
             "expires_at": flow.expires_at,
+            "_browser_binding": binding,  # set as an HttpOnly cookie by the API layer, never in the body
         }
 
 
@@ -259,14 +264,20 @@ async def _shred(session: Any, flow: OAuthFlow) -> None:
             await session.delete(cred)
 
 
-async def complete_redirect(ctx: AppContext, code: str, state: str) -> dict[str, Any]:
-    """Browser callback: authenticated by the unguessable, single-use, expiring ``state``."""
+async def complete_redirect(ctx: AppContext, code: str, state: str, binding: str | None) -> dict[str, Any]:
+    """Browser callback: authenticated by the unguessable, single-use, expiring ``state`` plus the
+    HttpOnly binding cookie of the browser that started the flow."""
     async with ctx.db.session() as session:
         flow = (
             await session.execute(select(OAuthFlow).where(OAuthFlow.state_hash == _hash_state(state)))
         ).scalar_one_or_none()
         if flow is None:
             raise NotFound("authorization request not found")
+        expected = flow.browser_binding_hash
+        if expected is None or not binding or not hmac.compare_digest(expected, _hash_state(binding)):
+            raise Forbidden(
+                "finish the connection in the same browser where you started it, or use manual mode"
+            )
         flow_id = flow.id
     return await _finish(ctx, flow_id, code)
 

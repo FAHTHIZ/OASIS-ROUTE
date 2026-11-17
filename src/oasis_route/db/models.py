@@ -554,6 +554,9 @@ class OAuthFlow(Base):
     __tablename__ = "oauth_flows"
     id: Mapped[str] = _id()
     state_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    # Hash of a random value held in an HttpOnly cookie by the browser that started a redirect flow. The
+    # callback must present it, so a link started by one person cannot be completed by another.
+    browser_binding_hash: Mapped[str | None] = mapped_column(String(64))
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     provider_id: Mapped[str] = mapped_column(ForeignKey("providers.id"), nullable=False)
