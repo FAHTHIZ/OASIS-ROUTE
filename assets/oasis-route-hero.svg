@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="620" viewBox="0 0 1320 620" role="img" aria-labelledby="title desc">
+  <title id="title">OASIS Route — one gateway, better inference routes</title>
+  <desc id="desc">A dark, animated network illustration showing an application sending a request through OASIS Route to user-authorized inference providers. Pulsing paths represent capability-aware selection and quota-aware routing.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset=".55" stop-color="#0a101a"/>
+      <stop offset="1" stop-color="#101827"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#35e0c1"/>
+      <stop offset=".55" stop-color="#62a9ff"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="active" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#33dfc1" stop-opacity=".2"/>
+      <stop offset=".48" stop-color="#54cfff" stop-opacity=".95"/>
+      <stop offset="1" stop-color="#a78bfa" stop-opacity=".85"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#37d9c0" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#37d9c0" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M34 0H0V34" fill="none" stroke="#91a8c5" stroke-opacity=".075" stroke-width="1"/>
+      <circle cx="0" cy="0" r="1.2" fill="#9eb6d1" fill-opacity=".18"/>
+    </pattern>
+    <filter id="softGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+  </defs>
+
+  <rect width="1320" height="620" rx="30" fill="url(#bg)"/>
+  <rect width="1320" height="620" rx="30" fill="url(#grid)"/>
+  <circle cx="1000" cy="300" r="360" fill="url(#halo)"/>
+  <path d="M0 520C260 440 420 660 700 550S1090 410 1320 500" fill="none" stroke="#263c55" stroke-opacity=".27" stroke-width="1"/>
+  <path d="M0 548C260 468 420 688 700 578S1090 438 1320 528" fill="none" stroke="#263c55" stroke-opacity=".18" stroke-width="1"/>
+
+  <!-- Brand and message -->
+  <g transform="translate(68 66)">
+    <rect width="48" height="48" rx="15" fill="#102831" stroke="#35dfc1" stroke-opacity=".75"/>
+    <circle cx="24" cy="24" r="13" fill="none" stroke="#35dfc1" stroke-width="2.3"/>
+    <circle cx="24" cy="24" r="4.3" fill="#35dfc1"/>
+    <path d="M24 5V12M43 24H36M24 43V36M5 24H12" stroke="#35dfc1" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <text x="132" y="86" fill="#f2f7ff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="800" letter-spacing="2.3">OASIS ROUTE</text>
+  <text x="132" y="108" fill="#8fa4bd" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="10" letter-spacing="2.2">OPEN-SOURCE INFERENCE ROUTING</text>
+
+  <rect x="70" y="157" width="252" height="30" rx="15" fill="#152b31" stroke="#2bd9ba" stroke-opacity=".4"/>
+  <circle cx="88" cy="172" r="4" fill="#45e3c7"/>
+  <text x="101" y="176" fill="#9ef1df" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">THE ROUTING LAYER FOR AI</text>
+
+  <text x="68" y="258" fill="#f5f8ff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="62" font-weight="800" letter-spacing="-2.4">One key.</text>
+  <text x="68" y="326" fill="#f5f8ff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="62" font-weight="800" letter-spacing="-2.4">Better routes.</text>
+  <text x="70" y="374" fill="#a9bbd0" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">Capability-aware selection. Quota-aware dispatch.</text>
+  <text x="70" y="402" fill="#a9bbd0" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">Authorized access. Honest failover.</text>
+
+  <g transform="translate(70 446)">
+    <rect width="152" height="34" rx="17" fill="#121f2c" stroke="#2f5260"/>
+    <circle cx="17" cy="17" r="4" fill="#43ddc2"/>
+    <text x="30" y="21" fill="#d9e9f5" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" font-weight="700">QUALITY FIRST</text>
+    <rect x="162" width="140" height="34" rx="17" fill="#121f2c" stroke="#304b69"/>
+    <circle cx="179" cy="17" r="4" fill="#69b8ff"/>
+    <text x="192" y="21" fill="#d9e9f5" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" font-weight="700">QUOTA SAFE</text>
+    <rect x="312" width="144" height="34" rx="17" fill="#121f2c" stroke="#51436f"/>
+    <circle cx="329" cy="17" r="4" fill="#b69aff"/>
+    <text x="342" y="21" fill="#d9e9f5" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" font-weight="700">VISIBLE FALLBACK</text>
+  </g>
+
+  <g transform="translate(70 544)">
+    <text x="0" y="0" fill="#7088a2" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="10" font-weight="700" letter-spacing="1.4">DISCOVER</text>
+    <path d="M74 -4H93" stroke="#425d77" stroke-width="1.4"/>
+    <path d="M89 -8L94 -4L89 0" fill="none" stroke="#425d77" stroke-width="1.4"/>
+    <text x="106" y="0" fill="#7088a2" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="10" font-weight="700" letter-spacing="1.4">VERIFY</text>
+    <path d="M163 -4H182" stroke="#425d77" stroke-width="1.4"/>
+    <path d="M178 -8L183 -4L178 0" fill="none" stroke="#425d77" stroke-width="1.4"/>
+    <text x="195" y="0" fill="#7088a2" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="10" font-weight="700" letter-spacing="1.4">AUTHORIZE</text>
+    <path d="M286 -4H305" stroke="#425d77" stroke-width="1.4"/>
+    <path d="M301 -8L306 -4L301 0" fill="none" stroke="#425d77" stroke-width="1.4"/>
+    <text x="319" y="0" fill="#9cebdc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="10" font-weight="700" letter-spacing="1.4">ROUTE</text>
+    <path d="M374 -4H393" stroke="#425d77" stroke-width="1.4"/>
+    <path d="M389 -8L394 -4L389 0" fill="none" stroke="#425d77" stroke-width="1.4"/>
+    <text x="407" y="0" fill="#7088a2" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="10" font-weight="700" letter-spacing="1.4">RECOVER</text>
+  </g>
+
+  <!-- Routing illustration -->
+  <g>
+    <rect x="618" y="94" width="646" height="462" rx="25" fill="#0d1724" fill-opacity=".72" stroke="#38506b" stroke-opacity=".42"/>
+    <text x="650" y="128" fill="#7f9ab5" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="10" font-weight="700" letter-spacing="1.8">A REQUEST TAKES THE ELIGIBLE PATH</text>
+    <rect x="1080" y="107" width="151" height="24" rx="12" fill="#142d2b" stroke="#2d8f7e" stroke-opacity=".6"/>
+    <circle cx="1094" cy="119" r="3.5" fill="#40dfc2"/>
+    <text x="1105" y="123" fill="#91e8d9" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" letter-spacing="1">USER-AUTHORIZED</text>
+
+    <!-- Connections behind the cards -->
+    <path d="M804 316C832 316 837 316 864 316" fill="none" stroke="#49617a" stroke-width="2"/>
+    <path class="route-line" d="M804 316C832 316 837 316 864 316" fill="none" stroke="url(#active)" stroke-width="3" stroke-linecap="round"/>
+    <path d="M1061 316C1090 316 1090 171 1120 171" fill="none" stroke="#2c4259" stroke-width="2"/>
+    <path d="M1061 316C1093 316 1093 275 1120 275" fill="none" stroke="#2c4259" stroke-width="2"/>
+    <path d="M1061 316C1093 316 1093 379 1120 379" fill="none" stroke="#2c4259" stroke-width="2"/>
+    <path d="M1061 316C1090 316 1090 483 1120 483" fill="none" stroke="#2c4259" stroke-width="2"/>
+    <path class="route-line active-branch" d="M1061 316C1090 316 1090 171 1120 171" fill="none" stroke="url(#active)" stroke-width="3.4" stroke-linecap="round"/>
+    <circle class="packet" r="4.5" fill="#7af1de">
+      <animateMotion dur="3.4s" repeatCount="indefinite" path="M804 316C832 316 837 316 864 316"/>
+    </circle>
+    <circle class="packet" r="4" fill="#a7f6e8">
+      <animateMotion dur="4.8s" repeatCount="indefinite" path="M1061 316C1090 316 1090 171 1120 171"/>
+    </circle>
+
+    <!-- App -->
+    <rect x="650" y="271" width="154" height="90" rx="16" fill="#132232" stroke="#4a6d89"/>
+    <rect x="666" y="287" width="27" height="27" rx="8" fill="#1a3444" stroke="#5b9fc1" stroke-opacity=".8"/>
+    <path d="M673 295H686M673 300H683M673 305H686" stroke="#9bdcf0" stroke-width="1.5" stroke-linecap="round"/>
+    <text x="702" y="300" fill="#dce9f7" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="800">YOUR APP</text>
+    <text x="666" y="335" fill="#849eb8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="10">OpenAI-compatible client</text>
+
+    <rect x="822" y="286" width="40" height="22" rx="11" fill="#142d36" stroke="#2a9f92" stroke-opacity=".7"/>
+    <text x="842" y="301" text-anchor="middle" fill="#9af1df" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="8" font-weight="700">KEY</text>
+
+    <!-- Gateway -->
+    <circle class="hub-halo" cx="962" cy="316" r="105" fill="#40d9c1" opacity=".07" filter="url(#softGlow)"/>
+    <circle class="hub-ring" cx="962" cy="316" r="86" fill="none" stroke="#46d9c2" stroke-opacity=".32" stroke-width="1.2"/>
+    <circle cx="962" cy="316" r="75" fill="#122b32" stroke="url(#accent)" stroke-width="2"/>
+    <circle cx="962" cy="316" r="61" fill="#0e1b27" stroke="#42667a" stroke-opacity=".8"/>
+    <g transform="translate(944 280)">
+      <circle cx="18" cy="18" r="15" fill="none" stroke="#4ee1c7" stroke-width="2.1"/>
+      <circle cx="18" cy="18" r="4" fill="#4ee1c7"/>
+      <path d="M18 0V6M36 18H30M18 36V30M0 18H6" stroke="#4ee1c7" stroke-width="1.8" stroke-linecap="round"/>
+    </g>
+    <text x="962" y="344" text-anchor="middle" fill="#f0fbff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="800" letter-spacing=".7">OASIS ROUTE</text>
+    <text x="962" y="363" text-anchor="middle" fill="#9ab5c8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="9">CAPABILITY + QUOTA</text>
+    <text x="962" y="376" text-anchor="middle" fill="#9ab5c8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="9">ROUTING ENGINE</text>
+
+    <!-- Provider endpoints -->
+    <g>
+      <rect x="1120" y="142" width="112" height="58" rx="12" fill="#152437" stroke="#4e82ac" stroke-opacity=".8"/>
+      <circle cx="1137" cy="162" r="5" fill="#71baff"/>
+      <text x="1150" y="166" fill="#e2efff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" font-weight="800">OPENAI</text>
+      <text x="1136" y="184" fill="#7891ab" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="8" letter-spacing=".9">CONNECTED</text>
+
+      <rect x="1120" y="246" width="112" height="58" rx="12" fill="#17263a" stroke="#3ed7be" stroke-width="1.4"/>
+      <circle cx="1137" cy="266" r="5" fill="#49e2c4"/>
+      <text x="1150" y="270" fill="#e2fff7" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="10" font-weight="800">ANTHROPIC</text>
+      <text x="1136" y="288" fill="#8fe9d8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="8" letter-spacing=".9">ELIGIBLE PATH</text>
+      <rect class="selected-glow" x="1114" y="240" width="124" height="70" rx="16" fill="none" stroke="#43e0c5" stroke-opacity=".62" stroke-width="1.1"/>
+
+      <rect x="1120" y="350" width="112" height="58" rx="12" fill="#152437" stroke="#4e82ac" stroke-opacity=".8"/>
+      <circle cx="1137" cy="370" r="5" fill="#75a9ff"/>
+      <text x="1150" y="374" fill="#e2efff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" font-weight="800">GEMINI</text>
+      <text x="1136" y="392" fill="#7891ab" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="8" letter-spacing=".9">CONNECTED</text>
+
+      <rect x="1120" y="454" width="112" height="58" rx="12" fill="#152437" stroke="#6b628c" stroke-opacity=".8"/>
+      <circle cx="1137" cy="474" r="5" fill="#b49cff"/>
+      <text x="1150" y="478" fill="#efe9ff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="10" font-weight="800">CUSTOM API</text>
+      <text x="1136" y="496" fill="#9186b1" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="8" letter-spacing=".9">CONNECTED</text>
+    </g>
+
+    <text x="650" y="526" fill="#607a96" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="9" letter-spacing="1.15">CONCEPTUAL ROUTE VIEW · DISCOVERY NEVER GRANTS ACCESS</text>
+  </g>
+
+  <style>
+    .route-line { stroke-dasharray: 9 11; animation: dash 4.6s linear infinite; }
+    .active-branch { animation-duration: 3.4s; }
+    .packet { filter: drop-shadow(0 0 5px #61e8d4); opacity: .95; }
+    .hub-ring { transform-box: fill-box; transform-origin: center; animation: ring 4s ease-in-out infinite; }
+    .hub-halo { animation: halo 4s ease-in-out infinite; }
+    .selected-glow { animation: selected 3.5s ease-in-out infinite; }
+    @keyframes dash { to { stroke-dashoffset: -80; } }
+    @keyframes ring { 0%,100% { transform: scale(1); opacity: .42; } 50% { transform: scale(1.08); opacity: .9; } }
+    @keyframes halo { 0%,100% { opacity: .06; } 50% { opacity: .2; } }
+    @keyframes selected { 0%,100% { stroke-opacity: .28; } 50% { stroke-opacity: .95; } }
+    @media (prefers-reduced-motion: reduce) {
+      .route-line, .hub-ring, .hub-halo, .selected-glow, .packet { animation: none !important; }
+    }
+  </style>
+</svg>
