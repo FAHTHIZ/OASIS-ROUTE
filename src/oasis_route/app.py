@@ -56,6 +56,10 @@ def create_app(settings: Settings | None = None, ctx: AppContext | None = None) 
 
         try:
             await sync_catalog(ctx.db, settings)
+            if settings.discovery_seed_sources:
+                from oasis_route.discovery.seeds import sync_seed_sources
+
+                await sync_seed_sources(ctx.db)
         except Exception as exc:  # schema not migrated yet: readiness reports it
             log.warning("catalog sync skipped", extra={"error": type(exc).__name__})
         stop = asyncio.Event()

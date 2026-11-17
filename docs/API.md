@@ -221,6 +221,9 @@ All paths are under `/api/v1`. Project-scoped endpoints require the key's own pr
 | `GET`, `POST` | `/sources` | Administrators register approved sources; other users submit leads for review. |
 | `POST` | `/admin/sources/{id}/review` | Approve or reject a source. |
 | `POST` | `/admin/sources/{id}/run` | Fetch now (robots, budgets and SSRF checks still apply). |
+| `POST` | `/admin/discovery/run` | Run every due approved source now (same scheduler as the worker). Returns per-run stats. |
+| `GET` | `/admin/provider-candidates` | Providers seen in public catalogues (for example the Hugging Face router) that are not yet registered. |
+| `POST` | `/admin/provider-candidates/{id}` | Mark a candidate `promoted` or `dismissed`. Audited; never creates a provider or connection by itself. |
 | `GET` | `/offers`, `/offers/{id}` | Non-administrators see only reviewed, connectable offers. |
 | `PATCH` | `/admin/offers/{id}` | Correct candidate facts before review. |
 | `POST` | `/admin/offers/{id}/transition` | Move an offer through its lifecycle (`discovered`, `needs_review`, `verified_eligible`, `connectable`, `active`, `rejected`, `ineligible`, `expired`, `suspended`, `stale`, `revoked`). |

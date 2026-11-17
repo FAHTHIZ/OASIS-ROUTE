@@ -57,7 +57,7 @@ PROVIDERS: tuple[ProviderSeed, ...] = (
         "openai_compatible",
         "https://api.openai.com/v1",
         "openai_chat",
-        ("openai.com", "platform.openai.com"),
+        ("openai.com", "platform.openai.com", "developers.openai.com"),
         terms_url="https://openai.com/policies/terms-of-use/",
         policy_url="https://openai.com/policies/usage-policies/",
     ),
@@ -67,7 +67,7 @@ PROVIDERS: tuple[ProviderSeed, ...] = (
         "anthropic",
         "https://api.anthropic.com",
         "anthropic_messages",
-        ("anthropic.com", "docs.anthropic.com"),
+        ("anthropic.com", "docs.anthropic.com", "platform.claude.com", "claude.com"),
         terms_url="https://www.anthropic.com/legal/commercial-terms",
         policy_url="https://www.anthropic.com/legal/aup",
     ),
@@ -77,7 +77,7 @@ PROVIDERS: tuple[ProviderSeed, ...] = (
         "openai_compatible",
         "https://generativelanguage.googleapis.com/v1beta/openai",
         "openai_chat",
-        ("ai.google.dev", "generativelanguage.googleapis.com"),
+        ("ai.google.dev", "aistudio.google.com", "generativelanguage.googleapis.com"),
         terms_url="https://ai.google.dev/gemini-api/terms",
         min_age=18,
     ),
@@ -114,7 +114,7 @@ PROVIDERS: tuple[ProviderSeed, ...] = (
         "openai_compatible",
         "https://api.cerebras.ai/v1",
         "openai_chat",
-        ("cerebras.ai", "inference-docs.cerebras.ai"),
+        ("cerebras.ai", "inference-docs.cerebras.ai", "cloud.cerebras.ai"),
         terms_url="https://www.cerebras.ai/terms-of-service",
     ),
     ProviderSeed(
@@ -231,7 +231,13 @@ async def sync_catalog(db: Database, settings: Settings) -> int:
         for seed in PROVIDERS:
             if seed.dev_only and not settings.mock_providers_enabled:
                 continue
-            if await s.get(Provider, seed.id) is None:
+            current = await s.get(Provider, seed.id)
+            if current is not None:
+                # Additive only: providers move documentation to new hosts; never remove operator domains.
+                missing = [d for d in seed.official_domains if d not in (current.official_domains or [])]
+                if missing:
+                    current.official_domains = [*(current.official_domains or []), *missing]
+            if current is None:
                 s.add(
                     Provider(
                         id=seed.id,

@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oasis_route.connections.access import access_for, access_path_for
 from oasis_route.context import AppContext
 from oasis_route.db.models import (
     ChangeEvent,
@@ -26,12 +27,14 @@ from oasis_route.db.models import (
     Model,
     Offer,
     Provider,
+    ProviderCandidate,
     Source,
     User,
     utcnow,
 )
-from oasis_route.discovery import extraction, review
+from oasis_route.discovery import extraction, review, structured
 from oasis_route.discovery.fetcher import FetchError, fetcher_for
+from oasis_route.discovery.urls import canonicalize, extract_links, is_frontier_candidate
 from oasis_route.domain.enums import OfferState, Role, SourceClass, SourceReviewStatus
 from oasis_route.domain.errors import Conflict, Forbidden, RateLimited, ValidationFailed
 from oasis_route.identity import audit
@@ -53,7 +56,17 @@ CLASS_WEIGHT = {
     SourceClass.CURATED_DIRECTORY: 0.4,  # leads, not authoritative
     SourceClass.USER_SUBMITTED: 0.3,
 }
-_SHARED_CLAIMS = {"min_age", "region", "expiry", "terms", "restriction", "prohibited", "model"}
+_SHARED_CLAIMS = {
+    "min_age",
+    "region",
+    "expiry",
+    "terms",
+    "restriction",
+    "prohibited",
+    "model",
+    "billing",
+    "usage_scope",
+}
 _TERMINAL = {OfferState.REVOKED.value, OfferState.REJECTED.value, OfferState.INELIGIBLE.value}
 
 
@@ -80,6 +93,9 @@ async def create_source(session: AsyncSession, actor: User, data: SourceInput, s
     parts = urlsplit(data.url)
     if parts.fragment:
         raise ValidationFailed("source URL must not contain a fragment")
+    data.url = canonicalize(data.url)
+    if data.url_scope:
+        data.url_scope = canonicalize(data.url_scope) if data.url_scope.count("/") > 2 else data.url_scope
     is_admin = actor.role == Role.ADMIN.value
     cls = data.source_class
     if not is_admin:
@@ -194,6 +210,8 @@ class RunResult:
     changed: bool = False
     offers: list[str] = field(default_factory=list)
     claims: int = 0
+    discovered_sources: int = 0
+    provider_candidates: int = 0
 
 
 def _backoff(src: Source, now: datetime, reason: str) -> datetime:
@@ -245,17 +263,50 @@ async def run_source(ctx: AppContext, source_id: str, *, force: bool = False) ->
             src.last_status = "not_modified"
             ctx.metrics.discovery_fetches.labels("not_modified").inc()
             return RunResult(source_id, "not_modified")
-        text = extraction.normalise(res.text, res.headers.get("content-type", "text/html"))
+        ctype = res.headers.get("content-type", "text/html")
+        kind = structured.detect(src.url, ctype)
+        src.extractor = kind
+        if kind in ("openrouter_models", "hf_router_models", "json"):
+            parsed = structured.structured_claims(kind, res.text)
+            # Catalogue JSON churns (benchmarks, latency stats); only the facts we extract define a change.
+            text = json.dumps(
+                [[c.claim_type, sorted((k, str(v)) for k, v in c.value.items())] for c in parsed],
+                sort_keys=True,
+            )
+            if kind == "json" and not parsed:
+                text = structured.canonical_json(res.text) or extraction.normalise(res.text, ctype)
+        else:
+            parsed = []
+            text = extraction.normalise(res.text, ctype)
         new_hash = extraction.content_hash(text)
         if new_hash == src.content_hash:
             src.last_status = "unchanged"
+            await _touch_offers(s, src, now)
             ctx.metrics.discovery_fetches.labels("unchanged").inc()
             return RunResult(source_id, "unchanged")
         old_hash, src.content_hash = src.content_hash, new_hash
         src.last_status = "changed" if old_hash else "first_fetch"
         ctx.metrics.discovery_fetches.labels("changed").inc()
-        result = await _ingest(s, src, text, res.status, res.headers, old_hash, new_hash)
+        if kind == "html":
+            parsed = structured.table_claims(structured.parse_tables(res.text))
+            text_for_claims = text
+        else:
+            text_for_claims = ""
+        result = await _ingest(s, src, text_for_claims, res.status, res.headers, old_hash, new_hash, parsed)
+        if kind == "html" and ctx.settings.discovery_frontier_enabled:
+            result.discovered_sources = await _expand_frontier(s, ctx, src, res.text)
         return result
+
+
+async def _touch_offers(s: AsyncSession, src: Source, now: datetime) -> None:
+    """An unchanged fetch re-confirms what this source said: keep its offers' observation time fresh."""
+    offer_ids = set(
+        (await s.execute(select(Evidence.offer_id).where(Evidence.source_id == src.id).distinct())).scalars()
+    ) - {None}
+    for oid in offer_ids:
+        offer = await s.get(Offer, oid)
+        if offer is not None:
+            offer.last_observed_at = now
 
 
 async def _resolve_provider(session: AsyncSession, src: Source) -> Provider | None:
@@ -275,6 +326,7 @@ async def _ingest(
     headers: dict[str, str],
     old_hash: str | None,
     new_hash: str,
+    structured_claims: list[extraction.Claim] | None = None,
 ) -> RunResult:
     provider = await _resolve_provider(s, src)
     known = []
@@ -282,10 +334,21 @@ async def _ingest(
         known = list(
             (await s.execute(select(Model.upstream_id).where(Model.provider_id == provider.id))).scalars()
         )
-    ex = extraction.extract(text, known_models=known)
+    ex = extraction.extract(text, known_models=known) if text else extraction.Extraction()
+    seen_models = {str(c.value.get("model")) for c in ex.of("model")}
+    for c in structured_claims or []:
+        if c.claim_type == "model" and str(c.value.get("model")) in seen_models:
+            continue
+        ex.claims.append(c)
     weight = CLASS_WEIGHT.get(SourceClass(src.source_class), 0.3)
     result = RunResult(src.id, src.last_status or "changed", changed=True, claims=len(ex.claims))
-    if provider is None or not ex.claims:
+    listings = ex.of("provider_listing")
+    if listings:
+        result.provider_candidates = await _upsert_candidates(s, src, listings)
+    if provider is not None and src.source_class == SourceClass.MODEL_CATALOGUE.value:
+        await _sync_catalogue_models(s, provider, ex)
+    offer_claims = [c for c in ex.claims if c.claim_type not in ("provider_listing", "catalogue")]
+    if provider is None or not offer_claims:
         s.add(
             ChangeEvent(
                 source_id=src.id,
@@ -294,24 +357,31 @@ async def _ingest(
                 severity="info",
                 summary=json.dumps(
                     {
-                        "note": "no provider match" if provider is None else "no claims found",
+                        "note": "no provider match" if provider is None else "no offer claims found",
                         "claims": len(ex.claims),
+                        "provider_candidates": result.provider_candidates,
+                        "catalogue": [c.value for c in ex.of("catalogue")],
                     }
                 ),
-                action_required=provider is None and bool(ex.claims),
+                action_required=(provider is None and bool(offer_claims)) or bool(result.provider_candidates),
             )
         )
         return result
 
     groups: dict[str, list[extraction.Claim]] = {}
-    credit_claims = ex.of("credit")
-    tier_claims = ex.of("quota") + ex.of("free_tier")
-    shared = [c for c in ex.claims if c.claim_type in _SHARED_CLAIMS]
+    credit_claims = ex.of("credit") + ex.of("trial")
+    tier_claims = (
+        ex.of("quota")
+        + ex.of("free_tier")
+        + [c for c in ex.of("model_quota") if c.value.get("tier") != "paid"]
+        + [c for c in ex.of("model") if c.value.get("free") is True]
+    )
+    shared = [c for c in ex.claims if c.claim_type in _SHARED_CLAIMS and c.value.get("free") is not True]
     if tier_claims:
         groups["free_tier"] = tier_claims + shared
-    if credit_claims:
+    if ex.of("credit"):
         groups["credits"] = credit_claims + shared
-    if not groups:
+    if not groups and shared:
         groups["unspecified"] = shared
 
     for access_mode, claims in groups.items():
@@ -332,13 +402,84 @@ async def _ingest(
                     sha256=c.sha256,
                     claim_type=c.claim_type,
                     claim_value=c.value,
-                    method="automated_extraction",
+                    method="structured_extraction"
+                    if c.claim_type in ("model_quota", "provider_listing", "catalogue")
+                    or c.value.get("source")
+                    else "automated_extraction",
                     confidence=round(c.confidence * weight, 3),
                     next_review_at=utcnow() + review.REVIEW_INTERVAL,
                 )
             )
     await s.flush()
     return result
+
+
+async def _upsert_candidates(s: AsyncSession, src: Source, listings: list[extraction.Claim]) -> int:
+    """Providers seen in a public catalogue but missing from the registry become reviewable candidates."""
+    known = set((await s.execute(select(Provider.id))).scalars())
+    now = utcnow()
+    created = 0
+    for c in listings:
+        slug = str(c.value.get("provider") or "")
+        if not slug or slug in known:
+            continue
+        facts: dict[str, Any] = {
+            k: c.value.get(k) for k in ("models", "live_models", "free_models", "source") if k in c.value
+        }
+        row = (
+            await s.execute(select(ProviderCandidate).where(ProviderCandidate.slug == slug))
+        ).scalar_one_or_none()
+        if row is None:
+            s.add(
+                ProviderCandidate(
+                    slug=slug,
+                    name=str(c.value.get("provider_name") or slug)[:200],
+                    via=str(c.value.get("via") or "")[:64],
+                    source_id=src.id,
+                    facts=facts,
+                    last_seen_at=now,
+                )
+            )
+            created += 1
+        else:
+            row.facts, row.last_seen_at = facts, now
+    return created
+
+
+async def _sync_catalogue_models(s: AsyncSession, provider: Provider, ex: extraction.Extraction) -> None:
+    """Record zero-price models published in the provider's own public catalogue (model + pricing sync).
+
+    Only ``free`` facts from a structured catalogue are written. A model that disappears from the free list
+    has its ``free`` flag cleared to unknown, so a free-only project stops routing to it immediately.
+    """
+    now = utcnow().isoformat()
+    free = {str(c.value["model"]): c.value for c in ex.of("model") if c.value.get("free") is True}
+    if not free and not ex.of("catalogue"):
+        return
+    rows = {
+        m.upstream_id: m
+        for m in (await s.execute(select(Model).where(Model.provider_id == provider.id))).scalars()
+    }
+    for mid, v in free.items():
+        m = rows.get(mid)
+        if m is None:
+            m = Model(
+                provider_id=provider.id,
+                upstream_id=mid,
+                display_name=mid,
+                aliases=[],
+                capabilities={"chat": True, "streaming": True, "tools": bool(v.get("tools"))},
+                context_window=v.get("context_window"),
+                max_output_tokens=v.get("max_output_tokens"),
+                lifecycle="active",
+                quality={},
+            )
+            s.add(m)
+        m.pricing = {"free": True, "source": v.get("source"), "observed_at": now, "expires": v.get("expires")}
+    for mid, m in rows.items():
+        p = m.pricing or {}
+        if mid not in free and p.get("free") is True and p.get("source") == "openrouter_models_api":
+            m.pricing = {**p, "free": None, "observed_at": now, "note": "no longer listed as free"}
 
 
 def _credit_type(claims: list[extraction.Claim]) -> str:
@@ -362,6 +503,18 @@ def _quota_claims(claims: list[extraction.Claim]) -> list[dict[str, Any]]:
         for c in claims
         if c.claim_type == "quota"
     ]
+    out += [
+        {
+            "unit": c.value["unit"],
+            "period": c.value["period"],
+            "limit": c.value["limit"],
+            "model_scope": c.value["model"],
+            "tier": c.value.get("tier", "unverified"),
+            "text": c.excerpt[:200],
+        }
+        for c in claims
+        if c.claim_type == "model_quota"
+    ]
     for c in claims:
         if c.claim_type == "credit":
             amount = int(float(c.value["amount_usd"]) * 1_000_000)
@@ -375,11 +528,81 @@ def _quota_claims(claims: list[extraction.Claim]) -> list[dict[str, Any]]:
                     "text": c.excerpt[:200],
                 }
             )
-    return sorted(out, key=lambda q: (q["unit"], q["period"], q["limit"]))
+    return sorted(out, key=lambda q: (q["model_scope"], q["unit"], q["period"], q["limit"]))
 
 
 def _strip_text(q: list[dict[str, Any]]) -> list[tuple[Any, ...]]:
     return sorted((x["unit"], x["period"], x["limit"], x.get("model_scope", "*")) for x in q)
+
+
+def _models_from(claims: list[extraction.Claim], src_id: str) -> list[dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for c in claims:
+        if c.claim_type not in ("model", "model_quota"):
+            continue
+        mid = str(c.value.get("model") or "")[:200]
+        if not mid:
+            continue
+        entry = out.setdefault(mid, {"model": mid, "free": None, "source_id": src_id})
+        if c.value.get("free") is True:
+            entry["free"] = True
+        for k in ("context_window", "expires"):
+            if c.value.get(k) is not None:
+                entry[k] = c.value[k]
+        if c.claim_type == "model_quota" and c.value.get("tier") == "free":
+            entry["free"] = True
+    return sorted(out.values(), key=lambda m: m["model"])
+
+
+def _billing_from(claims: list[extraction.Claim]) -> dict[str, Any]:
+    b: dict[str, Any] = {}
+    for c in claims:
+        if c.claim_type == "billing" and "card_required" in c.value:
+            b["card_required"] = bool(c.value["card_required"])
+        elif c.claim_type == "trial":
+            b["trial_days"] = min(int(c.value["days"]), b.get("trial_days", 10**6))
+        elif c.claim_type == "credit":
+            b["credit_usd"] = max(float(c.value["amount_usd"]), b.get("credit_usd", 0.0))
+            b["renewal"] = (
+                "one_time"
+                if c.value.get("credit_type") == "one_time"
+                else c.value.get("credit_type", "unknown")
+            )
+        elif c.claim_type == "usage_scope" and c.value.get("evaluation_only"):
+            b["evaluation_only_mentioned"] = True
+    return b
+
+
+def _offer_class(access_mode: str, billing: dict[str, Any], provider: Provider) -> str:
+    if provider.id.startswith("mock"):
+        return "local"
+    if access_mode == "credits":
+        return (
+            "one_time_trial"
+            if billing.get("renewal") == "one_time" or billing.get("trial_days")
+            else ("recurring_free" if billing.get("renewal") == "recurring" else "promotional")
+        )
+    if access_mode == "free_tier":
+        return "recurring_free"
+    return "unknown"
+
+
+def _oauth_available(provider_id: str) -> bool:
+    from oasis_route.connections.oauth import SPECS  # local import: oauth depends on connections
+
+    return provider_id in SPECS
+
+
+def _merge_by_source(existing: list[Any], new: list[dict[str, Any]], src_id: str) -> list[dict[str, Any]]:
+    """Each source owns its own entries; one source's fetch never erases facts another source provided."""
+    kept = [
+        dict(e) for e in existing or [] if isinstance(e, dict) and e.get("source_id") not in (src_id, None)
+    ]
+    return kept + [{**n, "source_id": src_id} for n in new]
+
+
+def _own(entries: list[Any], src_id: str) -> list[dict[str, Any]]:
+    return [e for e in entries or [] if isinstance(e, dict) and e.get("source_id") in (src_id, None)]
 
 
 async def _upsert_offer(
@@ -397,12 +620,31 @@ async def _upsert_offer(
     elig = extraction.eligibility_from(sub)
     quota = _quota_claims(claims)
     ctype = _credit_type(claims)
+    models = _models_from(claims, src.id)
+    billing = _billing_from(claims)
     expiry = [c.value["date"] for c in sub.of("expiry")]
     expires_at = datetime.fromisoformat(min(expiry) + "T23:59:59+00:00") if expiry else None
     confidence = round(max((c.confidence for c in claims), default=0.0) * weight, 3)
     dedupe = f"{provider.id}:{access_mode}"
     offer = (await s.execute(select(Offer).where(Offer.dedupe_key == dedupe))).scalar_one_or_none()
     actor = f"system:discovery:{src.id}"
+    now = utcnow()
+    info = access_for(provider.id)
+    links = {
+        k: v
+        for k, v in {
+            "console": info.console,
+            "api_key": info.api_key,
+            "signup": info.signup,
+            "docs": info.docs,
+            "pricing": info.pricing,
+            "rate_limits": info.rate_limits,
+            "terms": provider.terms_url,
+        }.items()
+        if v
+    }
+    if info.card_required is not None and "card_required" not in billing:
+        billing["card_required_hint"] = info.card_required
     if offer is None:
         offer = Offer(
             provider_id=provider.id,
@@ -410,12 +652,24 @@ async def _upsert_offer(
             access_mode=access_mode,
             state=OfferState.DISCOVERED.value,
             dedupe_key=dedupe,
-            quota_claims=quota,
+            quota_claims=[{**q, "source_id": src.id} for q in quota],
             credit_type=ctype,
             eligibility=elig,
             terms_url=provider.terms_url,
+            onboarding_url=info.api_key or info.console,
             expires_at=expires_at,
             confidence=confidence,
+            offer_class=_offer_class(access_mode, billing, provider),
+            access_path=access_path_for(
+                provider.id, provider.adapter_key, oauth_available=_oauth_available(provider.id)
+            ),
+            models=models,
+            regions=[],
+            billing=billing,
+            links=links,
+            first_observed_at=now,
+            last_observed_at=now,
+            extractor_version=structured.EXTRACTOR_VERSION,
         )
         s.add(offer)
         await s.flush()
@@ -448,10 +702,17 @@ async def _upsert_offer(
             )
         return offer
 
+    offer.last_observed_at = now
+    offer.extractor_version = structured.EXTRACTOR_VERSION
+    if offer.first_observed_at is None:
+        offer.first_observed_at = now
     if offer.state in _TERMINAL and offer.state != OfferState.INELIGIBLE.value:
         return offer
     state = OfferState(offer.state)
-    quota_changed = _strip_text(quota) != _strip_text(offer.quota_claims or [])
+    quota_changed = _strip_text(quota) != _strip_text(_own(offer.quota_claims, src.id))
+    models_changed = sorted((m["model"], m.get("free")) for m in models) != sorted(
+        (m.get("model"), m.get("free")) for m in _own(offer.models, src.id)
+    )
     # Only a *contradiction or new restriction* from the source counts; facts a reviewer added from other
     # evidence are not treated as removed just because this page does not repeat them.
     current = offer.eligibility or {}
@@ -460,21 +721,32 @@ async def _upsert_offer(
         and bool(elig.get("region_statements"))
     )
     expiry_changed = expires_at is not None and offer.expires_at != expires_at
-    if not (quota_changed or elig_changed or expiry_changed):
+    if not (quota_changed or elig_changed or expiry_changed or models_changed):
         offer.confidence = max(offer.confidence, confidence)
         return offer
 
     diff = {
         "event": "offer_claims_changed",
-        "quota": {"old": offer.quota_claims, "new": quota} if quota_changed else None,
+        "quota": {"old": _own(offer.quota_claims, src.id), "new": quota} if quota_changed else None,
+        "models": {
+            "added": sorted(
+                {m["model"] for m in models} - {m.get("model") for m in _own(offer.models, src.id)}
+            ),
+            "removed": sorted(
+                {str(m.get("model")) for m in _own(offer.models, src.id)} - {m["model"] for m in models}
+            ),
+        }
+        if models_changed
+        else None,
         "eligibility": {"old": offer.eligibility, "new": elig} if elig_changed else None,
         "expires_at": {"old": str(offer.expires_at), "new": str(expires_at)} if expiry_changed else None,
     }
     live = state in review.LIVE_STATES
+    only_models = models_changed and not (quota_changed or elig_changed or expiry_changed)
     severity = (
         "critical"
         if (live and (elig_changed or elig.get("requires_prohibited_practice")))
-        else ("warning" if live else "info")
+        else ("warning" if live and not only_models else "info")
     )
     s.add(
         ChangeEvent(
@@ -484,12 +756,18 @@ async def _upsert_offer(
             new_hash=new_hash,
             severity=severity,
             summary=json.dumps(diff, default=str)[:20_000],
-            action_required=True,
+            action_required=not only_models,
         )
     )
+    # Model availability is a catalogue fact (not a reviewed term): keep it current for every state.
+    offer.models = _merge_by_source(offer.models, models, src.id)
     if not live:
         # Not yet reviewed: refresh candidate facts in place.
-        offer.quota_claims, offer.eligibility, offer.credit_type = quota, elig, ctype
+        offer.quota_claims = _merge_by_source(offer.quota_claims, quota, src.id)
+        offer.eligibility = {**(offer.eligibility or {}), **elig}
+        offer.credit_type = ctype
+        offer.billing = {**(offer.billing or {}), **billing}
+        offer.links = {**links, **(offer.links or {})}
         offer.expires_at = expires_at or offer.expires_at
         offer.confidence = max(offer.confidence, confidence)
         if elig.get("requires_prohibited_practice") and state is not OfferState.INELIGIBLE:
@@ -502,6 +780,8 @@ async def _upsert_offer(
             await review.transition(
                 s, offer, OfferState.NEEDS_REVIEW, actor=actor, rationale="source changed; re-review"
             )
+        return offer
+    if only_models:
         return offer
     # Reviewed offer: never overwrite reviewed facts; be conservative.
     offer.next_review_at = utcnow()
@@ -528,6 +808,81 @@ async def _upsert_offer(
             s, offer, "offer.changed", "Quota or expiry details changed for an offer you use", "info"
         )
     return offer
+
+
+async def _expand_frontier(s: AsyncSession, ctx: AppContext, src: Source, raw_html: str) -> int:
+    """Bounded link-following from an approved page to more pages on the same provider's official domains.
+
+    A followed page inherits the parent's approval only when it is on one of the provider's official
+    domains, its path looks like access/limits/pricing/models documentation, and the depth and per-provider
+    budgets allow it. Everything else is ignored (no off-domain leads are auto-approved). Inherited sources
+    are fetched through the same fetcher, so robots.txt and rate limits still apply to each one.
+    """
+    settings = ctx.settings
+    if src.depth >= settings.discovery_frontier_max_depth or src.provider_id is None:
+        return 0
+    provider = await s.get(Provider, src.provider_id)
+    if provider is None or SourceClass(src.source_class) not in OFFICIAL_CLASSES:
+        return 0
+    domains = list(provider.official_domains or [])
+    count = len(
+        list(
+            (
+                await s.execute(
+                    select(Source.id).where(Source.provider_id == provider.id, Source.origin == "frontier")
+                )
+            ).scalars()
+        )
+    )
+    budget = min(
+        settings.discovery_frontier_links_per_fetch, settings.discovery_frontier_max_per_provider - count
+    )
+    if budget <= 0:
+        return 0
+    created = 0
+    for link in extract_links(raw_html, src.url):
+        if created >= budget:
+            break
+        host = (urlsplit(link).hostname or "").lower()
+        if link == src.url or not domain_matches(host, domains) or not is_frontier_candidate(link):
+            continue
+        try:
+            check_url_shape(link)
+        except UnsafeUrlError:
+            continue
+        if (await s.execute(select(Source.id).where(Source.url == link))).first() is not None:
+            continue
+        child = Source(
+            url=link,
+            domain=host,
+            provider_id=provider.id,
+            source_class=src.source_class,
+            review_status=SourceReviewStatus.APPROVED.value,
+            terms_notes=(
+                f"Inherited approval from parent source {src.url} (same provider, official domain, depth "
+                f"{src.depth + 1}). robots.txt is re-checked before every fetch."
+            )[:4000],
+            crawl_interval_s=max(src.crawl_interval_s, 86_400),
+            min_interval_per_domain_s=src.min_interval_per_domain_s,
+            retention_days=src.retention_days,
+            origin="frontier",
+            depth=src.depth + 1,
+            parent_id=src.id,
+            next_fetch_at=utcnow(),
+        )
+        s.add(child)
+        await s.flush()
+        created += 1
+    if created:
+        s.add(
+            ChangeEvent(
+                source_id=src.id,
+                severity="info",
+                summary=json.dumps({"event": "frontier_expanded", "new_sources": created}),
+                action_required=False,
+            )
+        )
+    return created
 
 
 async def _notify_connected(s: AsyncSession, offer: Offer, kind: str, title: str, severity: str) -> None:
