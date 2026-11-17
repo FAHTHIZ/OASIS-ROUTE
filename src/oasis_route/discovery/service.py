@@ -377,7 +377,15 @@ async def _ingest(
         + [c for c in ex.of("model") if c.value.get("free") is True]
     )
     shared = [c for c in ex.claims if c.claim_type in _SHARED_CLAIMS and c.value.get("free") is not True]
-    if tier_claims:
+    # Providers whose API is documented as billed publish rate limits for paying tiers. A passing "free"
+    # in the prose is not evidence of a free tier there; only per-model free rows or free models are.
+    strong_free = [c for c in ex.of("model_quota") if c.value.get("tier") == "free"] + [
+        c for c in ex.of("model") if c.value.get("free") is True
+    ]
+    paid_provider = provider is not None and access_for(provider.id).default_billing_mode == "paid"
+    if tier_claims and paid_provider and not strong_free:
+        groups["rate_limits"] = [c for c in tier_claims if c.claim_type != "free_tier"] + shared
+    elif tier_claims:
         groups["free_tier"] = tier_claims + shared
     if ex.of("credit"):
         groups["credits"] = credit_claims + shared
@@ -584,10 +592,13 @@ def _offer_class(access_mode: str, billing: dict[str, Any], provider: Provider) 
         )
     if access_mode == "free_tier":
         return "recurring_free"
+    if access_mode == "rate_limits":
+        return "paid"
     return "unknown"
 
 
 def _oauth_available(provider_id: str) -> bool:
+    """Whether the provider has an official sign-in flow (the per-deployment check is done at read time)."""
     from oasis_route.connections.oauth import SPECS  # local import: oauth depends on connections
 
     return provider_id in SPECS

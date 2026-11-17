@@ -85,8 +85,17 @@ class Fetcher:
                     buf.extend(chunk)
                     if len(buf) > cap:
                         raise FetchError("response_too_large", resp.status_code)
+                # aiter_bytes() already decoded any content-encoding; drop the headers that describe the
+                # wire encoding so the rebuilt response is not decoded a second time.
+                plain = httpx.Headers(
+                    [
+                        (k, v)
+                        for k, v in resp.headers.multi_items()
+                        if k not in ("content-encoding", "content-length")
+                    ]
+                )
                 return httpx.Response(
-                    resp.status_code, headers=resp.headers, content=bytes(buf), request=resp.request
+                    resp.status_code, headers=plain, content=bytes(buf), request=resp.request
                 )
         except httpx.HTTPError as exc:
             raise FetchError(f"network_error: {type(exc).__name__}") from exc

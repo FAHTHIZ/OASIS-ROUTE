@@ -24,6 +24,12 @@ FRONTIER_KEYWORDS = re.compile(
     r"usage|terms|policy|policies|deprecat|changelog|release[-_]?notes|announc)",
     re.I,
 )
+# Signed-in app pages, account areas and privacy/cookie notices never document public offers.
+FRONTIER_SKIP = re.compile(
+    r"(^|/)(settings|login|log-in|signin|sign-in|logout|account|accounts|dashboard|organization|"
+    r"organizations|profile|checkout|cart|upgrade|privacy[-_]?policy|privacy|cookies?|cookie-policy)(/|$)",
+    re.I,
+)
 _SKIP_EXT = re.compile(r"\.(png|jpe?g|gif|svg|webp|ico|css|js|mjs|woff2?|ttf|pdf|zip|gz|mp4|webm)$", re.I)
 
 
@@ -83,4 +89,5 @@ def extract_links(html_text: str, base_url: str, *, limit: int = 2000) -> list[s
 
 
 def is_frontier_candidate(url: str) -> bool:
-    return bool(FRONTIER_KEYWORDS.search(urlsplit(url).path))
+    path = urlsplit(url).path
+    return bool(FRONTIER_KEYWORDS.search(path)) and not FRONTIER_SKIP.search(path)
