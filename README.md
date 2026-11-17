@@ -71,6 +71,19 @@ Oasis Route is working software. The implementation roadmap in [docs/EXECUTION_P
 | Web console with plain-language status | Implemented |
 | Optional mail notices (forwarded mail; Gmail behind a compliance attestation) | Implemented, off by default |
 | Official provider OAuth connections (OpenRouter PKCE; redirect and headless modes) | Implemented |
+| Account data export and erasure (secret-free export; deletion destroys stored credentials) | Implemented |
+| Install from wheel and upgrade from the previous release, verified in CI | Implemented |
+
+### Known limitations
+
+- Only `POST /v1/chat/completions` and `GET /v1/models` are served. Embeddings, the Responses API, images, audio and legacy completions are not.
+- Streaming failover happens only before the first byte; a stream that fails midway ends with an error event rather than being spliced with another model's output.
+- OAuth sign-in is available for OpenRouter only. Other providers use an API key that the user pastes once.
+- Data-policy facts (training on inputs, retention) are unknown for every seeded provider until an operator records them with evidence, so projects that require no-training or zero-retention exclude those providers.
+- The per-key rate limiter is per process; with N replicas the effective limit is up to N times the setting. Quota reservations are global.
+- Discovery extraction is deterministic pattern matching. It proposes candidates for human review and never activates an offer by itself.
+- Gmail is off by default and must stay off in production until Google's verification and security assessment are complete.
+- `/metrics` is unauthenticated and must stay on a private network.
 
 ## Quickstart
 
@@ -104,7 +117,7 @@ Any OpenAI SDK works by setting its base URL to `https://route.example.com/v1` a
 - Using it: [API guide](docs/API.md), [configuration](docs/CONFIGURATION.md)
 - Running it: [deployment](docs/DEPLOYMENT.md), [operations runbook](docs/OPERATIONS.md), [zero-operations requirement](docs/ZERO_OPERATIONS_AUTONOMY.md)
 - Building it: [development](docs/DEVELOPMENT.md), [architecture](docs/ARCHITECTURE.md), [routing and quotas](docs/ROUTING_AND_QUOTAS.md), [discovery and registry](docs/DISCOVERY_AND_REGISTRY.md), [provider adapter contract](docs/PROVIDER_ADAPTERS.md), [decision records](docs/adr/)
-- Trust: [security and compliance](docs/SECURITY_AND_COMPLIANCE.md), [threat model](docs/THREAT_MODEL.md), [implementation audit](docs/IMPLEMENTATION_AUDIT.md)
+- Trust: [security and compliance](docs/SECURITY_AND_COMPLIANCE.md), [threat model](docs/THREAT_MODEL.md), [implementation audit](docs/IMPLEMENTATION_AUDIT.md), [release checklist](docs/RELEASE_CHECKLIST.md)
 - Planning: [execution plan](docs/EXECUTION_PLAN.md), [agent handoff](AGENT_HANDOFF.md), [research notes](docs/RESEARCH.md)
 
 ## Design principles

@@ -89,3 +89,24 @@ src/oasis_route/
 - SQLite lacks row locks; mitigated by single-statement conditional updates that are atomic on both engines,
   with concurrency tests on PostgreSQL in CI.
 - Benchmarks drift; quality scores are stored per task with source/date/confidence and are operator-editable.
+
+## 6. Verification status (updated 2026-11-17)
+
+Every phase in [EXECUTION_PLAN.md](EXECUTION_PLAN.md) is checked off only with code wired into the running
+application and tests that exercise it. Evidence for each release gate:
+
+| Gate | Evidence |
+|---|---|
+| P0–P1 skeleton, config, logs, migrations, health | `tests/test_config.py`, `test_health.py`, `test_migrations.py` (round trip + models-match-migrations drift guard) |
+| P2 identity, Oasis Keys, vault, audit, isolation | `test_api_keys.py`, `test_vault.py`, `test_kek_rotation.py`, `test_audit.py`, `test_tenant_isolation.py`, `test_redaction.py` |
+| P3 gateway and adapters | `test_gateway.py`, `test_adapters_contract.py` (success, malformed, streaming, cancellation, timeout, reset, 401/403/404/429/5xx, Retry-After, usage, quota headers, redaction, oversize, redirects) |
+| P4 ledger and router | `test_quota_ledger.py`, `test_quota_concurrency.py`, `test_router_policy.py`, `test_router_fallback.py` |
+| P5 discovery and verification | `test_discovery_review.py`, `test_extraction.py`, `test_ssrf.py` |
+| P6 health, recovery, capacity, telemetry | `test_health_breaker.py`, `test_capacity.py`, `test_telemetry.py` |
+| P7 UX, CLI, deployment | `test_cli.py`, `test_zero_ops.py` (one-credential onboarding end to end, supervised worker, stall alerts), CI compose smoke test |
+| P8 optional mail | `test_notifications.py` |
+| P9 release readiness | `test_resilience.py` (seeded fault injection under concurrency), CI supply-chain job (pip-audit, licenses, gitleaks, SBOM), Trivy, `scripts/install_check.sh`, `scripts/upgrade_check.sh`, [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) |
+| Data rights (export, erasure, retention) | `test_data_rights.py`, `test_worker.py::test_record_retention_is_opt_in_and_prunes_only_old_rows` |
+
+Open items are tracked as known limitations in the [README](../README.md#known-limitations), not as
+unchecked plan items.
