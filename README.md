@@ -6,6 +6,22 @@ Oasis Route is an independent inference infrastructure project. It discovers pub
 
 It is designed to work with Oasis and with any application that can call an OpenAI-compatible API.
 
+## Oasis Key
+
+**Oasis Key** is the name of the unified API credential issued by Oasis Route. An application uses its Oasis Key to authenticate with the Oasis Route gateway; Oasis Route then selects among the user's separately authorized upstream provider connections. Applications do not need a different gateway key for every inference provider.
+
+```bash
+export OASIS_API_KEY="your-oasis-key"
+```
+
+Send it as a bearer token:
+
+```http
+Authorization: Bearer <OASIS_API_KEY>
+```
+
+An Oasis Key is not an upstream provider credential. Provider API keys and OAuth tokens remain separately authorized and protected in the credential vault. Keys should be scoped, shown only once at creation, revocable, and rotatable.
+
 > **Important:** Oasis Route does not create provider identities, harvest credentials, bypass access controls, evade quotas, or reset free allocations through account rotation. It discovers legitimate offers and uses provider access explicitly authorized by the account owner and permitted by provider terms.
 
 ## What it does
