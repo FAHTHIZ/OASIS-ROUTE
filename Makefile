@@ -1,4 +1,4 @@
-.PHONY: install dev fmt lint type test test-pg check migrate serve worker docker up
+.PHONY: install dev fmt lint type test test-pg check migrate serve worker docker up audit
 
 install:
 	uv sync
@@ -39,3 +39,10 @@ docker:
 
 up:
 	docker compose up -d --build
+
+audit:  ## dependency vulnerabilities, licenses, secrets
+	uv export --frozen --no-dev --all-extras --no-emit-project --format requirements-txt -o /tmp/oasis-req.txt
+	uvx pip-audit -r /tmp/oasis-req.txt --disable-pip --progress-spinner off
+	UV_PROJECT_ENVIRONMENT=/tmp/oasis-runtime uv sync --frozen --no-dev --all-extras
+	/tmp/oasis-runtime/bin/python scripts/check_licenses.py
+	gitleaks git --no-banner --redact --config .gitleaks.toml .
