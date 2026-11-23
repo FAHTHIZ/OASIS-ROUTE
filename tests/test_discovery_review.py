@@ -300,3 +300,62 @@ async def test_user_submission_limit(client: httpx.AsyncClient, ctx: AppContext,
         assert r.status_code == 201
     r = await client.post("/api/v1/sources", json={"url": "https://x.test/3"}, headers=auth(g["key"]))
     assert r.status_code == 429
+
+
+FEED = "https://docs.mock.test/releases.atom"
+ATOM = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Mock releases</title>
+<entry><title>New free tier</title><updated>2026-11-20T00:00:00Z</updated>
+<content type="html">&lt;p&gt;The free tier allows 30 requests per minute for mock-large.&lt;/p&gt;
+</content></entry>
+</feed>"""
+
+
+def test_feed_text_parses_atom_rss_and_refuses_dtds() -> None:
+    from oasis_route.discovery import structured
+
+    assert structured.detect(FEED, "application/atom+xml") == "feed"
+    assert structured.detect("https://x.test/blog", "application/rss+xml; charset=utf-8") == "feed"
+    t = structured.feed_text(ATOM)
+    assert "New free tier (2026-11-20T00:00:00Z)" in t and "30 requests per minute" in t
+    rss = (
+        "<rss><channel><item><title>Credits</title>"
+        "<description>$5 free credit</description></item></channel></rss>"
+    )
+    assert "$5 free credit" in structured.feed_text(rss)
+    bomb = '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "aaaa">]><feed>&a;</feed>'
+    assert structured.feed_text(bomb) == ""
+    assert structured.feed_text("not xml <") == ""
+
+
+async def test_feed_source_feeds_text_claims(
+    client: httpx.AsyncClient, ctx: AppContext, web: FakeWeb
+) -> None:
+    g = await _setup(client, web)
+    web.page(FEED, ATOM, content_type="application/atom+xml")
+    sid = await _approved_source(client, g, FEED)
+    res = await disc.run_source(ctx, sid, force=True)
+    assert res.status == "first_fetch" and res.offers
+    async with ctx.db.session() as s:
+        src = await s.get(Source, sid)
+        assert src is not None and src.extractor == "feed"
+
+
+async def test_extractor_upgrade_reextracts_unchanged_pages(
+    client: httpx.AsyncClient, ctx: AppContext, web: FakeWeb
+) -> None:
+    g = await _setup(client, web)
+    sid = await _approved_source(client, g)
+    assert (await disc.run_source(ctx, sid, force=True)).status == "first_fetch"
+    assert (await disc.run_source(ctx, sid, force=True)).status == "not_modified"
+    async with ctx.db.transaction() as s:
+        src = await s.get(Source, sid)
+        assert src is not None and src.extractor_version is not None
+        src.extractor_version = "2000.1.1"  # stored by an older extractor release
+    before = web.fetched(DOCS)
+    res = await disc.run_source(ctx, sid, force=True)
+    assert res.status == "reextracted"
+    assert web.requests[-1].headers.get("if-none-match") is None  # unconditional refetch
+    assert web.fetched(DOCS) == before + 1
+    # Once re-extracted, the ordinary conditional fetch resumes.
+    assert (await disc.run_source(ctx, sid, force=True)).status == "not_modified"

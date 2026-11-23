@@ -62,6 +62,15 @@ class OpenAIProfile:
         default_factory=lambda: {"streaming": True, "tools": False, "json_mode": False, "vision": False}
     )
     extra_headers: dict[str, str] = field(default_factory=dict)
+    # Model listing. ``models_url`` overrides ``<base_url>/models`` with a provider's own (absolute, official)
+    # listing endpoint; ``models_key``/``models_id_field`` describe its JSON shape. Providers that publish no
+    # listing set ``list_models_supported=False`` and are validated by a 1-token request to
+    # ``probe_model`` (a model the provider prices at zero), relying on catalogue-seeded models.
+    models_url: str | None = None
+    models_key: str = "data"
+    models_id_field: str = "id"
+    list_models_supported: bool = True
+    probe_model: str | None = None
 
 
 ALLOWED_PASSTHROUGH = (
@@ -206,10 +215,11 @@ class OpenAICompatibleAdapter:
         return UpstreamError(cat, f"upstream {status}: {safe}", status=status, retry_after_s=retry_after)
 
     async def list_models(self, conn: ConnectionContext) -> list[ModelInfo]:
+        if not self.profile.list_models_supported:
+            return []
+        url = self.profile.models_url or self._url(conn, "/models")
         try:
-            r = await conn.client.get(
-                self._url(conn, "/models"), headers=self._headers(conn), timeout=timeout_for(conn)
-            )
+            r = await conn.client.get(url, headers=self._headers(conn), timeout=timeout_for(conn))
         except httpx.HTTPError as exc:
             raise transport_error(exc) from exc
         body = r.content
@@ -217,19 +227,21 @@ class OpenAICompatibleAdapter:
             raise self.normalize_error(r.status_code, r.headers, body)
         try:
             data = json.loads(body)
-            items = data.get("data", []) if isinstance(data, dict) else []
+            items = data.get(self.profile.models_key, []) if isinstance(data, dict) else []
         except ValueError as exc:
             raise UpstreamError(
                 ErrorCategory.UNKNOWN_UPSTREAM, "malformed model list", retryable=False
             ) from exc
+        id_field = self.profile.models_id_field
         out = []
-        for it in items:
-            if isinstance(it, dict) and isinstance(it.get("id"), str):
+        for it in items if isinstance(items, list) else []:
+            if isinstance(it, dict) and isinstance(it.get(id_field), str):
                 caps, max_out = infer_capabilities(it)
+                mid = it[id_field]
                 out.append(
                     ModelInfo(
-                        upstream_id=it["id"],
-                        display_name=str(it.get("name") or it["id"]),
+                        upstream_id=mid,
+                        display_name=str(it.get("display_name") or it.get("name") or mid),
                         context_window=to_int(str(it.get("context_length") or it.get("context_window") or ""))
                         or None,
                         max_output_tokens=max_out,
@@ -238,6 +250,27 @@ class OpenAICompatibleAdapter:
                     )
                 )
         return out
+
+    async def _probe(self, conn: ConnectionContext) -> None:
+        """Authenticate with a 1-token request to a zero-priced model (providers without a model list)."""
+        model = self.profile.probe_model
+        if not model:
+            raise UpstreamError(
+                ErrorCategory.REQUEST_UNSUPPORTED, "provider has no model list or probe model configured"
+            )
+        body = {"model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}
+        try:
+            r = await conn.client.post(
+                self._url(conn, "/chat/completions"),
+                headers=self._headers(conn),
+                json=body,
+                timeout=timeout_for(conn),
+            )
+        except httpx.HTTPError as exc:
+            raise transport_error(exc) from exc
+        # A rate limit still proves the key is accepted; anything else non-2xx is reported as-is.
+        if r.status_code >= 300 and r.status_code != 429:
+            raise self.normalize_error(r.status_code, r.headers, r.content)
 
     async def _hf_account(self, conn: ConnectionContext) -> AccountStatus | None:
         key = conn.secret.get("api_key")
@@ -290,11 +323,14 @@ class OpenAICompatibleAdapter:
         )
 
     async def validate_connection(self, conn: ConnectionContext) -> list[ModelInfo]:
+        if not self.profile.list_models_supported:
+            await self._probe(conn)
+            return []
         return await self.list_models(conn)
 
     async def health_check(self, conn: ConnectionContext) -> bool:
         try:
-            await self.list_models(conn)
+            await self.validate_connection(conn)
         except UpstreamError:
             return False
         return True

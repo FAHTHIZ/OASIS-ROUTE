@@ -265,9 +265,55 @@ def detect(url: str, content_type: str) -> str:
         return "openrouter_models"
     if u == "https://router.huggingface.co/v1/models":
         return "hf_router_models"
+    ct = content_type.lower()
+    if "atom+xml" in ct or "rss+xml" in ct or u.endswith((".atom", ".rss", "/feed.xml", "/rss.xml")):
+        return "feed"
     if "json" in content_type:
         return "json"
     return "html"
+
+
+FEED_MAX_ENTRIES = 30
+_ATOM = "{http://www.w3.org/2005/Atom}"
+
+
+def feed_text(raw: str) -> str:
+    """Atom/RSS (announcement posts, GitHub release feeds) to plain text, newest entries first.
+
+    DTDs are refused outright so entity-expansion tricks never reach the parser. Each entry's
+    HTML body is normalised like a page; the result feeds the ordinary text-claims pipeline.
+    """
+    import xml.etree.ElementTree as ET
+
+    from oasis_route.discovery.extraction import normalise
+
+    head = raw[:4096].upper()
+    if "<!DOCTYPE" in head or "<!ENTITY" in raw.upper():
+        return ""
+    try:
+        root = ET.fromstring(raw.encode("utf-8", "replace"))  # noqa: S314 - DTDs refused above
+    except ET.ParseError:
+        return ""
+
+    def txt(node: ET.Element | None) -> str:
+        return "".join(node.itertext()) if node is not None else ""
+
+    out: list[str] = []
+    if root.tag == f"{_ATOM}feed":
+        for e in root.findall(f"{_ATOM}entry")[:FEED_MAX_ENTRIES]:
+            title = txt(e.find(f"{_ATOM}title")).strip()
+            when = txt(e.find(f"{_ATOM}updated")).strip() or txt(e.find(f"{_ATOM}published")).strip()
+            body = txt(e.find(f"{_ATOM}content")) or txt(e.find(f"{_ATOM}summary"))
+            out.append(f"{title} ({when})\n{normalise(body)}" if when else f"{title}\n{normalise(body)}")
+    else:
+        for item in root.iter("item"):
+            if len(out) >= FEED_MAX_ENTRIES:
+                break
+            title = txt(item.find("title")).strip()
+            when = txt(item.find("pubDate")).strip()
+            body = txt(item.find("description"))
+            out.append(f"{title} ({when})\n{normalise(body)}" if when else f"{title}\n{normalise(body)}")
+    return "\n\n".join(x.strip() for x in out if x.strip())
 
 
 def _zero(v: Any) -> bool:

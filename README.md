@@ -216,7 +216,14 @@ uv run oasis-route dev
 
 ### 5. Connect a provider and make a request
 
-Open <code>/console/</code> and sign in with the Oasis Key. **Discover** lists the providers with verified free capacity; use **Sign in with ...** or **Add API key** on a card (or the **Connections** tab).
+Open <code>/console/</code> and sign in with the Oasis Key. On **Connections → Paste your keys**, paste every provider key you hold (or your whole `.env`), tick the ownership box and press **Connect all**. Each key's provider is recognised automatically, the key is checked only with that provider, its models (and which of them are free) are synchronised, and routing starts using them immediately. **Discover** lists every provider with verified free capacity and links straight to where each one issues its free key; OpenRouter and Hugging Face can also be connected with **Sign in with ...** instead of a key.
+
+The same step from a terminal, reading `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `NVIDIA_API_KEY`, `HF_TOKEN` and the others from your environment or a `.env` file:
+
+~~~bash
+oasis-route connect --from-env                 # preview: shows what was recognised, stores nothing
+oasis-route connect --from-env --env-file .env --accept-terms --free-tier
+~~~
 
 Then call the gateway:
 
@@ -230,6 +237,14 @@ curl https://route.example.com/v1/chat/completions \
       {"role": "user", "content": "Explain the difference between a process and a thread."}
     ]
   }'
+~~~
+
+`model: "auto"` picks the strongest eligible model across all your connections (free first) and moves to the next strongest when one runs out of quota or fails. Claude Code and other Anthropic clients work through the Anthropic Messages endpoint:
+
+~~~bash
+export ANTHROPIC_BASE_URL=https://route.example.com
+export ANTHROPIC_AUTH_TOKEN=$OASIS_API_KEY
+claude
 ~~~
 
 Any OpenAI SDK can use the same gateway by setting its base URL to <code>https://route.example.com/v1</code> and its API key to the Oasis Key.
@@ -259,7 +274,7 @@ OASIS Route is working software. The implementation roadmap is tracked phase by 
 | **Routing and quotas** | Capability-aware quality-first routing, route preview, atomic reservations, idempotency, shared quota pools, and usage settlement |
 | **Recovery** | Circuit breakers, cooldowns, Retry-After handling, reset-aware recovery, and honest downgrade signalling |
 | **Discovery** | Seed sources, bounded frontier, catalogue and rate-limit-table extraction, provider candidates, safe fetcher, evidence provenance, review workflow, and the Discover catalogue |
-| **Onboarding and spend** | OpenRouter and Hugging Face sign-in, token refresh, account free-tier detection, per-connection billing modes, and the free-only spend policy |
+| **Onboarding and spend** | One-step paste-all-keys connect (console and `oasis-route connect`) with local provider detection, OpenRouter and Hugging Face sign-in, token refresh, account free-tier detection, per-connection billing modes, and the free-only spend policy |
 | **Capacity and telemetry** | Capacity analytics and forecasting, usage ledger, health metrics, Prometheus metrics, and OpenTelemetry instrumentation |
 | **Worker** | Database-leased jobs, backoff, timeouts, crash recovery, and stall alerts |
 | **Console and deployment** | Web console, onboarding, Docker deployment, backup/restore guidance, and production runbooks |
@@ -273,9 +288,11 @@ OASIS Route is deliberately explicit about what it does not serve or guarantee t
 - **Inference endpoints:** Chat Completions, Responses, Anthropic Messages, and Models are supported. Embeddings, images, audio, and legacy completions are not served.
 - **Responses state:** the Responses API is currently stateless; <code>previous_response_id</code> is not supported.
 - **Mid-stream recovery:** failover is possible only before the first response byte. A stream that fails midway ends with an error event rather than being spliced into another model's output.
-- **Sign-in coverage:** OpenRouter and Hugging Face only. Hugging Face sign-in needs an https `public_url` (for its Client ID Metadata Document) or `OASIS_ROUTE_HF_OAUTH_CLIENT_ID`; device-code sign-in is not wired yet. Other providers use API keys.
+- **Sign-in coverage:** OpenRouter and Hugging Face only. Hugging Face sign-in needs an https `public_url` (for its Client ID Metadata Document) or `OASIS_ROUTE_HF_OAUTH_CLIENT_ID`. Other providers use API keys, which can all be pasted at once.
 - **Billing detection:** only OpenRouter and Hugging Face expose whether an account can be billed. For other providers a connection stays `unknown` (blocked in free-only projects) until the owner confirms it is free tier.
-- **Discovery reach:** official pages and catalogues only. No general web search, GitHub release feeds or announcement feeds yet. A page is re-extracted only when its content changes, so extractor improvements apply on the next change.
+- **Accounts and keys are yours to create:** Oasis Route never signs up for provider accounts, solves sign-up checks or collects keys published elsewhere. Providers' terms tie free tiers to a person's own account (usually with email or phone verification), and leaked keys belong to someone else. You create each free account once; everything after pasting the key is automatic. This is the same model OmniRoute and FreeLLMAPI use.
+- **Discovery reach:** official pages, catalogues and Atom/RSS announcement or release feeds that an operator has approved. No general web search. Discovered offers are proposed for review and are not routed until approved.
+- **GitHub Models:** retired by GitHub on 30 July 2026 and not supported.
 - **Provider data policies:** training and retention facts remain unknown for seeded providers until an operator records them with evidence. Providers are excluded from projects that require no-training or zero-retention when those facts are unknown. NVIDIA is seeded as training on inputs because its own pages state that inputs are used to improve its models.
 - **Discovery activation:** extraction is deterministic (structured catalogues, HTML tables and patterns). It proposes offers for human review; it never activates an offer by itself.
 - **Gmail:** off by default and must remain off in production until Google's verification and security assessment are complete.

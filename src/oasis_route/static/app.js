@@ -65,6 +65,88 @@ const safeLink = (href, text) =>
     ? el("a", { href, target: "_blank", rel: "noopener noreferrer" }, text)
     : null;
 
+const OUTCOME_TEXT = {
+  connected: "Connected",
+  already_connected: "Already connected",
+  needs_provider: "Choose provider",
+  rejected: "Not allowed",
+  invalid: "Key rejected",
+  error: "Will retry",
+};
+
+// One-step onboarding: paste every key (or a whole .env); providers are detected locally, nothing is guessed.
+function quickConnectCard(back) {
+  const text = el("textarea", {
+    rows: 6,
+    autocomplete: "off",
+    spellcheck: "false",
+    placeholder: "GROQ_API_KEY=gsk_…\nGEMINI_API_KEY=AIza…\nhf_…\n(one key per line, or paste your whole .env)",
+  });
+  const accept = el("input", { type: "checkbox" });
+  const free = el("input", { type: "checkbox" });
+  const out = el("div", {});
+  const showResults = (data) => {
+    const rows = data.results || [];
+    const summary = data.dry_run
+      ? `${rows.length} key(s) recognised. Nothing has been stored yet.`
+      : `${fmt(data.connected)} connected · ${fmt(data.already_connected)} already connected · ` +
+        `${fmt(data.needs_attention)} need attention · ${fmt(data.free_models_available)} free models available`;
+    out.replaceChildren(
+      el("p", {}, summary),
+      data.ignored_lines ? el("p", { class: "muted" }, `${data.ignored_lines} other line(s) ignored (not provider keys).`) : null,
+      table(
+        [
+          { label: "Key", get: (r) => el("code", {}, r.key_hint) },
+          { label: "Provider", get: (r) => r.provider_id || (r.candidates && r.candidates.length ? `one of: ${r.candidates.join(", ")}` : "unknown") },
+          { label: "Result", get: (r) => (r.outcome ? OUTCOME_TEXT[r.outcome] || r.outcome : `detected by ${r.detected_by}`) },
+          { label: "Free models", num: true, get: (r) => (r.outcome === "connected" ? fmt(r.free_models) : "—") },
+          {
+            label: "Details",
+            get: (r) =>
+              r.outcome === "needs_provider" || r.detected_by === "ambiguous" || r.detected_by === "unknown"
+                ? `${r.message || ""} Put it on a line such as MISTRAL_API_KEY=<key> to say which provider issued it.`
+                : r.message || "",
+          },
+        ],
+        rows
+      )
+    );
+  };
+  const submit = async (dryRun) => {
+    out.replaceChildren(el("p", { class: "muted" }, dryRun ? "Checking…" : "Connecting and validating each key…"));
+    try {
+      const data = await api(`/api/v1/projects/${pid()}/connections/quick`, {
+        method: "POST",
+        body: { text: text.value, accept_terms: accept.checked, free_tier: free.checked, dry_run: dryRun },
+      });
+      if (!dryRun) text.value = "";
+      showResults(data);
+    } catch (e) {
+      out.replaceChildren(errorBox(e));
+    }
+  };
+  return card(
+    "Paste your keys",
+    el(
+      "p",
+      { class: "muted" },
+      "Paste every provider key you hold. Each key is matched to its provider here, sent only to that provider to be checked, " +
+        "then stored encrypted. Models, free tiers, limits and routing are set up automatically."
+    ),
+    text,
+    el("label", {}, el("span", {}, accept, " These are my own accounts and I accept each provider's terms")),
+    el("label", {}, el("span", {}, free, " No billing is set up on these accounts (free plans or trial keys)")),
+    el(
+      "p",
+      {},
+      el("button", { type: "button", class: "secondary", onclick: () => submit(true) }, "Check keys"),
+      " ",
+      el("button", { type: "button", onclick: async () => { await submit(false); } }, "Connect all")
+    ),
+    out
+  );
+}
+
 // Starts an official provider sign-in, opens the provider's page and waits for the flow to finish.
 async function startOAuth(provider, acceptTerms, msg, back) {
   const pollFlow = async (flowId, deadline) => {
@@ -528,8 +610,9 @@ const views = {
         )
       : null;
     return [
+      quickConnectCard("connections"),
       oauthCard,
-      card("Connect a provider", termsList, form, msg),
+      card("Connect one provider", termsList, form, msg),
       card(
         "Connections",
         table(

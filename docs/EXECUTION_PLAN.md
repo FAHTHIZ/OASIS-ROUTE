@@ -110,8 +110,10 @@ Scope from [LIVE_PROVIDER_DISCOVERY_AND_ONBOARDING.md](LIVE_PROVIDER_DISCOVERY_A
 - [x] Official sign-in: OpenRouter PKCE key exchange; Hugging Face OAuth 2.0 + PKCE with a Client ID Metadata Document and background token refresh.
 - [x] Discover catalogue API and console tab with access requirements, verified offers, evidence links and next actions.
 - [ ] Device-code sign-in (Hugging Face publishes a device endpoint; not wired yet).
-- [ ] Announcement and GitHub release feeds as sources; permitted search APIs.
-- [ ] Re-extraction of unchanged pages after an extractor upgrade.
+- [x] Announcement and GitHub release feeds (Atom/RSS) as sources. Permitted search APIs remain out of scope.
+- [x] Re-extraction of unchanged pages after an extractor upgrade (`sources.extractor_version`, migration 0008).
+- [x] One-step onboarding: paste every key (or a `.env`) in the console or run `oasis-route connect`; providers detected locally, each key validated only with its issuer, models synced and discovery refreshed.
+- [x] Cohere (trial keys) and Z.ai (free GLM Flash models) providers.
 
 **Acceptance:** nothing discovered is shown to users or used for routing before a reviewer cites evidence; free-only projects never route to a connection whose cost is paid or unknown.
 

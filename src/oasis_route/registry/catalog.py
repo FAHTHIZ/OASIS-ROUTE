@@ -160,6 +160,51 @@ PROVIDERS: tuple[ProviderSeed, ...] = (
         + REVIEW_NOTE,
     ),
     ProviderSeed(
+        "cohere",
+        "Cohere",
+        "openai_compatible",
+        "https://api.cohere.ai/compatibility/v1",
+        "openai_chat",
+        ("cohere.com", "cohere.ai", "docs.cohere.com", "dashboard.cohere.com", "api.cohere.com"),
+        terms_url="https://cohere.com/terms-of-use",
+        notes="Trial (evaluation) keys are free and limited to 1,000 API calls a month and 20 requests a "
+        "minute per chat model; production keys are billed (https://docs.cohere.com/docs/rate-limits). "
+        "Trial keys are for evaluation, not production use. " + REVIEW_NOTE,
+    ),
+    ProviderSeed(
+        "zai",
+        "Z.ai (GLM)",
+        "openai_compatible",
+        "https://api.z.ai/api/paas/v4",
+        "openai_chat",
+        ("z.ai", "docs.z.ai", "api.z.ai"),
+        terms_url="https://chat.z.ai/legal-agreement/terms-of-service",
+        notes="Pay-as-you-go API with several models priced at zero "
+        "(https://docs.z.ai/guides/overview/pricing). GLM Coding Plan quota may only be used inside "
+        "officially supported coding tools, so Oasis Route connects only standard API keys on the general "
+        "endpoint. " + REVIEW_NOTE,
+        models=tuple(
+            {
+                "upstream_id": mid,
+                "display_name": name,
+                "family": "glm",
+                "context_window": ctxw,
+                "max_output_tokens": max_out,
+                "capabilities": {"streaming": True, "tools": True, "json_mode": False, "vision": vision},
+                "pricing": {
+                    "free": True,
+                    "source": "https://docs.z.ai/guides/overview/pricing",
+                    "observed_at": "2026-11-23",
+                },
+            }
+            for mid, name, ctxw, max_out, vision in (
+                ("glm-4.7-flash", "GLM-4.7-Flash", 200_000, 128_000, False),
+                ("glm-4.5-flash", "GLM-4.5-Flash", 128_000, 96_000, False),
+                ("glm-4.6v-flash", "GLM-4.6V-Flash", 128_000, 32_000, True),
+            )
+        ),
+    ),
+    ProviderSeed(
         "custom",
         "Custom OpenAI-compatible endpoint",
         "openai_compatible",

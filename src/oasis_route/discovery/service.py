@@ -233,6 +233,11 @@ async def run_source(ctx: AppContext, source_id: str, *, force: bool = False) ->
             return RunResult(source_id, "not_due")
         url, etag, lm, interval = src.url, src.etag, src.last_modified, src.min_interval_per_domain_s
         scope_host = src.domain
+        # After an extractor upgrade the stored claims are stale even if the page is not:
+        # fetch unconditionally once and re-ingest regardless of the content hash.
+        reextract = src.content_hash is not None and src.extractor_version != structured.EXTRACTOR_VERSION
+        if reextract:
+            etag = lm = None
     fetcher = fetcher_for(ctx)
     try:
         res = await fetcher.fetch(
@@ -275,20 +280,29 @@ async def run_source(ctx: AppContext, source_id: str, *, force: bool = False) ->
             )
             if kind == "json" and not parsed:
                 text = structured.canonical_json(res.text) or extraction.normalise(res.text, ctype)
+        elif kind == "feed":
+            parsed = []
+            text = structured.feed_text(res.text)
         else:
             parsed = []
             text = extraction.normalise(res.text, ctype)
         new_hash = extraction.content_hash(text)
-        if new_hash == src.content_hash:
+        src.extractor_version = structured.EXTRACTOR_VERSION
+        if new_hash == src.content_hash and not reextract:
             src.last_status = "unchanged"
             await _touch_offers(s, src, now)
             ctx.metrics.discovery_fetches.labels("unchanged").inc()
             return RunResult(source_id, "unchanged")
         old_hash, src.content_hash = src.content_hash, new_hash
-        src.last_status = "changed" if old_hash else "first_fetch"
+        if not old_hash:
+            src.last_status = "first_fetch"
+        else:
+            src.last_status = "reextracted" if old_hash == new_hash else "changed"
         ctx.metrics.discovery_fetches.labels("changed").inc()
         if kind == "html":
             parsed = structured.table_claims(structured.parse_tables(res.text))
+            text_for_claims = text
+        elif kind == "feed":
             text_for_claims = text
         else:
             text_for_claims = ""

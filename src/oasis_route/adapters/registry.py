@@ -32,6 +32,25 @@ PROFILES: dict[str, OpenAIProfile] = {
     "huggingface": OpenAIProfile(
         "huggingface", stream_usage_option=False, default_capabilities={"streaming": True}
     ),
+    # https://docs.cohere.com/docs/compatibility-api ; models from the native list endpoint
+    # (https://docs.cohere.com/reference/list-models), filtered to chat-capable models.
+    "cohere": OpenAIProfile(
+        "cohere",
+        stream_usage_option=False,
+        default_capabilities={"streaming": True, "tools": True, "json_mode": True, "vision": False},
+        models_url="https://api.cohere.com/v1/models?endpoint=chat&page_size=1000",
+        models_key="models",
+        models_id_field="name",
+    ),
+    # https://docs.z.ai/guides/develop/http/introduction ; no public model-list endpoint is documented, so
+    # keys are checked with a 1-token call to GLM-4.5-Flash, which the pricing page lists as free.
+    "zai": OpenAIProfile(
+        "zai",
+        stream_usage_option=False,
+        default_capabilities={"streaming": True, "tools": True, "json_mode": False, "vision": False},
+        list_models_supported=False,
+        probe_model="glm-4.5-flash",
+    ),
     "custom": OpenAIProfile("custom", stream_usage_option=False),
     "mock": OpenAIProfile("mock", default_capabilities=dict(_FULL)),
     "mock_alt": OpenAIProfile("mock_alt", default_capabilities=dict(_FULL)),

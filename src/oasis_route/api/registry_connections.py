@@ -11,7 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oasis_route.api.deps import Principal, get_ctx, get_session, project_access, require_admin, require_scope
+from oasis_route.connections import key_detect
 from oasis_route.connections import oauth as oauth_flows
+from oasis_route.connections import quick_connect as quick
 from oasis_route.connections import service as conns
 from oasis_route.context import AppContext
 from oasis_route.db.models import Connection, Endpoint, HealthRecord, Model, Provider, QuotaPool
@@ -328,6 +330,93 @@ async def create_connection(
         out = _conn_out(c)
     out.validation = validation
     return out
+
+
+class QuickKey(BaseModel):
+    api_key: SecretStr
+    provider_id: str | None = Field(
+        default=None, description="Provider the key was issued by. Omit to detect it from the key format."
+    )
+
+
+class QuickConnectIn(BaseModel):
+    text: SecretStr | None = Field(
+        default=None,
+        description="Pasted keys: one per line, or a whole .env file. Only provider keys are read; other "
+        "variables are ignored and never stored or echoed.",
+    )
+    keys: list[QuickKey] = Field(default_factory=list, max_length=key_detect.MAX_KEYS)
+    accept_terms: bool = Field(
+        default=False,
+        description="Confirms you hold every one of these provider accounts yourself and accept each "
+        "provider's terms.",
+    )
+    free_tier: bool = Field(
+        default=False,
+        description="Declares these accounts have no billing set up (free plan or trial key). Ignored for "
+        "providers that bill every request.",
+    )
+    dry_run: bool = Field(default=False, description="Only report what was detected; store nothing.")
+
+
+def _detected(body: QuickConnectIn) -> tuple[list[key_detect.DetectedKey], int]:
+    found: list[key_detect.DetectedKey] = []
+    ignored = 0
+    if body.text is not None:
+        raw = body.text.get_secret_value()
+        if len(raw.encode()) > key_detect.MAX_TEXT_BYTES:
+            raise ValidationFailed(f"pasted text is limited to {key_detect.MAX_TEXT_BYTES} bytes")
+        parsed = key_detect.parse_text(raw)
+        found += parsed.keys
+        ignored = parsed.ignored_lines
+    seen = {d.api_key for d in found}
+    for k in body.keys:
+        value = k.api_key.get_secret_value().strip()
+        if value and value not in seen:
+            seen.add(value)
+            found.append(key_detect.detect(value, provider_id=k.provider_id))
+    return found, ignored
+
+
+@router.post("/projects/{project_id}/connections/quick")
+async def quick_connect_keys(
+    project_id: str,
+    body: QuickConnectIn,
+    p: Principal = Depends(require_scope(ApiKeyScope.MANAGE)),
+    ctx: AppContext = Depends(get_ctx),
+) -> dict[str, Any]:
+    """Connect many provider keys at once. Each key's provider is detected locally; nothing is guessed."""
+    async with ctx.db.session() as session:
+        await project_access(project_id, p, session, write=True)
+    found, ignored = _detected(body)
+    if len(found) > key_detect.MAX_KEYS:
+        raise ValidationFailed(f"at most {key_detect.MAX_KEYS} keys per request")
+    if body.dry_run:
+        return {
+            "dry_run": True,
+            "ignored_lines": ignored,
+            "results": [
+                {
+                    "key_hint": d.hint,
+                    "provider_id": d.provider_id,
+                    "detected_by": d.method,
+                    "candidates": d.candidates,
+                    "env_name": d.env_name,
+                    "message": d.note,
+                }
+                for d in found
+            ],
+        }
+    summary = await quick.quick_connect(
+        ctx,
+        project_id=project_id,
+        user=p.user,
+        keys=found,
+        accept_terms=body.accept_terms,
+        free_tier_declared=body.free_tier,
+        ignored_lines=ignored,
+    )
+    return summary.as_dict()
 
 
 @router.get("/projects/{project_id}/connections", response_model=list[ConnectionOut])

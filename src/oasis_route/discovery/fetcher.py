@@ -27,6 +27,8 @@ ALLOWED_CONTENT_TYPES = (
     "application/xhtml+xml",
     "application/xml",
     "text/xml",
+    "application/atom+xml",
+    "application/rss+xml",
 )
 
 
