@@ -1,0 +1,69 @@
+name: Bug report
+description: Report a reproducible OASIS Route problem
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "Remove Oasis Keys, provider API keys, OAuth tokens and personal data before posting. Request IDs and route previews are safe to share."
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead?
+      description: Include the HTTP status, error body and the `x-oasis-*` response headers if you have them.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Run oasis-route dev\n2. Connect ...\n3. POST /v1/chat/completions with ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "0.1.0, ghcr.io/fahthiz/oasis-route:edge, or a commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run it?
+      options:
+        - uvx / uv tool install
+        - Docker image (ghcr.io)
+        - docker compose (PostgreSQL)
+        - From a clone
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which API surface?
+      multiple: true
+      options:
+        - OpenAI Chat Completions
+        - OpenAI Responses
+        - Anthropic Messages
+        - Console
+        - CLI
+        - Discovery
+  - type: input
+    id: provider
+    attributes:
+      label: Provider(s) involved
+      placeholder: "Groq, OpenRouter, custom endpoint, ..."
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Logs are redacted by default, but check them once more for secrets.
+      render: text

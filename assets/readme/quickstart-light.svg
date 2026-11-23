@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="168" viewBox="0 0 1280 168" role="img" aria-labelledby="t d">
+<title id="t">Quick start in three steps</title>
+<desc id="d">01 run oasis-route dev with uvx; 02 connect your provider keys with oasis-route connect --from-env; 03 point any OpenAI or Anthropic SDK at the gateway with model auto.</desc>
+<style>@media (prefers-reduced-motion: no-preference) {
+.s0{animation:fade .9s 0.15s cubic-bezier(.2,.7,.1,1) both}.s1{animation:fade .9s 0.45s cubic-bezier(.2,.7,.1,1) both}.s2{animation:fade .9s 0.75s cubic-bezier(.2,.7,.1,1) both}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+}</style>
+<g class="s0">
+<rect x="1.0" y="1" width="408.7" height="166" rx="18" fill="#F5F8FC" stroke="#D5E1EE"/>
+<text x="26.0" y="50" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="800" fill="#0E9E85">01</text>
+<text x="76.0" y="47" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" font-weight="800" fill="#0F1B2A">Run it</text>
+<rect x="22.0" y="70" width="366.7" height="40" rx="10" fill="#FFFFFF" stroke="#D5E1EE"/>
+<text x="36.0" y="95" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace" font-size="13" fill="#0F1B2A"><tspan fill="#0E9E85">$ </tspan>uvx --from git+…/OASIS-ROUTE oasis-route dev</text>
+<text x="26.0" y="142" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#55697F">Prints the console URL and an Oasis Key.</text>
+</g><path d="M412.7 84h20" stroke="#D5E1EE" stroke-width="2"/><path d="M426.7 79l6 5-6 5" fill="none" stroke="#D5E1EE" stroke-width="2"/><g class="s1">
+<rect x="435.7" y="1" width="408.7" height="166" rx="18" fill="#F5F8FC" stroke="#D5E1EE"/>
+<text x="460.7" y="50" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="800" fill="#2F6FD6">02</text>
+<text x="510.7" y="47" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" font-weight="800" fill="#0F1B2A">Paste your keys</text>
+<rect x="456.7" y="70" width="366.7" height="40" rx="10" fill="#FFFFFF" stroke="#D5E1EE"/>
+<text x="470.7" y="95" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace" font-size="13" fill="#0F1B2A"><tspan fill="#2F6FD6">$ </tspan>oasis-route connect --from-env</text>
+<text x="460.7" y="142" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#55697F">Each key is recognised, checked, synced.</text>
+</g><path d="M847.3 84h20" stroke="#D5E1EE" stroke-width="2"/><path d="M861.3 79l6 5-6 5" fill="none" stroke="#D5E1EE" stroke-width="2"/><g class="s2">
+<rect x="870.3" y="1" width="408.7" height="166" rx="18" fill="#F5F8FC" stroke="#D5E1EE"/>
+<text x="895.3" y="50" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="800" fill="#6D4FD8">03</text>
+<text x="945.3" y="47" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" font-weight="800" fill="#0F1B2A">Point any SDK at it</text>
+<rect x="891.3" y="70" width="366.7" height="40" rx="10" fill="#FFFFFF" stroke="#D5E1EE"/>
+<text x="905.3" y="95" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace" font-size="13" fill="#0F1B2A"><tspan fill="#6D4FD8">$ </tspan>base_url=…/v1   model=&quot;auto&quot;</text>
+<text x="895.3" y="142" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#55697F">Strongest free model first, honest failover.</text>
+</g>
+</svg>

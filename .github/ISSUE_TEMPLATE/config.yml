@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/FAHTHIZ/OASIS-ROUTE/security/advisories/new
+    about: Report vulnerabilities privately. Please do not open a public issue for them.
+  - name: Read the free-tier capacity maths
+    url: https://github.com/FAHTHIZ/OASIS-ROUTE/blob/main/docs/FREE_TIER_CAPACITY.md
+    about: How many free tokens a month OASIS Route can route, and how the number is computed.
+  - name: OASIS, the agent runtime
+    url: https://github.com/FAHTHIZ/oasis
+    about: The open-source agent platform OASIS Route was built for.
