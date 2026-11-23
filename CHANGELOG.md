@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Hugging Face device-code sign-in (RFC 8628) for servers without a browser: `"mode": "device"`, a short user code, and `POST .../oauth/{flow_id}/poll` honouring `interval` and `slow_down`.
+- `oasis-route dev --connect-env [--free-tier --age N --country CC]` connects the provider keys in your environment on every start and pauses the mock providers once a real one is active.
+- Paste-your-keys now lets you pick the provider for keys whose format several providers share (`providers_by_line`, from the dry run's `line`).
 - One-step onboarding. **Connections → Paste your keys** in the console, `POST /api/v1/projects/{id}/connections/quick` and `oasis-route connect --from-env` connect every key at once: each key's provider is recognised locally from its variable name or prefix (ambiguous keys are never tried against several providers), validated only with that provider, and its models and approved discovery sources refreshed.
 - Cohere (trial keys, OpenAI-compatible endpoint) and Z.ai (free GLM Flash models) providers, with key-only validation for providers that do not list models.
 - Atom/RSS announcement and release feeds as discovery sources (DTDs refused).

@@ -93,6 +93,7 @@ class DetectedKey:
     candidates: list[str] = field(default_factory=list)
     env_name: str | None = None
     note: str = ""
+    line: int | None = None  # 1-based line in pasted text, so a client can say which provider it is
 
     @property
     def hint(self) -> str:
@@ -168,7 +169,7 @@ def parse_text(text: str) -> ParsedText:
     out: list[DetectedKey] = []
     seen: set[str] = set()
     ignored = 0
-    for raw in text.splitlines():
+    for lineno, raw in enumerate(text.splitlines(), start=1):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
@@ -191,5 +192,6 @@ def parse_text(text: str) -> ParsedText:
         if d.api_key in seen:
             continue
         seen.add(d.api_key)
+        d.line = lineno
         out.append(d)
     return ParsedText(out, ignored)

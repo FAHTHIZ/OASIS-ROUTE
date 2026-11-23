@@ -46,6 +46,8 @@ from oasis_route.identity import audit
 from oasis_route.security.vault import SealedSecret
 
 FLOW_TTL = timedelta(minutes=10)
+DEVICE_TTL_MAX = timedelta(minutes=15)
+DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 CALLBACK_PATH = "/api/v1/oauth/callback"
 BINDING_COOKIE = "oasis_oauth_binding"
 
@@ -65,6 +67,7 @@ class OAuthSpec:
     client_id_setting: str | None = None  # Settings attribute holding a registered client id
     supports_cimd: bool = False  # provider accepts a Client ID Metadata Document URL as client_id
     manual_mode: bool = True  # provider can display the code for headless completion
+    device_url: str | None = None  # RFC 8628 device authorization endpoint (sign in on another device)
 
 
 SPECS: dict[str, OAuthSpec] = {
@@ -86,6 +89,7 @@ SPECS: dict[str, OAuthSpec] = {
         client_id_setting="hf_oauth_client_id",
         supports_cimd=True,
         manual_mode=False,
+        device_url="https://huggingface.co/oauth/device",
     ),
 }
 
@@ -158,6 +162,7 @@ async def start(
     priority: int,
     redirect: bool,
     request_base_url: str,
+    device: bool = False,
 ) -> dict[str, Any]:
     spec = SPECS.get(provider_id)
     if spec is None:
@@ -175,13 +180,17 @@ async def start(
                 "docs": spec.docs_url,
             },
         )
-    if not redirect and not spec.manual_mode:
+    if device and not spec.device_url:
+        raise ValidationFailed(f"{provider_id} does not offer device-code sign-in")
+    if device:
+        redirect = False
+    elif not redirect and not spec.manual_mode:
         raise ValidationFailed(f"{provider_id} sign-in only supports the browser redirect mode")
     if not accept_terms:
         raise ValidationFailed(
             "you must confirm you hold this account yourself and accept the provider's terms"
         )
-    async with ctx.db.transaction() as session:
+    async with ctx.db.session() as session:
         provider = await session.get(Provider, provider_id)
         fresh = await session.get(User, user.id)
         if provider is None or fresh is None:
@@ -189,6 +198,18 @@ async def start(
         reasons = conns.eligibility_reasons(fresh, provider, None, AuthMethod.OAUTH.value)
         if reasons:
             raise PolicyViolation("not eligible to connect this provider", details={"reasons": reasons})
+    provider_name = provider.name
+    if device:
+        return await _start_device(
+            ctx,
+            spec,
+            client_id=str(client_id),
+            project_id=project_id,
+            user=user,
+            display_name=display_name or provider_name,
+            priority=priority,
+        )
+    async with ctx.db.transaction() as session:
         state = secrets.token_urlsafe(32)
         verifier = secrets.token_urlsafe(64)
         binding = secrets.token_urlsafe(32) if redirect else None
@@ -198,7 +219,7 @@ async def start(
             project_id=project_id,
             user_id=user.id,
             provider_id=provider_id,
-            display_name=display_name or provider.name,
+            display_name=display_name or provider_name,
             priority=priority,
             expires_at=utcnow() + FLOW_TTL,
         )
@@ -251,6 +272,197 @@ async def start(
             "expires_at": flow.expires_at,
             "_browser_binding": binding,  # set as an HttpOnly cookie by the API layer, never in the body
         }
+
+
+async def _start_device(
+    ctx: AppContext,
+    spec: OAuthSpec,
+    *,
+    client_id: str,
+    project_id: str,
+    user: User,
+    display_name: str,
+    priority: int,
+) -> dict[str, Any]:
+    """RFC 8628: ask the provider for a user code the person enters on any device they are signed in on."""
+    assert spec.device_url
+    try:
+        resp = await ctx.upstream_client.post(
+            spec.device_url,
+            data={"client_id": client_id, "scope": spec.scope},
+            headers={"accept": "application/json"},
+            timeout=20.0,
+        )
+        body = resp.json() if resp.status_code < 400 else None
+    except (httpx.HTTPError, ValueError) as exc:
+        raise OAuthFailed(f"could not reach the provider: {type(exc).__name__}") from exc
+    if not isinstance(body, dict) or not all(
+        isinstance(body.get(k), str) and body.get(k) for k in ("device_code", "user_code", "verification_uri")
+    ):
+        raise OAuthFailed(
+            "the provider did not start device sign-in", details={"upstream_status": resp.status_code}
+        )
+    verification_uri = str(body["verification_uri"])
+    complete_uri = body.get("verification_uri_complete")
+    official = spec.device_url.split("/", 3)[:3]
+    for uri in (verification_uri, complete_uri):  # never send a user to a host the provider did not own
+        if isinstance(uri, str) and uri.split("/", 3)[:3] != official:
+            raise OAuthFailed("the provider returned an unexpected sign-in address")
+    interval = _bounded_int(body.get("interval"), 5, 1, 60)
+    ttl = min(timedelta(seconds=_bounded_int(body.get("expires_in"), 900, 60, 3600)), DEVICE_TTL_MAX)
+    async with ctx.db.transaction() as session:
+        flow = OAuthFlow(
+            state_hash=_hash_state(secrets.token_urlsafe(32)),  # unused: device flows have no callback
+            project_id=project_id,
+            user_id=user.id,
+            provider_id=spec.provider_id,
+            display_name=display_name,
+            priority=priority,
+            expires_at=utcnow() + ttl,
+        )
+        session.add(flow)
+        await session.flush()
+        sealed = ctx.vault_.seal(
+            {"device_code": body["device_code"], "client_id": client_id, "interval": interval}, _aad(flow.id)
+        )
+        cred = Credential(
+            kek_id=sealed.kek_id, wrapped_dek=sealed.wrapped_dek, ciphertext=sealed.ciphertext, aad=sealed.aad
+        )
+        session.add(cred)
+        await session.flush()
+        flow.verifier_credential_id = cred.id
+        await audit.record(
+            session,
+            "connection.oauth_started",
+            actor_user_id=user.id,
+            project_id=project_id,
+            target_type="oauth_flow",
+            target_id=flow.id,
+            details={"provider": spec.provider_id, "mode": "device"},
+        )
+        return {
+            "flow_id": flow.id,
+            "provider_id": spec.provider_id,
+            "mode": "device",
+            "user_code": str(body["user_code"]),
+            "verification_uri": verification_uri,
+            "verification_uri_complete": complete_uri if isinstance(complete_uri, str) else None,
+            "authorization_url": complete_uri if isinstance(complete_uri, str) else verification_uri,
+            "interval": interval,
+            "expires_at": flow.expires_at,
+            "_browser_binding": None,
+        }
+
+
+def _bounded_int(v: Any, default: int, lo: int, hi: int) -> int:
+    if isinstance(v, bool) or not isinstance(v, int | float):
+        return default
+    return max(lo, min(hi, int(v)))
+
+
+async def poll_device(ctx: AppContext, *, project_id: str, flow_id: str) -> dict[str, Any]:
+    """Ask the provider once whether the user approved a device flow; connect on approval.
+
+    Callers poll no faster than the returned ``interval``; ``slow_down`` from the provider raises it.
+    """
+    async with ctx.db.session() as session:
+        flow = await session.get(OAuthFlow, flow_id)
+        if flow is None or flow.project_id != project_id:
+            raise NotFound("authorization request not found")
+        settled = flow.status != "pending"
+        cred = (
+            await session.get(Credential, flow.verifier_credential_id)
+            if flow.verifier_credential_id
+            else None
+        )
+        expired = flow.expires_at <= utcnow()
+        sealed = (
+            dict(
+                ctx.vault_.open(
+                    SealedSecret(
+                        kek_id=cred.kek_id,
+                        wrapped_dek=cred.wrapped_dek,
+                        ciphertext=cred.ciphertext,
+                        aad=cred.aad,
+                    ),
+                    _aad(flow.id),
+                )
+            )
+            if cred is not None and not expired and not settled
+            else None
+        )
+        spec = SPECS[flow.provider_id]
+    if settled:
+        return await get_flow(ctx, project_id=project_id, flow_id=flow_id)
+    if sealed is None or "device_code" not in sealed:
+        if expired:
+            await _fail(ctx, flow_id, "expired", None)
+            return await get_flow(ctx, project_id=project_id, flow_id=flow_id)
+        raise ValidationFailed("this authorization request is not a device sign-in")
+    interval = int(sealed.get("interval") or 5)
+    try:
+        resp = await ctx.upstream_client.post(
+            spec.exchange_url,
+            data={
+                "grant_type": DEVICE_GRANT,
+                "device_code": str(sealed["device_code"]),
+                "client_id": str(sealed.get("client_id") or ""),
+            },
+            headers={"accept": "application/json"},
+            timeout=20.0,
+        )
+    except httpx.HTTPError:
+        return {"flow_id": flow_id, "status": "pending", "interval": interval}  # transient (RFC 8628 3.5)
+    if resp.status_code >= 400:
+        try:
+            err = str((resp.json() or {}).get("error") or "")
+        except (ValueError, AttributeError):
+            err = ""
+        if err == "slow_down":
+            interval = min(interval + 5, 60)
+            await _store_interval(ctx, flow_id, sealed, interval)
+            return {"flow_id": flow_id, "status": "pending", "interval": interval}
+        if err == "authorization_pending" or resp.status_code >= 500 or resp.status_code == 429:
+            return {"flow_id": flow_id, "status": "pending", "interval": interval}
+        reason = {
+            "access_denied": "sign-in was declined on the provider's site",
+            "expired_token": "the code expired before it was approved; start again",
+        }.get(err, "the provider refused the sign-in")
+        await _fail(ctx, flow_id, "expired" if err == "expired_token" else "failed", reason)
+        return await get_flow(ctx, project_id=project_id, flow_id=flow_id)
+    secret = _token_secret(spec, resp, client_id=str(sealed.get("client_id") or ""))
+    if secret is None:
+        await _fail(ctx, flow_id, "failed", "the provider did not return a credential")
+        return await get_flow(ctx, project_id=project_id, flow_id=flow_id)
+    snapshot = await _claim(ctx, flow_id)
+    out = await _create(ctx, flow_id, snapshot, secret)
+    return {**await get_flow(ctx, project_id=project_id, flow_id=flow_id), "validation": out["validation"]}
+
+
+async def _store_interval(ctx: AppContext, flow_id: str, sealed: dict[str, Any], interval: int) -> None:
+    async with ctx.db.transaction() as session:
+        flow = await session.get(OAuthFlow, flow_id)
+        if flow is None or not flow.verifier_credential_id:
+            return
+        cred = await session.get(Credential, flow.verifier_credential_id)
+        if cred is None:
+            return
+        new = ctx.vault_.seal({**sealed, "interval": interval}, _aad(flow.id))
+        cred.kek_id, cred.wrapped_dek, cred.ciphertext, cred.aad = (
+            new.kek_id,
+            new.wrapped_dek,
+            new.ciphertext,
+            new.aad,
+        )
+
+
+async def _fail(ctx: AppContext, flow_id: str, status: str, error: str | None) -> None:
+    async with ctx.db.transaction() as session:
+        flow = await session.get(OAuthFlow, flow_id, with_for_update=True)
+        if flow is None or flow.status != "pending":
+            return
+        flow.status, flow.error, flow.completed_at = status, (error or None), utcnow()
+        await _shred(session, flow)
 
 
 async def _exchange(ctx: AppContext, spec: OAuthSpec, code: str, sealed: dict[str, Any]) -> dict[str, Any]:
@@ -314,6 +526,20 @@ def _token_secret(spec: OAuthSpec, resp: httpx.Response, *, client_id: str) -> d
 
 async def _finish(ctx: AppContext, flow_id: str, code: str) -> dict[str, Any]:
     """Exchange the code, create the connection, validate it. Each flow can complete once."""
+    sealed_flow = await _open_for_claim(ctx, flow_id)
+    if "device_code" in sealed_flow:
+        raise ValidationFailed("this is a device sign-in; it completes by polling, not with a code")
+    snapshot = await _claim(ctx, flow_id)
+    spec = SPECS[snapshot[2]]
+    try:
+        secret = await _exchange(ctx, spec, code, sealed_flow)
+    except AppError as exc:
+        await _mark_failed(ctx, flow_id, exc.message)
+        raise
+    return await _create(ctx, flow_id, snapshot, secret)
+
+
+async def _open_for_claim(ctx: AppContext, flow_id: str) -> dict[str, Any]:
     expired = False
     async with ctx.db.transaction() as session:
         flow = await session.get(OAuthFlow, flow_id, with_for_update=True)
@@ -324,34 +550,52 @@ async def _finish(ctx: AppContext, flow_id: str, code: str) -> dict[str, Any]:
         if flow.expires_at <= utcnow():
             flow.status, expired = "expired", True
             await _shred(session, flow)
-    if expired:  # raised after commit so the verifier is destroyed
-        raise ValidationFailed("this authorization request expired; start again")
+        else:
+            cred = (
+                await session.get(Credential, flow.verifier_credential_id)
+                if flow.verifier_credential_id
+                else None
+            )
+            if cred is None:
+                raise ValidationFailed("this authorization request is no longer usable; start again")
+            return dict(
+                ctx.vault_.open(
+                    SealedSecret(
+                        kek_id=cred.kek_id,
+                        wrapped_dek=cred.wrapped_dek,
+                        ciphertext=cred.ciphertext,
+                        aad=cred.aad,
+                    ),
+                    _aad(flow.id),
+                )
+            )
+    assert expired  # raised after commit so the verifier is destroyed
+    raise ValidationFailed("this authorization request expired; start again")
+
+
+async def _claim(ctx: AppContext, flow_id: str) -> tuple[str, str, str, str, int]:
+    """Mark the flow as used and destroy its sealed verifier; a concurrent completion now fails."""
     async with ctx.db.transaction() as session:
         flow = await session.get(OAuthFlow, flow_id, with_for_update=True)
         if flow is None or flow.status != "pending":
             raise ValidationFailed("this authorization request is no longer usable; start again")
-        cred = (
-            await session.get(Credential, flow.verifier_credential_id)
-            if flow.verifier_credential_id
-            else None
-        )
-        if cred is None:
-            raise ValidationFailed("this authorization request is no longer usable; start again")
-        sealed_flow = dict(
-            ctx.vault_.open(
-                SealedSecret(
-                    kek_id=cred.kek_id, wrapped_dek=cred.wrapped_dek, ciphertext=cred.ciphertext, aad=cred.aad
-                ),
-                _aad(flow.id),
-            )
-        )
-        flow.status = "exchanging"  # claims the flow: a concurrent callback now sees it as used
+        flow.status = "exchanging"
         await _shred(session, flow)
-        snapshot = (flow.project_id, flow.user_id, flow.provider_id, flow.display_name, flow.priority)
+        return (flow.project_id, flow.user_id, flow.provider_id, flow.display_name, flow.priority)
+
+
+async def _mark_failed(ctx: AppContext, flow_id: str, message: str) -> None:
+    async with ctx.db.transaction() as session:
+        flow = await session.get(OAuthFlow, flow_id)
+        if flow is not None:
+            flow.status, flow.error, flow.completed_at = "failed", message[:300], utcnow()
+
+
+async def _create(
+    ctx: AppContext, flow_id: str, snapshot: tuple[str, str, str, str, int], secret: dict[str, Any]
+) -> dict[str, Any]:
     project_id, user_id, provider_id, display_name, priority = snapshot
-    spec = SPECS[provider_id]
     try:
-        secret = await _exchange(ctx, spec, code, sealed_flow)
         async with ctx.db.transaction() as session:
             user = await session.get(User, user_id)
             if user is None or not user.is_active:
@@ -376,10 +620,7 @@ async def _finish(ctx: AppContext, flow_id: str, code: str) -> dict[str, Any]:
             assert flow is not None
             flow.status, flow.connection_id, flow.completed_at = "completed", cid, utcnow()
     except AppError as exc:
-        async with ctx.db.transaction() as session:
-            flow = await session.get(OAuthFlow, flow_id)
-            if flow is not None:
-                flow.status, flow.error, flow.completed_at = "failed", exc.message[:300], utcnow()
+        await _mark_failed(ctx, flow_id, exc.message)
         raise
     result = await conns.validate(ctx, cid, user_id)
     return {"connection_id": cid, "project_id": project_id, "validation": result.__dict__}

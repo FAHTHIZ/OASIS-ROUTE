@@ -56,6 +56,7 @@ class ProviderOut(ORM):
     notes: str
     endpoints: list[EndpointOut] = []
     oauth_available: bool = False
+    oauth_device: bool = False  # sign in by entering a short code on any device (RFC 8628)
 
 
 @router.get("/providers", response_model=list[ProviderOut])
@@ -74,6 +75,8 @@ async def list_providers(
         po = ProviderOut.model_validate(p)
         po.endpoints = by.get(p.id, [])
         po.oauth_available = oauth_flows.available(ctx, p.id)
+        spec = oauth_flows.SPECS.get(p.id)
+        po.oauth_device = po.oauth_available and spec is not None and spec.device_url is not None
         out.append(po)
     return out
 
@@ -346,6 +349,12 @@ class QuickConnectIn(BaseModel):
         "variables are ignored and never stored or echoed.",
     )
     keys: list[QuickKey] = Field(default_factory=list, max_length=key_detect.MAX_KEYS)
+    providers_by_line: dict[int, str] = Field(
+        default_factory=dict,
+        max_length=key_detect.MAX_KEYS,
+        description="Provider for keys whose format several providers share: {line number in text: "
+        "provider_id}, using the `line` reported by a dry run.",
+    )
     accept_terms: bool = Field(
         default=False,
         description="Confirms you hold every one of these provider accounts yourself and accept each "
@@ -367,7 +376,13 @@ def _detected(body: QuickConnectIn) -> tuple[list[key_detect.DetectedKey], int]:
         if len(raw.encode()) > key_detect.MAX_TEXT_BYTES:
             raise ValidationFailed(f"pasted text is limited to {key_detect.MAX_TEXT_BYTES} bytes")
         parsed = key_detect.parse_text(raw)
-        found += parsed.keys
+        for d in parsed.keys:
+            chosen = body.providers_by_line.get(d.line or 0)
+            if chosen:
+                line = d.line
+                d = key_detect.detect(d.api_key, provider_id=chosen, env_name=d.env_name)
+                d.line = line
+            found.append(d)
         ignored = parsed.ignored_lines
     seen = {d.api_key for d in found}
     for k in body.keys:
@@ -402,6 +417,7 @@ async def quick_connect_keys(
                     "detected_by": d.method,
                     "candidates": d.candidates,
                     "env_name": d.env_name,
+                    "line": d.line,
                     "message": d.note,
                 }
                 for d in found

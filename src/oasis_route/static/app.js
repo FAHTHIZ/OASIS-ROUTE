@@ -85,6 +85,19 @@ function quickConnectCard(back) {
   const accept = el("input", { type: "checkbox" });
   const free = el("input", { type: "checkbox" });
   const out = el("div", {});
+  let choices = {}; // line number -> provider chosen for keys several providers could have issued
+  const providerCell = (r) => {
+    if (r.provider_id) return r.provider_id;
+    if (!(r.candidates && r.candidates.length) || !r.line) return "unknown";
+    const sel = el(
+      "select",
+      { onchange: (ev) => { if (ev.target.value) choices[r.line] = ev.target.value; else delete choices[r.line]; } },
+      el("option", { value: "" }, "Which provider issued it?"),
+      r.candidates.map((c) => el("option", { value: c }, c))
+    );
+    if (choices[r.line]) sel.value = choices[r.line];
+    return sel;
+  };
   const showResults = (data) => {
     const rows = data.results || [];
     const summary = data.dry_run
@@ -97,14 +110,16 @@ function quickConnectCard(back) {
       table(
         [
           { label: "Key", get: (r) => el("code", {}, r.key_hint) },
-          { label: "Provider", get: (r) => r.provider_id || (r.candidates && r.candidates.length ? `one of: ${r.candidates.join(", ")}` : "unknown") },
+          { label: "Provider", get: (r) => (data.dry_run ? providerCell(r) : r.provider_id || (r.candidates && r.candidates.length ? `one of: ${r.candidates.join(", ")}` : "unknown")) },
           { label: "Result", get: (r) => (r.outcome ? OUTCOME_TEXT[r.outcome] || r.outcome : `detected by ${r.detected_by}`) },
           { label: "Free models", num: true, get: (r) => (r.outcome === "connected" ? fmt(r.free_models) : "—") },
           {
             label: "Details",
             get: (r) =>
               r.outcome === "needs_provider" || r.detected_by === "ambiguous" || r.detected_by === "unknown"
-                ? `${r.message || ""} Put it on a line such as MISTRAL_API_KEY=<key> to say which provider issued it.`
+                ? data.dry_run && r.candidates && r.candidates.length
+                  ? "Pick the provider, then press Connect all."
+                  : `${r.message || ""} Run Check keys and pick its provider, or write it as MISTRAL_API_KEY=<key>.`
                 : r.message || "",
           },
         ],
@@ -117,9 +132,18 @@ function quickConnectCard(back) {
     try {
       const data = await api(`/api/v1/projects/${pid()}/connections/quick`, {
         method: "POST",
-        body: { text: text.value, accept_terms: accept.checked, free_tier: free.checked, dry_run: dryRun },
+        body: {
+          text: text.value,
+          accept_terms: accept.checked,
+          free_tier: free.checked,
+          dry_run: dryRun,
+          providers_by_line: choices,
+        },
       });
-      if (!dryRun) text.value = "";
+      if (!dryRun) {
+        text.value = "";
+        choices = {};
+      }
       showResults(data);
     } catch (e) {
       out.replaceChildren(errorBox(e));
@@ -173,6 +197,36 @@ async function startOAuth(provider, acceptTerms, msg, back) {
       safeLink(f.authorization_url, `Open ${provider.name} again`)
     );
     pollFlow(f.flow_id, Date.now() + 10 * 60 * 1000);
+  } catch (e) {
+    msg.replaceChildren(errorBox(e));
+  }
+}
+
+// Device-code sign-in: show a short code the user enters on the provider's site from any device.
+async function startDevice(provider, acceptTerms, msg, back) {
+  const poll = async (flowId, interval, deadline) => {
+    if (Date.now() > deadline) return msg.replaceChildren("The code expired. Try again.");
+    try {
+      const f = await api(`/api/v1/projects/${pid()}/connections/oauth/${flowId}/poll`, { method: "POST" });
+      if (f.status === "completed") return render(back);
+      if (f.status !== "pending") return msg.replaceChildren(errorBox(new Error(f.error || `Sign-in ${f.status}. Try again.`)));
+      interval = f.interval || interval;
+    } catch (e) {
+      return msg.replaceChildren(errorBox(e));
+    }
+    setTimeout(() => poll(flowId, interval, deadline), interval * 1000);
+  };
+  try {
+    const f = await api(`/api/v1/projects/${pid()}/connections/oauth/start`, {
+      method: "POST",
+      body: { provider_id: provider.id, accept_terms: acceptTerms, mode: "device" },
+    });
+    msg.replaceChildren(
+      el("p", {}, `On any device signed in to ${provider.name}, open `, safeLink(f.verification_uri, f.verification_uri), " and enter:"),
+      el("p", {}, el("code", { style: "font-size:1.6em;letter-spacing:.15em" }, f.user_code)),
+      el("p", { class: "muted" }, "This page connects automatically once you approve.")
+    );
+    poll(f.flow_id, f.interval || 5, new Date(f.expires_at).getTime());
   } catch (e) {
     msg.replaceChildren(errorBox(e));
   }
@@ -604,7 +658,16 @@ const views = {
                 },
                 `Sign in with ${p.name}`
               )
-            )
+            ),
+            oauthProviders
+              .filter((p) => p.oauth_device)
+              .map((p) =>
+                el(
+                  "button",
+                  { type: "button", class: "secondary", onclick: () => startDevice(p, oauthAccept.checked, oauthMsg, "connections") },
+                  `${p.name} with a code`
+                )
+              )
           ),
           oauthMsg
         )
