@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="520" viewBox="0 0 1280 520" role="img" aria-labelledby="tt td">
+<title id="tt">Total free LLM capacity per month: about 1.7B tokens</title>
+<desc id="td">Every free tier listed by OASIS Route, FreeLLMAPI and OmniRoute, one account per provider, shared pools counted once, checked 2026-11-23. 1.7B tokens a month for 20,000-token agent requests, 626M for 1,500-token chat requests. Verified official limits alone: 71M. With OpenRouter's one-time unlock: 2.3B. Theoretical ceiling: 52.5B. FreeLLMAPI claims 10.1B, OmniRoute 1.6B.</desc>
+<defs>
+<linearGradient id="tg" x1="0" x2="1"><stop offset="0" stop-color="#35DFC1"/><stop offset=".55" stop-color="#62A9FF"/><stop offset="1" stop-color="#A78BFA"/></linearGradient>
+<radialGradient id="th" cx=".2" cy=".35" r=".6"><stop offset="0" stop-color="#A78BFA" stop-opacity=".16"/><stop offset="1" stop-color="#A78BFA" stop-opacity="0"/></radialGradient>
+</defs>
+<style>@media (prefers-reduced-motion: no-preference) {
+.b0{transform-box:fill-box;transform-origin:left;animation:grow 1.3s 0.30s cubic-bezier(.2,.7,.1,1) both}.b1{transform-box:fill-box;transform-origin:left;animation:grow 1.3s 0.48s cubic-bezier(.2,.7,.1,1) both}.b2{transform-box:fill-box;transform-origin:left;animation:grow 1.3s 0.66s cubic-bezier(.2,.7,.1,1) both}.b3{transform-box:fill-box;transform-origin:left;animation:grow 1.3s 0.84s cubic-bezier(.2,.7,.1,1) both}.b4{transform-box:fill-box;transform-origin:left;animation:grow 1.3s 1.02s cubic-bezier(.2,.7,.1,1) both}
+.big{animation:rise 1s .1s cubic-bezier(.2,.7,.1,1) both}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+}</style>
+<rect x=".5" y=".5" width="1279" height="519" rx="26" fill="#111B2B" stroke="#22344A"/>
+<rect x=".5" y=".5" width="1279" height="519" rx="26" fill="url(#th)"/>
+<text x="48" y="64" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="800" fill="#35DFC1" letter-spacing=".16em">TOTAL FREE LLM CAPACITY · PER MONTH</text>
+<g class="big">
+<text x="44" y="190" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="124" font-weight="800" fill="url(#tg)" letter-spacing="-.04em">~1.7B</text>
+<text x="52" y="236" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#E8F1FC">free tokens every month</text>
+</g>
+<text x="52" y="276" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#93A8C0">Every free tier anyone lists, signed up once each.</text>
+<text x="52" y="298" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#93A8C0">Shared pools counted once · coding-agent requests</text>
+<text x="52" y="320" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#93A8C0">(626M at chat size) · 29 providers · recurring only</text>
+<line x1="52" y1="356" x2="560" y2="356" stroke="#22344A"/>
+<text x="52" y="388" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="800" fill="#93A8C0" letter-spacing=".14em">WHAT OTHERS ADVERTISE</text>
+<text x="52" y="420" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#E8F1FC">FreeLLMAPI <tspan fill="#F5B84A">10.1B</tspan><tspan font-weight="400" fill="#93A8C0">  adds shared pools once per model</tspan></text>
+<text x="52" y="446" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#E8F1FC">OmniRoute <tspan fill="#F5B84A">1.6B</tspan><tspan font-weight="400" fill="#93A8C0">  ~1B is Mistral, which has no free API</tspan></text>
+<text x="52" y="488" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace" font-size="12.5" fill="#93A8C0">checked 2026-11-23 · python scripts/ecosystem_capacity.py</text>
+<text x="632" y="76" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="800" fill="#93A8C0" letter-spacing=".14em">HOW THE TOTAL BUILDS UP</text>
+<text x="1232" y="76" text-anchor="end" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">log scale · tokens/month</text>
+<g class="t0">
+
+<circle cx="632" cy="127" r="5" fill="#35DFC1"/>
+<text x="648" y="132" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="800" fill="#E8F1FC">Verified official limits</text>
+<text x="648" y="152" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">no purchase, provider docs only</text>
+<rect x="920" y="120" width="220" height="12" rx="6" fill="#2A3B52"/>
+<rect class="b0" x="920" y="120" width="46.9" height="12" rx="6" fill="#35DFC1"/>
+<text x="1232" y="131" text-anchor="end" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="800" fill="#35DFC1">71M</text>
+</g><g class="t1">
+
+<circle cx="632" cy="193" r="5" fill="#62A9FF"/>
+<text x="648" y="198" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="800" fill="#E8F1FC">Every first-party free tier</text>
+<text x="648" y="218" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">labs and inference clouds</text>
+<rect x="920" y="186" width="220" height="12" rx="6" fill="#2A3B52"/>
+<rect class="b1" x="920" y="186" width="89.2" height="12" rx="6" fill="#62A9FF"/>
+<text x="1232" y="197" text-anchor="end" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="800" fill="#62A9FF">418M</text>
+</g><g class="t2">
+<rect x="610" y="238" width="636" height="60" rx="14" fill="#A78BFA" fill-opacity=".10" stroke="#A78BFA" stroke-opacity=".55"/>
+<circle cx="632" cy="259" r="5" fill="#A78BFA"/>
+<text x="648" y="264" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="800" fill="#E8F1FC">Everything listed</text>
+<text x="648" y="284" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">first-party + gateways, one account each</text>
+<rect x="920" y="252" width="220" height="12" rx="6" fill="#2A3B52"/>
+<rect class="b2" x="920" y="252" width="122.4" height="12" rx="6" fill="#A78BFA"/>
+<text x="1232" y="263" text-anchor="end" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="800" fill="#A78BFA">1.7B</text>
+</g><g class="t3">
+
+<circle cx="632" cy="325" r="5" fill="#F5B84A"/>
+<text x="648" y="330" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="800" fill="#E8F1FC">+ OpenRouter unlock</text>
+<text x="648" y="350" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">one-time 10 credits: 1,000 free requests/day</text>
+<rect x="920" y="318" width="220" height="12" rx="6" fill="#2A3B52"/>
+<rect class="b3" x="920" y="318" width="129.4" height="12" rx="6" fill="#F5B84A"/>
+<text x="1232" y="329" text-anchor="end" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="800" fill="#F5B84A">2.3B</text>
+</g><g class="t4">
+
+<circle cx="632" cy="391" r="5" fill="#93A8C0"/>
+<text x="648" y="396" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="800" fill="#E8F1FC">Theoretical ceiling</text>
+<text x="648" y="416" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">rate-limit-only tiers run 24/7</text>
+<rect x="920" y="384" width="220" height="12" rx="6" fill="#2A3B52"/>
+<rect class="b4" x="920" y="384" width="204.6" height="12" rx="6" fill="#93A8C0"/>
+<text x="1232" y="395" text-anchor="end" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="800" fill="#93A8C0">52.5B</text>
+</g>
+<text x="632" y="474" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#93A8C0">Mistral is excluded as disputed; 15 tiers with no published cap are not counted.</text>
+<text x="632" y="494" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#93A8C0">Credits at $1 per million tokens. Every number is reproducible from the script.</text>
+</svg>

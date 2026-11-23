@@ -23,6 +23,7 @@
   <a href="docs/DEVELOPMENT.md"><img alt="Python 3.12+" src="./assets/readme/badge-python.svg" height="28" /></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="./assets/readme/badge-license.svg" height="28" /></a>
   <br>
+  <a href="docs/FREE_TIER_CAPACITY.md#the-whole-ecosystem"><img alt="Total: about 1.7B free tokens a month" src="./assets/readme/badge-total.svg" height="28" /></a>
   <a href="docs/FREE_TIER_CAPACITY.md"><img alt="Free tier: about 32M tokens a month" src="./assets/readme/badge-free-tokens.svg" height="28" /></a>
   <a href="docs/FREE_TIER_CAPACITY.md"><img alt="Agent: about 650M tokens a month" src="./assets/readme/badge-agent-tokens.svg" height="28" /></a>
   <a href="docs/adr/0002-free-only-spend-policy.md"><img alt="Spend: free-only by default" src="./assets/readme/badge-spend.svg" height="28" /></a>
@@ -39,7 +40,7 @@
 
 <p align="center">
   <a href="#quickstart"><b>Quickstart</b></a> &nbsp;·&nbsp;
-  <a href="#how-many-free-tokens"><b>How many free tokens?</b></a> &nbsp;·&nbsp;
+  <a href="#how-many-free-tokens"><b>How many free tokens? (~1.7B/mo)</b></a> &nbsp;·&nbsp;
   <a href="#why-oasis-route">Why</a> &nbsp;·&nbsp;
   <a href="#discover-free-capacity">Discover</a> &nbsp;·&nbsp;
   <a href="#how-it-works">How it works</a> &nbsp;·&nbsp;
@@ -181,6 +182,29 @@ docker compose run --rm api bootstrap --email you@example.com
 ~~~
 
 ## How many free tokens?
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/total-dark.svg" />
+    <img src="./assets/readme/total-light.svg" alt="Total free LLM capacity per month: about 1.7 billion tokens. Counts every free tier listed by OASIS Route, FreeLLMAPI and OmniRoute, signed up once each, shared pools counted once, for 20,000-token coding-agent requests (626 million at chat size), across 29 providers, recurring only. Build-up: verified official limits 71M, every first-party tier 418M, everything listed 1.7B, plus the OpenRouter one-time unlock 2.3B, theoretical ceiling 52.5B. FreeLLMAPI advertises 10.1B and OmniRoute 1.62B." width="100%" />
+  </picture>
+</p>
+
+### The total
+
+If you sign up **once** at every free LLM tier anyone lists (official providers plus the gateways FreeLLMAPI and OmniRoute track) and count every shared pool only once, you get:
+
+| Layer | Chat (1,500 tokens a request) | Coding agent (20,000 tokens a request) |
+|---|---|---|
+| Verified official limits, nothing bought | ~32M | ~71M |
+| Every first-party free tier (labs and inference clouds) | ~256M | ~418M |
+| **Everything listed, one account each, recurring** | **~626M** | **~1.7B** |
+| + OpenRouter's one-time 10-credit unlock | ~669M | ~2.3B |
+| + rate-limit-only tiers (NVIDIA, SEA-LION, OVH…) run 24/7 | ~4.4B (ceiling) | ~52.5B (ceiling) |
+
+**Bottom line: about 1.7 billion free tokens a month in total, of which about 70 million are on official, verified limits.** [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi) advertises 10.1B because it adds each model's own budget label even when the provider shares one pool across all of them (26 Cloudflare models × ~15M against a single 10,000-neuron daily budget, for example). Run its own public catalog through the same method and it sums to 1.47B. Most of [OmniRoute's 1.62B](https://github.com/cheaper-inference/OmniRoute/blob/main/docs/reference/FREE_TIERS.md) is Mistral, which has no free API access. Every number on the card comes from `python scripts/ecosystem_capacity.py`, and the per-pool table is in [the whole-ecosystem section](docs/FREE_TIER_CAPACITY.md#the-whole-ecosystem).
+
+### What OASIS Route routes today
 
 <p align="center">
   <picture>

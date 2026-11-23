@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "assets" / "readme"
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import ecosystem_capacity as eco  # noqa: E402
 import free_tier_capacity as cap  # noqa: E402
 
 FONT = "Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
@@ -283,6 +284,82 @@ def capacity_chart(t: Theme) -> None:
     write(f"capacity-{t.name}.svg", svg)
 
 
+# ---------------------------------------------------------------------------------------------- total
+
+
+def total_card(t: Theme) -> None:
+    h = eco.headline()
+    tiers = [
+        ("Verified official limits", "no purchase, provider docs only", h["verified_agent"], t.teal),
+        ("Every first-party free tier", "labs and inference clouds", h["first_party_agent"], t.blue),
+        ("Everything listed", "first-party + gateways, one account each", h["all_agent"], t.violet),
+        ("+ OpenRouter unlock", "one-time 10 credits: 1,000 free requests/day", h["unlock_agent"], t.amber),
+        ("Theoretical ceiling", "rate-limit-only tiers run 24/7", h["ceiling_agent"], t.muted),
+    ]
+    lo, hi = 7.0, 11.0
+    bx0, bx1 = 920, 1140
+
+    def xpos(v: float) -> float:
+        return bx0 + (math.log10(max(v, 10**lo)) - lo) / (hi - lo) * (bx1 - bx0)
+
+    rows = []
+    for i, (title, sub, v, c) in enumerate(tiers):
+        y = 128 + i * 66
+        hl = i == 2
+        rows.append(
+            f"""<g class="t{i}">
+{f'<rect x="610" y="{y - 22}" width="636" height="60" rx="14" fill="{t.violet}" fill-opacity=".10" stroke="{t.violet}" stroke-opacity=".55"/>' if hl else ""}
+<circle cx="632" cy="{y - 1}" r="5" fill="{c}"/>
+<text x="648" y="{y + 4}" font-family="{FONT}" font-size="15" font-weight="800" fill="{t.text}">{escape(title)}</text>
+<text x="648" y="{y + 24}" font-family="{FONT}" font-size="12" fill="{t.muted}">{escape(sub)}</text>
+<rect x="{bx0}" y="{y - 8}" width="{bx1 - bx0}" height="12" rx="6" fill="{t.faint}"/>
+<rect class="b{i}" x="{bx0}" y="{y - 8}" width="{xpos(v) - bx0:.1f}" height="12" rx="6" fill="{c}"/>
+<text x="1232" y="{y + 3}" text-anchor="end" font-family="{FONT}" font-size="16" font-weight="800" fill="{c if i < 4 else t.muted}">{fmt_tokens(v)}</text>
+</g>"""
+        )
+    anim = "".join(
+        f".b{i}{{transform-box:fill-box;transform-origin:left;animation:grow 1.3s {0.3 + i * 0.18:.2f}s cubic-bezier(.2,.7,.1,1) both}}"
+        for i in range(len(tiers))
+    )
+    claims = [(label.split(" (")[0], v) for label, v, _, _ in eco.CLAIMS]
+    fl, omni = claims[0][1], claims[2][1]
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="520" viewBox="0 0 1280 520" role="img" aria-labelledby="tt td">
+<title id="tt">Total free LLM capacity per month: about {fmt_tokens(h["all_agent"])} tokens</title>
+<desc id="td">Every free tier listed by OASIS Route, FreeLLMAPI and OmniRoute, one account per provider, shared pools counted once, checked {eco.CHECKED}. {fmt_tokens(h["all_agent"])} tokens a month for 20,000-token agent requests, {fmt_tokens(h["all_chat"])} for 1,500-token chat requests. Verified official limits alone: {fmt_tokens(h["verified_agent"])}. With OpenRouter's one-time unlock: {fmt_tokens(h["unlock_agent"])}. Theoretical ceiling: {fmt_tokens(h["ceiling_agent"])}. FreeLLMAPI claims {fmt_tokens(fl)}, OmniRoute {fmt_tokens(omni)}.</desc>
+<defs>
+<linearGradient id="tg" x1="0" x2="1"><stop offset="0" stop-color="{t.teal}"/><stop offset=".55" stop-color="{t.blue}"/><stop offset="1" stop-color="{t.violet}"/></linearGradient>
+<radialGradient id="th" cx=".2" cy=".35" r=".6"><stop offset="0" stop-color="{t.violet}" stop-opacity=".16"/><stop offset="1" stop-color="{t.violet}" stop-opacity="0"/></radialGradient>
+</defs>
+<style>{REDUCED}
+{anim}
+.big{{animation:rise 1s .1s cubic-bezier(.2,.7,.1,1) both}}
+@keyframes grow{{from{{transform:scaleX(0)}}to{{transform:scaleX(1)}}}}
+@keyframes rise{{from{{opacity:0;transform:translateY(12px)}}to{{opacity:1;transform:none}}}}
+}}</style>
+<rect x=".5" y=".5" width="1279" height="519" rx="26" fill="{t.card}" stroke="{t.border}"/>
+<rect x=".5" y=".5" width="1279" height="519" rx="26" fill="url(#th)"/>
+<text x="48" y="64" font-family="{FONT}" font-size="13" font-weight="800" fill="{t.teal}" letter-spacing=".16em">TOTAL FREE LLM CAPACITY · PER MONTH</text>
+<g class="big">
+<text x="44" y="190" font-family="{FONT}" font-size="124" font-weight="800" fill="url(#tg)" letter-spacing="-.04em">~{fmt_tokens(h["all_agent"])}</text>
+<text x="52" y="236" font-family="{FONT}" font-size="26" font-weight="700" fill="{t.text}">free tokens every month</text>
+</g>
+<text x="52" y="276" font-family="{FONT}" font-size="15" fill="{t.muted}">Every free tier anyone lists, signed up once each.</text>
+<text x="52" y="298" font-family="{FONT}" font-size="15" fill="{t.muted}">Shared pools counted once · coding-agent requests</text>
+<text x="52" y="320" font-family="{FONT}" font-size="15" fill="{t.muted}">({fmt_tokens(h["all_chat"])} at chat size) · {h["providers"]} providers · recurring only</text>
+<line x1="52" y1="356" x2="560" y2="356" stroke="{t.border}"/>
+<text x="52" y="388" font-family="{FONT}" font-size="12" font-weight="800" fill="{t.muted}" letter-spacing=".14em">WHAT OTHERS ADVERTISE</text>
+<text x="52" y="420" font-family="{FONT}" font-size="15" font-weight="700" fill="{t.text}">FreeLLMAPI <tspan fill="{t.amber}">{fmt_tokens(fl)}</tspan><tspan font-weight="400" fill="{t.muted}">  adds shared pools once per model</tspan></text>
+<text x="52" y="446" font-family="{FONT}" font-size="15" font-weight="700" fill="{t.text}">OmniRoute <tspan fill="{t.amber}">{fmt_tokens(omni)}</tspan><tspan font-weight="400" fill="{t.muted}">  ~1B is Mistral, which has no free API</tspan></text>
+<text x="52" y="488" font-family="{MONO}" font-size="12.5" fill="{t.muted}">checked {eco.CHECKED} · python scripts/ecosystem_capacity.py</text>
+<text x="632" y="76" font-family="{FONT}" font-size="12" font-weight="800" fill="{t.muted}" letter-spacing=".14em">HOW THE TOTAL BUILDS UP</text>
+<text x="1232" y="76" text-anchor="end" font-family="{FONT}" font-size="12" fill="{t.muted}">log scale · tokens/month</text>
+{"".join(rows)}
+<text x="632" y="474" font-family="{FONT}" font-size="12.5" fill="{t.muted}">Mistral is excluded as disputed; 15 tiers with no published cap are not counted.</text>
+<text x="632" y="494" font-family="{FONT}" font-size="12.5" fill="{t.muted}">Credits at $1 per million tokens. Every number is reproducible from the script.</text>
+</svg>"""
+    write(f"total-{t.name}.svg", svg)
+
+
 # ------------------------------------------------------------------------------------------ quickstart
 
 
@@ -418,13 +495,13 @@ def social_svg(floor_chat: float, agent: float, tests: int) -> str:
 <text x="80" y="414" font-family="{FONT}" font-size="24" font-weight="500" fill="#A9BBD0">honest failover. OpenAI and Anthropic compatible.</text>
 <g font-family="{FONT}" font-weight="800">
 <rect x="80" y="468" width="240" height="96" rx="18" fill="#111B2B" stroke="#22344A"/>
-<text x="104" y="516" font-size="38" fill="{TEAL}">~{fmt_tokens(floor_chat)}</text><text x="104" y="546" font-size="15" font-weight="600" fill="#93A8C0">free tokens / month</text>
+<text x="104" y="516" font-size="38" fill="{TEAL}">~{fmt_tokens(eco.headline()["all_agent"])}</text><text x="104" y="546" font-size="15" font-weight="600" fill="#93A8C0">total free tokens / mo</text>
 <rect x="340" y="468" width="240" height="96" rx="18" fill="#111B2B" stroke="#22344A"/>
-<text x="364" y="516" font-size="38" fill="{VIOLET}">~{fmt_tokens(agent)}</text><text x="364" y="546" font-size="15" font-weight="600" fill="#93A8C0">agent tokens / month*</text>
+<text x="364" y="516" font-size="38" fill="{VIOLET}">~{fmt_tokens(agent)}</text><text x="364" y="546" font-size="15" font-weight="600" fill="#93A8C0">built-in, agent use*</text>
 <rect x="600" y="468" width="240" height="96" rx="18" fill="#111B2B" stroke="#22344A"/>
 <text x="624" y="516" font-size="38" fill="{BLUE}">{tests}</text><text x="624" y="546" font-size="15" font-weight="600" fill="#93A8C0">tests · SQLite + Postgres</text>
 </g>
-<text x="80" y="600" font-family="{FONT}" font-size="15" fill="#6F86A0">* after OpenRouter's one-time 10-credit unlock · github.com/FAHTHIZ/OASIS-ROUTE</text>
+<text x="80" y="600" font-family="{FONT}" font-size="15" fill="#6F86A0">every listed free tier, one account each · * after OpenRouter's 10-credit unlock</text>
 <g transform="translate(930 170)" fill="none" stroke-linecap="round">
 <path d="M0 150C80 150 90 60 170 60" stroke="{TEAL}" stroke-width="3" stroke-opacity=".8"/>
 <path d="M0 150H170" stroke="{BLUE}" stroke-width="3" stroke-opacity=".8"/>
@@ -450,6 +527,7 @@ def main() -> None:
         ("api", "API", "OpenAI · Anthropic", "api", TEAL, "#19B89B"),
         ("free-tokens", "FREE TIER", f"~{fmt_tokens(floor_chat)} tok/mo", "token", TEAL, BLUE),
         ("agent-tokens", "AGENT", f"~{fmt_tokens(unlocked_agent)} tok/mo", "agent", VIOLET, "#8A6CF0"),
+        ("total", "TOTAL", f"~{fmt_tokens(eco.headline()['all_agent'])} tok/mo", "token", VIOLET, BLUE),
         ("providers", "PROVIDERS", "12 + any OpenAI-compatible", "route", BLUE, VIOLET),
         ("tests", "TESTS", f"{tests}", "tests", TEAL, "#19B89B"),
         ("spend", "SPEND", "free-only by default", "coin", AMBER, "#E09A2B"),
@@ -484,6 +562,7 @@ def main() -> None:
             ],
         )
         capacity_chart(t)
+        total_card(t)
         quickstart(t)
         divider(t)
         for name in FEATURE_ICONS:
