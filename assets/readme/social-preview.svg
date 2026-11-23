@@ -15,13 +15,13 @@
 <text x="80" y="414" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="500" fill="#A9BBD0">honest failover. OpenAI and Anthropic compatible.</text>
 <g font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-weight="800">
 <rect x="80" y="468" width="240" height="96" rx="18" fill="#111B2B" stroke="#22344A"/>
-<text x="104" y="516" font-size="38" fill="#35DFC1">~32M</text><text x="104" y="546" font-size="15" font-weight="600" fill="#93A8C0">free tokens / month</text>
+<text x="104" y="516" font-size="38" fill="#35DFC1">~1.7B</text><text x="104" y="546" font-size="15" font-weight="600" fill="#93A8C0">total free tokens / mo</text>
 <rect x="340" y="468" width="240" height="96" rx="18" fill="#111B2B" stroke="#22344A"/>
-<text x="364" y="516" font-size="38" fill="#A78BFA">~650M</text><text x="364" y="546" font-size="15" font-weight="600" fill="#93A8C0">agent tokens / month*</text>
+<text x="364" y="516" font-size="38" fill="#A78BFA">~650M</text><text x="364" y="546" font-size="15" font-weight="600" fill="#93A8C0">built-in, agent use*</text>
 <rect x="600" y="468" width="240" height="96" rx="18" fill="#111B2B" stroke="#22344A"/>
 <text x="624" y="516" font-size="38" fill="#62A9FF">319</text><text x="624" y="546" font-size="15" font-weight="600" fill="#93A8C0">tests · SQLite + Postgres</text>
 </g>
-<text x="80" y="600" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#6F86A0">* after OpenRouter's one-time 10-credit unlock · github.com/FAHTHIZ/OASIS-ROUTE</text>
+<text x="80" y="600" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#6F86A0">every listed free tier, one account each · * after OpenRouter's 10-credit unlock</text>
 <g transform="translate(930 170)" fill="none" stroke-linecap="round">
 <path d="M0 150C80 150 90 60 170 60" stroke="#35DFC1" stroke-width="3" stroke-opacity=".8"/>
 <path d="M0 150H170" stroke="#62A9FF" stroke-width="3" stroke-opacity=".8"/>

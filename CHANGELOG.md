@@ -6,6 +6,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Whole-ecosystem free-capacity total: `scripts/ecosystem_capacity.py` counts every free tier listed by OASIS Route, the FreeLLMAPI catalog and OmniRoute, once per account with shared pools counted once. About 1.7B tokens a month for agent-sized requests (626M at chat size), 2.3B with OpenRouter's one-time unlock. A new README card and the `TOTAL` badge show it, next to FreeLLMAPI's 10.1B and OmniRoute's 1.62B claims.
 - Free-tier capacity re-checked on 2026-11-23: about 30M chat / 70M agent tokens a month with no purchase, about 650M agent tokens after a one-time 10 OpenRouter credits, and a 2.7B theoretical ceiling with NVIDIA's prototyping tier. `scripts/free_tier_capacity.py` now models request-per-month caps (Cohere) and Cloudflare neurons, prints four scenarios, and reflects SambaNova's reduced model list. See [docs/FREE_TIER_CAPACITY.md](docs/FREE_TIER_CAPACITY.md).
 - Redesigned README with generated, theme-aware artwork (`scripts/readme_assets.py` writes `assets/readme/*.svg` and the social preview), a capacity chart and a comparison with OmniRoute and other gateways.
 - Community files: issue forms (bug, feature idea, provider or free-tier update), pull request template, `SUPPORT.md`, `CITATION.cff` and Dependabot for uv, GitHub Actions and Docker.
