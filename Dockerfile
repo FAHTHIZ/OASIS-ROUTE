@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Oasis Route: API + gateway + console, with the background worker supervised in-process by default.
 
-FROM python:3.12-slim AS build
+FROM python:3.15-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
@@ -10,7 +10,7 @@ RUN uv sync --locked --no-dev --no-install-project --extra otel
 COPY src ./src
 RUN uv sync --locked --no-dev --extra otel --no-editable
 
-FROM python:3.12-slim AS runtime
+FROM python:3.15-slim AS runtime
 # Security updates for the base OS; drop the unused system installer tooling from the final image.
 RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 RUN python -m pip uninstall -y pip setuptools wheel || true
