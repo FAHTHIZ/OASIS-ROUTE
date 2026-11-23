@@ -1,45 +1,245 @@
-# OASIS Route
+<a id="readme-top"></a>
 
 <p align="center">
-  <img src="./assets/oasis-route-hero.svg" alt="OASIS Route — an animated illustration of a request moving through one gateway to user-authorized inference providers" width="100%" />
+  <img src="./assets/oasis-route-hero.svg" alt="OASIS Route: an animated illustration of a request moving through one gateway to user-authorized inference providers" width="100%" />
 </p>
 
 <p align="center">
-  <a href="https://github.com/FAHTHIZ/OASIS-ROUTE/actions/workflows/ci.yml"><img src="https://github.com/FAHTHIZ/OASIS-ROUTE/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python 3.12+" />
-  <img src="https://img.shields.io/badge/API-OpenAI%20%2B%20Anthropic-11A88B" alt="OpenAI and Anthropic compatible APIs" />
-  <img src="https://img.shields.io/github/license/FAHTHIZ/OASIS-ROUTE?color=8B75E5" alt="Apache 2.0 license" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/tagline-dark.svg" />
+    <img src="./assets/readme/tagline-light.svg" alt="Every free token you are entitled to. One key. Verified free tiers, your own accounts, the strongest model with quota left, and honest failover." width="100%" />
+  </picture>
 </p>
 
 <p align="center">
-  <strong>One gateway. One Oasis Key. The strongest eligible route.</strong>
-  <br />
-  <sub>Open-source inference discovery, provider intelligence, quota-aware routing, and policy-aware failover.</sub>
+  <b>OASIS Route is an open-source, self-hosted LLM gateway and free-tier router.</b><br>
+  It finds verified free inference tiers, connects the provider accounts you own, and sends every request<br>
+  to the strongest model that still has quota, behind one OpenAI- and Anthropic-compatible endpoint and one key.
 </p>
 
 <p align="center">
-  <a href="#quickstart">Quickstart</a> ·
-  <a href="#discover-free-capacity">Discover</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="#capabilities">Capabilities</a> ·
-  <a href="#api-compatibility">API compatibility</a> ·
-  <a href="#documentation">Documentation</a> ·
-  <a href="#security-and-trust">Security</a>
+  <a href="https://github.com/FAHTHIZ/OASIS-ROUTE/actions/workflows/ci.yml"><img src="https://github.com/FAHTHIZ/OASIS-ROUTE/actions/workflows/ci.yml/badge.svg" alt="CI status" height="28" /></a>
+  <a href="https://github.com/FAHTHIZ/OASIS-ROUTE/actions/workflows/ci.yml"><img alt="Tests: 319" src="./assets/readme/badge-tests.svg" height="28" /></a>
+  <a href="docs/DEVELOPMENT.md"><img alt="Python 3.12+" src="./assets/readme/badge-python.svg" height="28" /></a>
+  <a href="LICENSE"><img alt="License: Apache 2.0" src="./assets/readme/badge-license.svg" height="28" /></a>
+  <br>
+  <a href="docs/FREE_TIER_CAPACITY.md"><img alt="Free tier: about 32M tokens a month" src="./assets/readme/badge-free-tokens.svg" height="28" /></a>
+  <a href="docs/FREE_TIER_CAPACITY.md"><img alt="Agent: about 650M tokens a month" src="./assets/readme/badge-agent-tokens.svg" height="28" /></a>
+  <a href="docs/adr/0002-free-only-spend-policy.md"><img alt="Spend: free-only by default" src="./assets/readme/badge-spend.svg" height="28" /></a>
+  <br>
+  <a href="docs/API.md"><img alt="API: OpenAI and Anthropic" src="./assets/readme/badge-api.svg" height="28" /></a>
+  <a href="docs/PROVIDER_ADAPTERS.md"><img alt="Providers: 12 plus any OpenAI-compatible endpoint" src="./assets/readme/badge-providers.svg" height="28" /></a>
+  <a href="https://github.com/FAHTHIZ/OASIS-ROUTE/pkgs/container/oasis-route"><img alt="Docker: ghcr.io" src="./assets/readme/badge-docker.svg" height="28" /></a>
+  <br>
+  <a href="docs/DEPLOYMENT.md"><img alt="Self-hosted: your machine" src="./assets/readme/badge-hosted.svg" height="28" /></a>
+  <a href="SECURITY.md"><img alt="Security: policy" src="./assets/readme/badge-security.svg" height="28" /></a>
+  <a href="docs/"><img alt="Docs: 25 guides" src="./assets/readme/badge-docs.svg" height="28" /></a>
+  <a href="CONTRIBUTING.md"><img alt="Pull requests: welcome" src="./assets/readme/badge-prs.svg" height="28" /></a>
 </p>
 
----
+<p align="center">
+  <a href="#quickstart"><b>Quickstart</b></a> &nbsp;·&nbsp;
+  <a href="#how-many-free-tokens"><b>How many free tokens?</b></a> &nbsp;·&nbsp;
+  <a href="#why-oasis-route">Why</a> &nbsp;·&nbsp;
+  <a href="#discover-free-capacity">Discover</a> &nbsp;·&nbsp;
+  <a href="#how-it-works">How it works</a> &nbsp;·&nbsp;
+  <a href="#api-compatibility">API</a> &nbsp;·&nbsp;
+  <a href="#how-it-compares">Compare</a> &nbsp;·&nbsp;
+  <a href="#documentation">Docs</a>
+</p>
 
-## What is OASIS Route?
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/stats-dark.svg" />
+    <img src="./assets/readme/stats-light.svg" alt="OASIS Route in numbers: about 32 million free tokens a month for chat and 71 million for coding agents with no purchase, about 650 million agent tokens a month after a one-time 10-credit OpenRouter unlock, and 319 tests on SQLite and PostgreSQL." width="100%" />
+  </picture>
+</p>
 
-**OASIS Route is an independent inference routing layer.** It discovers publicly documented inference offers, verifies their eligibility and terms, connects upstream accounts only with the account owner's authorization, and routes requests to the strongest suitable model with available capacity.
+<details>
+<summary><b>Table of contents</b></summary>
 
-Connect it to **Oasis or any application that can call an OpenAI-compatible API**. Keep one gateway endpoint in your application while OASIS Route handles provider selection, quota reservations, health, and bounded failover behind it.
+<br>
 
-It is designed around one important distinction:
+- [Quickstart](#quickstart)
+- [How many free tokens?](#how-many-free-tokens)
+- [Why OASIS Route](#why-oasis-route)
+- [Discover free capacity](#discover-free-capacity)
+- [How it works](#how-it-works) · [The Oasis Key](#the-oasis-key) · [Capabilities](#capabilities)
+- [API compatibility](#api-compatibility) · [Providers and free tiers](#providers-and-free-tiers)
+- [How it compares](#how-it-compares)
+- [Implementation status](#implementation-status) · [Known limitations](#known-limitations)
+- [Security and trust](#security-and-trust)
+- [Documentation](#documentation) · [Design principles](#design-principles)
+- [Contributing](#contributing) · [License](#license)
 
-> **Finding an offer is not the same as having permission to use it.** Discovery, verification, authorization, and usable capacity are separate states.
+</details>
 
-## The idea
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/divider-dark.svg"><img src="./assets/readme/divider-light.svg" alt="" aria-hidden="true" width="100%"></picture></p>
+
+## Quickstart
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/quickstart-dark.svg" />
+    <img src="./assets/readme/quickstart-light.svg" alt="Quick start in three steps: 01 run oasis-route dev with uvx, which prints the console URL and an Oasis Key; 02 paste your provider keys with oasis-route connect --from-env; 03 point any SDK at the gateway with model auto." width="100%" />
+  </picture>
+</p>
+
+### 1. Run locally — no upstream account required
+
+The fastest way to explore OASIS Route is its deterministic mock-provider mode. It starts the application without making upstream inference calls.
+
+Requires [uv](https://docs.astral.sh/uv/).
+
+~~~bash
+uvx --from git+https://github.com/FAHTHIZ/OASIS-ROUTE oasis-route dev
+~~~
+
+The command prints the console URL, your project ID, and an Oasis Key.
+
+### 2. Run with Docker
+
+No local Python installation is needed:
+
+~~~bash
+docker run --rm -p 8080:8080 ghcr.io/fahthiz/oasis-route:edge dev
+~~~
+
+### 3. Install the command
+
+~~~bash
+uv tool install git+https://github.com/FAHTHIZ/OASIS-ROUTE
+# Or: pipx install git+https://github.com/FAHTHIZ/OASIS-ROUTE
+
+oasis-route dev --port 8080
+~~~
+
+### 4. Develop from a clone
+
+~~~bash
+git clone https://github.com/FAHTHIZ/OASIS-ROUTE.git
+cd OASIS-ROUTE
+uv sync
+uv run oasis-route dev
+~~~
+
+### 5. Connect a provider and make a request
+
+Open <code>/console/</code> and sign in with the Oasis Key. On **Connections → Paste your keys**, paste every provider key you hold (or your whole `.env`), tick the ownership box and press **Connect all**. Each key's provider is recognised automatically, the key is checked only with that provider, its models (and which of them are free) are synchronised, and routing starts using them immediately. **Discover** lists every provider with verified free capacity and links straight to where each one issues its free key; OpenRouter and Hugging Face can also be connected with **Sign in with ...** instead of a key.
+
+The same step from a terminal, reading `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `NVIDIA_API_KEY`, `HF_TOKEN` and the others from your environment or a `.env` file:
+
+~~~bash
+oasis-route connect --from-env                 # preview: shows what was recognised, stores nothing
+oasis-route connect --from-env --env-file .env --accept-terms --free-tier
+~~~
+
+Or let the local all-in-one pick them up every time it starts (keys already connected are skipped, and the built-in mock providers are paused once a real provider is active):
+
+~~~bash
+GROQ_API_KEY=gsk_... GEMINI_API_KEY=AIza... oasis-route dev --connect-env --free-tier --age 25 --country BD
+~~~
+
+`--age` and `--country` are your own declaration, needed by providers whose terms set an age or country rule. Hugging Face can also be connected on a headless server by **Hugging Face with a code**: enter the short code shown on any device where you are signed in.
+
+Then call the gateway:
+
+~~~bash
+curl https://route.example.com/v1/chat/completions \
+  -H "Authorization: Bearer $OASIS_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "auto",
+    "messages": [
+      {"role": "user", "content": "Explain the difference between a process and a thread."}
+    ]
+  }'
+~~~
+
+`model: "auto"` picks the strongest eligible model across all your connections (free first) and moves to the next strongest when one runs out of quota or fails. Claude Code and other Anthropic clients work through the Anthropic Messages endpoint:
+
+~~~bash
+export ANTHROPIC_BASE_URL=https://route.example.com
+export ANTHROPIC_AUTH_TOKEN=$OASIS_API_KEY
+claude
+~~~
+
+Any OpenAI SDK can use the same gateway by setting its base URL to <code>https://route.example.com/v1</code> and its API key to the Oasis Key.
+
+### Production deployment
+
+For a PostgreSQL-backed deployment, follow the [deployment guide](docs/DEPLOYMENT.md):
+
+~~~bash
+# Create .env with:
+# POSTGRES_PASSWORD
+# OASIS_ROUTE_MASTER_KEY
+# OASIS_ROUTE_API_KEY_PEPPER
+
+docker compose up -d --build
+docker compose run --rm api bootstrap --email you@example.com
+~~~
+
+## How many free tokens?
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/capacity-dark.svg" />
+    <img src="./assets/readme/capacity-light.svg" alt="Bar chart of free tokens per month through OASIS Route with one account per provider. No purchase: 24M chat, 63M agent. Adding Cloudflare Workers AI: 32M chat, 71M agent. Adding OpenRouter's one-time 10-credit unlock: 75M chat, 650M agent. Adding NVIDIA's prototyping ceiling: 2.7B chat, 35.7B agent. OmniRoute's claim of 1.62B is marked for reference." width="100%" />
+  </picture>
+</p>
+
+Counted from each provider's **published** limits on 2026-11-23, one account per provider, with the binding limit (tokens a day, requests a day, tokens a minute, monthly caps or neuron budgets) applied per request size:
+
+| You have… | Chat (1,500 tokens a request) | Coding agent (20,000 tokens a request) |
+|---|---|---|
+| **Free accounts only, nothing bought** | **~24M-32M tokens / month** | **~63M-71M tokens / month** |
+| + one-time 10-credit OpenRouter top-up | ~75M | **~650M** |
+| + NVIDIA prototyping API at 100% use | ~2.7B (ceiling) | ~36B (ceiling) |
+
+**Bottom line: about 30 million tokens a month for chat and about 70 million for agents, with no purchase.** Groq contributes the most chat capacity (200K tokens a day on each of three models); OpenRouter's shared `:free` pool and Cohere's 1,000 monthly trial calls favour large agent requests. Gemini and Z.ai's free GLM Flash models add more, but publish no numbers, so they are measured after you connect them instead of guessed. Every figure is reproducible with `python scripts/free_tier_capacity.py`; the method, per-pool table and change log are in [Free-tier capacity maths](docs/FREE_TIER_CAPACITY.md).
+
+> [!NOTE]
+> OmniRoute advertises about 1.62B free tokens a month. By its own breakdown, about 1B of that is Mistral, whose usage-limits page now says Free mode doesn't include API access, and about 545M comes from third-party aggregators and proxies. Its first-party pools add up to about 68M, in line with the range above. See the [comparison](docs/FREE_TIER_CAPACITY.md#comparison-with-other-gateways-claims).
+
+## Why OASIS Route
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/icon-discover-dark.svg"><img src="./assets/readme/icon-discover-light.svg" width="48" height="48" alt="" aria-hidden="true"></picture>
+      <h3>Evidence-backed discovery</h3>
+      Official pages, catalogues and feeds are checked on a schedule. Every offer keeps its source, date and review trail, and nothing is routed until it is verified.
+    </td>
+    <td width="33%" valign="top">
+      <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/icon-route-dark.svg"><img src="./assets/readme/icon-route-light.svg" width="48" height="48" alt="" aria-hidden="true"></picture>
+      <h3>Strongest model first</h3>
+      <code>model: "auto"</code> ranks eligible models by task fit and capability, free routes first, and explains every decision in a route preview.
+    </td>
+    <td width="33%" valign="top">
+      <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/icon-quota-dark.svg"><img src="./assets/readme/icon-quota-light.svg" width="48" height="48" alt="" aria-hidden="true"></picture>
+      <h3>Quota you can trust</h3>
+      Atomic reservations, shared pools and limits learned from <code>x-ratelimit-*</code> headers, so capacity is measured, not advertised.
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/icon-failover-dark.svg"><img src="./assets/readme/icon-failover-light.svg" width="48" height="48" alt="" aria-hidden="true"></picture>
+      <h3>Honest failover</h3>
+      A <code>429</code> cools down the model, then the connection. Bounded fallback never hides a downgrade or hops to a second account.
+    </td>
+    <td width="33%" valign="top">
+      <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/icon-vault-dark.svg"><img src="./assets/readme/icon-vault-light.svg" width="48" height="48" alt="" aria-hidden="true"></picture>
+      <h3>Your keys, encrypted</h3>
+      Provider keys and OAuth tokens live in an envelope-encrypted vault with KEK rotation. Apps only ever see a scoped, revocable Oasis Key.
+    </td>
+    <td width="33%" valign="top">
+      <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/icon-free-dark.svg"><img src="./assets/readme/icon-free-light.svg" width="48" height="48" alt="" aria-hidden="true"></picture>
+      <h3>Free-only by default</h3>
+      New projects never route to a paid or unknown-cost connection. Allowing paid routes needs an explicit, audited acknowledgement.
+    </td>
+  </tr>
+</table>
 
 | Instead of… | OASIS Route… |
 |---|---|
@@ -48,6 +248,8 @@ It is designed around one important distinction:
 | Retrying blindly after a rate limit | Uses quota reservations, cooldowns, health state, and bounded failover |
 | Treating public announcements as usable capacity | Preserves evidence and requires verification plus user authorization |
 | Hiding a fallback or quality downgrade | Makes routing decisions explainable and signals downgrades honestly |
+
+> **Finding an offer is not the same as having permission to use it.** Discovery, verification, authorization, and usable capacity are separate states.
 
 ## Discover free capacity
 
@@ -174,102 +376,38 @@ Implemented adapters include:
 
 Official sign-in is available for OpenRouter (PKCE, redirect and headless modes) and Hugging Face (OAuth 2.0 + PKCE; needs an https `public_url` or a registered app). Other providers use API keys supplied by the account owner. Connected OpenRouter and Hugging Face accounts report whether they are free tier, so free-only routing can use them without manual confirmation.
 
-## Quickstart
+### Providers and free tiers
 
-### 1. Run locally — no upstream account required
+| Provider | Connect with | Free tier (published, 2026-11-23) |
+|---|---|---|
+| [Groq](https://console.groq.com/docs/rate-limits) | API key | 30 RPM, 1,000 RPD, 200K tokens/day per model (gpt-oss-120b, gpt-oss-20b, qwen3.8-27b) |
+| [OpenRouter](https://openrouter.ai/docs/api/reference/limits) | Sign in (PKCE) or key | `:free` models: 20 RPM, 50 RPD shared (1,000 RPD after 10 credits) |
+| [SambaNova](https://docs.sambanova.ai/docs/en/models/rate-limits) | API key | 20 RPM, 20 RPD, 200K tokens/day (gpt-oss-120b, gemma-4-31B-it) |
+| [Cohere](https://docs.cohere.com/docs/rate-limits) | API key | Trial keys: 20 RPM, 1,000 calls a month |
+| [NVIDIA API Catalog](https://build.nvidia.com/search) | API key | Up to 40 RPM, prototyping only; trains on inputs |
+| [Google Gemini](https://aistudio.google.com/docs/rate-limits) | API key | Free tier per project; limits shown only in AI Studio |
+| [Z.ai](https://docs.z.ai/guides/overview/pricing) | API key | GLM-4.7-Flash, GLM-4.5-Flash, GLM-4.6V-Flash at $0; limits not published |
+| [Hugging Face](https://huggingface.co/docs/inference-providers/pricing) | Sign in (OAuth, device code) or token | No monthly credits on free accounts; $2 on PRO |
+| [Cerebras](https://inference-docs.cerebras.ai/support/rate-limits) | API key | One-time $5 trial credit (card needed), 30 days |
+| [Mistral](https://docs.mistral.ai/admin/billing-usage/usage-limits) | API key | Free mode has no API access; pay-as-you-go |
+| OpenAI, Anthropic | API key | Paid |
+| [Cloudflare Workers AI](https://developers.cloudflare.com/workers-ai/platform/pricing/), llama.cpp, Ollama, vLLM, any OpenAI-compatible URL | Custom endpoint | Cloudflare: 10,000 neurons/day; local models: limited by your hardware |
 
-The fastest way to explore OASIS Route is its deterministic mock-provider mode. It starts the application without making upstream inference calls.
+## How it compares
 
-Requires [uv](https://docs.astral.sh/uv/).
+| | OASIS Route | [OmniRoute](https://github.com/cheaper-inference/OmniRoute) | [LiteLLM](https://github.com/BerriAI/litellm) |
+|---|---|---|---|
+| Focus | Verified free tiers and provider intelligence | Free-tier aggregation, many strategies | SDK and proxy for 100+ providers |
+| Free tokens a month | ~30M chat / ~70M agent, reproducible script | ~1.62B claimed | Not tracked |
+| OpenAI Chat, Responses, Anthropic Messages | Yes | Yes | Yes |
+| Quotas learned from response headers | Yes | — | — |
+| Terms, age and multi-account checks | Yes | — | — |
+| Data-policy gating (no-training, zero-retention) | Yes, unknown never passes | — | — |
+| Evidence trail behind each offer | Yes | — | — |
+| Embeddings, images, caching, guardrails | Not yet | Yes | Yes |
+| Provider count | 12 + any OpenAI-compatible | 390+ catalogued | 100+ |
 
-~~~bash
-uvx --from git+https://github.com/FAHTHIZ/OASIS-ROUTE oasis-route dev
-~~~
-
-The command prints the console URL, your project ID, and an Oasis Key.
-
-### 2. Run with Docker
-
-No local Python installation is needed:
-
-~~~bash
-docker run --rm -p 8080:8080 ghcr.io/fahthiz/oasis-route:edge dev
-~~~
-
-### 3. Install the command
-
-~~~bash
-uv tool install git+https://github.com/FAHTHIZ/OASIS-ROUTE
-# Or: pipx install git+https://github.com/FAHTHIZ/OASIS-ROUTE
-
-oasis-route dev --port 8080
-~~~
-
-### 4. Develop from a clone
-
-~~~bash
-git clone https://github.com/FAHTHIZ/OASIS-ROUTE.git
-cd OASIS-ROUTE
-uv sync
-uv run oasis-route dev
-~~~
-
-### 5. Connect a provider and make a request
-
-Open <code>/console/</code> and sign in with the Oasis Key. On **Connections → Paste your keys**, paste every provider key you hold (or your whole `.env`), tick the ownership box and press **Connect all**. Each key's provider is recognised automatically, the key is checked only with that provider, its models (and which of them are free) are synchronised, and routing starts using them immediately. **Discover** lists every provider with verified free capacity and links straight to where each one issues its free key; OpenRouter and Hugging Face can also be connected with **Sign in with ...** instead of a key.
-
-The same step from a terminal, reading `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `NVIDIA_API_KEY`, `HF_TOKEN` and the others from your environment or a `.env` file:
-
-~~~bash
-oasis-route connect --from-env                 # preview: shows what was recognised, stores nothing
-oasis-route connect --from-env --env-file .env --accept-terms --free-tier
-~~~
-
-Or let the local all-in-one pick them up every time it starts (keys already connected are skipped, and the built-in mock providers are paused once a real provider is active):
-
-~~~bash
-GROQ_API_KEY=gsk_... GEMINI_API_KEY=AIza... oasis-route dev --connect-env --free-tier --age 25 --country BD
-~~~
-
-`--age` and `--country` are your own declaration, needed by providers whose terms set an age or country rule. Hugging Face can also be connected on a headless server by **Hugging Face with a code**: enter the short code shown on any device where you are signed in.
-
-Then call the gateway:
-
-~~~bash
-curl https://route.example.com/v1/chat/completions \
-  -H "Authorization: Bearer $OASIS_API_KEY" \
-  -H "content-type: application/json" \
-  -d '{
-    "model": "auto",
-    "messages": [
-      {"role": "user", "content": "Explain the difference between a process and a thread."}
-    ]
-  }'
-~~~
-
-`model: "auto"` picks the strongest eligible model across all your connections (free first) and moves to the next strongest when one runs out of quota or fails. Claude Code and other Anthropic clients work through the Anthropic Messages endpoint:
-
-~~~bash
-export ANTHROPIC_BASE_URL=https://route.example.com
-export ANTHROPIC_AUTH_TOKEN=$OASIS_API_KEY
-claude
-~~~
-
-Any OpenAI SDK can use the same gateway by setting its base URL to <code>https://route.example.com/v1</code> and its API key to the Oasis Key.
-
-### Production deployment
-
-For a PostgreSQL-backed deployment, follow the [deployment guide](docs/DEPLOYMENT.md):
-
-~~~bash
-# Create .env with:
-# POSTGRES_PASSWORD
-# OASIS_ROUTE_MASTER_KEY
-# OASIS_ROUTE_API_KEY_PEPPER
-
-docker compose up -d --build
-docker compose run --rm api bootstrap --email you@example.com
-~~~
+The full, fair feature matrix (including where the others are ahead) is in [How OASIS Route compares](docs/COMPARISON.md).
 
 ## Implementation status
 
@@ -348,10 +486,16 @@ Read the [security and compliance model](docs/SECURITY_AND_COMPLIANCE.md), [thre
 
 ## Contributing
 
-Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the setup instructions and quality gates.
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for setup and quality gates. Found a new free tier or a changed limit? Open a [provider update](https://github.com/FAHTHIZ/OASIS-ROUTE/issues/new?template=provider_update.yml) with a link to the official page. Questions go to [SUPPORT.md](SUPPORT.md).
 
 Provider-specific behavior belongs in adapters. Do not wrap competing gateways or duplicate their routing engines.
+
+If OASIS Route is useful to you, a star helps other people find it.
 
 ## License
 
 OASIS Route is licensed under the [Apache License 2.0](LICENSE).
+
+<p align="center">
+  <a href="#readme-top"><img src="./assets/readme/footer.svg" alt="OASIS Route. One gateway. One Oasis Key. The strongest eligible route. Back to top." width="100%" /></a>
+</p>

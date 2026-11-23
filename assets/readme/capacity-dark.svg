@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="512" viewBox="0 0 1280 512" role="img" aria-labelledby="t d">
+<title id="t">Free tokens per month through OASIS Route, one account per provider</title>
+<desc id="d">Log-scale bars, limits checked 2026-11-23. No purchase: 24M chat, 63M coding agent; + Cloudflare Workers AI: 32M chat, 71M coding agent; + OpenRouter unlock: 75M chat, 650M coding agent; + NVIDIA ceiling: 2.7B chat, 35.7B coding agent. OmniRoute's claimed total of 1.62B is marked for reference.</desc>
+<defs>
+<linearGradient id="chat" x1="0" x2="1"><stop offset="0" stop-color="#35DFC1" stop-opacity=".55"/><stop offset="1" stop-color="#35DFC1"/></linearGradient>
+<linearGradient id="agent" x1="0" x2="1"><stop offset="0" stop-color="#A78BFA" stop-opacity=".55"/><stop offset="1" stop-color="#A78BFA"/></linearGradient>
+</defs>
+<style>@media (prefers-reduced-motion: no-preference) {
+.g0a,.g0b{transform-box:fill-box;transform-origin:left;animation:grow 1.4s 0.20s cubic-bezier(.2,.7,.1,1) both}.g1a,.g1b{transform-box:fill-box;transform-origin:left;animation:grow 1.4s 0.45s cubic-bezier(.2,.7,.1,1) both}.g2a,.g2b{transform-box:fill-box;transform-origin:left;animation:grow 1.4s 0.70s cubic-bezier(.2,.7,.1,1) both}.g3a,.g3b{transform-box:fill-box;transform-origin:left;animation:grow 1.4s 0.95s cubic-bezier(.2,.7,.1,1) both}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+}</style>
+<rect x=".5" y=".5" width="1279" height="511" rx="22" fill="#111B2B" stroke="#22344A"/>
+<text x="40" y="46" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="800" fill="#E8F1FC">Free tokens per month, one account per provider</text>
+<text x="40" y="70" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#93A8C0">Published limits checked 2026-11-23 · log scale · binding limit applied per request size</text>
+<g font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#E8F1FC">
+<rect x="880" y="36" width="14" height="14" rx="4" fill="#35DFC1"/><text x="902" y="48">Chat, 1,500 tok/request</text>
+<rect x="1060" y="36" width="14" height="14" rx="4" fill="#A78BFA"/><text x="1082" y="48">Agent, 20,000 tok/request</text>
+</g>
+<line x1="400.0" y1="90" x2="400.0" y2="460" stroke="#2A3B52" stroke-width="1"/><text x="400.0" y="482" text-anchor="middle" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">1M</text><line x1="566.0" y1="90" x2="566.0" y2="460" stroke="#2A3B52" stroke-width="1"/><text x="566.0" y="482" text-anchor="middle" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">10M</text><line x1="732.0" y1="90" x2="732.0" y2="460" stroke="#2A3B52" stroke-width="1"/><text x="732.0" y="482" text-anchor="middle" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">100M</text><line x1="898.0" y1="90" x2="898.0" y2="460" stroke="#2A3B52" stroke-width="1"/><text x="898.0" y="482" text-anchor="middle" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">1B</text><line x1="1064.0" y1="90" x2="1064.0" y2="460" stroke="#2A3B52" stroke-width="1"/><text x="1064.0" y="482" text-anchor="middle" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">10B</text><line x1="1230.0" y1="90" x2="1230.0" y2="460" stroke="#2A3B52" stroke-width="1"/><text x="1230.0" y="482" text-anchor="middle" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#93A8C0">100B</text>
+<line x1="932.8" y1="90" x2="932.8" y2="460" stroke="#F5B84A" stroke-width="1.5" stroke-dasharray="5 5"/>
+<text x="924.8" y="82" text-anchor="end" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#F5B84A">OmniRoute claim, 1.62B</text>
+<g class="r0">
+<text x="40" y="122" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="800" fill="#E8F1FC"><tspan fill="#35DFC1">A</tspan>  No purchase</text>
+<text x="40" y="144" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#93A8C0">Groq, SambaNova, OpenRouter, Cohere</text>
+<rect class="g0a" x="400" y="106" width="228.7" height="20" rx="6" fill="url(#chat)"/>
+<text x="638.7" y="121" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#E8F1FC">24M</text>
+<rect class="g0b" x="400" y="132" width="298.2" height="20" rx="6" fill="url(#agent)"/>
+<text x="708.2" y="147" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#E8F1FC">63M</text>
+</g><g class="r1">
+<text x="40" y="208" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="800" fill="#E8F1FC"><tspan fill="#35DFC1">B</tspan>  + Cloudflare Workers AI</text>
+<text x="40" y="230" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#93A8C0">10,000 neurons a day via a custom endpoint</text>
+<rect class="g1a" x="400" y="192" width="249.1" height="20" rx="6" fill="url(#chat)"/>
+<text x="659.1" y="207" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#E8F1FC">32M</text>
+<rect class="g1b" x="400" y="218" width="307.5" height="20" rx="6" fill="url(#agent)"/>
+<text x="717.5" y="233" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#E8F1FC">71M</text>
+</g><g class="r2">
+<text x="40" y="294" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="800" fill="#E8F1FC"><tspan fill="#35DFC1">C</tspan>  + OpenRouter unlock</text>
+<text x="40" y="316" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#93A8C0">one-time 10 credits lift 50 to 1,000 free requests a day</text>
+<rect class="g2a" x="400" y="278" width="311.3" height="20" rx="6" fill="url(#chat)"/>
+<text x="721.3" y="293" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#E8F1FC">75M</text>
+<rect class="g2b" x="400" y="304" width="466.9" height="20" rx="6" fill="url(#agent)"/>
+<text x="876.9" y="319" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#E8F1FC">650M</text>
+</g><g class="r3">
+<text x="40" y="380" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="800" fill="#E8F1FC"><tspan fill="#35DFC1">D</tspan>  + NVIDIA ceiling</text>
+<text x="40" y="402" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#93A8C0">40 RPM at 100% use; prototyping terms only</text>
+<rect class="g3a" x="400" y="364" width="569.7" height="20" rx="6" fill="url(#chat)"/>
+<text x="979.7" y="379" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#E8F1FC">2.7B</text>
+<rect class="g3b" x="400" y="390" width="755.8" height="20" rx="6" fill="url(#agent)"/>
+<text x="1165.8" y="405" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#E8F1FC">35.7B</text>
+</g>
+</svg>

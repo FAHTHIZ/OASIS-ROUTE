@@ -1,0 +1,56 @@
+name: Provider or free-tier update
+description: A new free tier, a changed limit, or a provider OASIS Route should support
+title: "[Provider]: "
+labels: ["provider", "capacity"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        OASIS Route only counts limits a provider **publishes** on its own pages, one account per person.
+        Please link the official page; screenshots of a console are welcome as supporting evidence.
+  - type: input
+    id: provider
+    attributes:
+      label: Provider
+      placeholder: "e.g. Groq"
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of change?
+      options:
+        - New free tier or provider
+        - Limit increased
+        - Limit decreased or tier removed
+        - Terms or data-policy change
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Official source URL
+      placeholder: "https://..."
+    validations:
+      required: true
+  - type: textarea
+    id: limits
+    attributes:
+      label: Limits as published
+      description: Quote the numbers exactly (RPM, RPD, TPM, TPD, monthly caps, credits) and the models they apply to.
+    validations:
+      required: true
+  - type: input
+    id: checked
+    attributes:
+      label: Date you checked
+      placeholder: "2026-11-23"
+    validations:
+      required: true
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Rules
+      options:
+        - label: The tier is available to one account per person under the provider's own terms (no account pooling).
+          required: true

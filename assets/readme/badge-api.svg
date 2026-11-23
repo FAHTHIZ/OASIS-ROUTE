@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="214" height="30" viewBox="0 0 214 30" role="img" aria-label="api: OpenAI · Anthropic">
+<title>api: OpenAI · Anthropic</title>
+<defs>
+<linearGradient id="api-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#131D2E"/><stop offset="1" stop-color="#0B1220"/></linearGradient>
+<linearGradient id="api-val" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#35DFC1"/><stop offset="1" stop-color="#19B89B"/></linearGradient>
+<linearGradient id="api-edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#35DFC1" stop-opacity=".6"/><stop offset=".5" stop-color="#35DFC1" stop-opacity=".15"/><stop offset="1" stop-color="#19B89B" stop-opacity=".55"/></linearGradient>
+<linearGradient id="api-shine" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="api-clip"><rect width="214" height="30" rx="15"/></clipPath>
+</defs>
+<style>@media (prefers-reduced-motion: no-preference) {
+.sw{animation:sw 9s 2s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes sw{0%{transform:translateX(-80px)}20%,100%{transform:translateX(294px)}}
+}</style>
+<g clip-path="url(#api-clip)">
+<rect width="214" height="30" fill="url(#api-bg)"/>
+<rect x="68.9" y="3" width="142.1" height="24" rx="12" fill="url(#api-val)"/>
+<rect class="sw" x="-60" y="0" width="46" height="30" fill="url(#api-shine)" transform="translate(-80 0)"/>
+</g>
+<rect x=".5" y=".5" width="213" height="29" rx="14.5" fill="none" stroke="url(#api-edge)"/>
+<g transform="translate(12 6) scale(.75)" fill="none" stroke="#35DFC1" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></g>
+<text x="38" y="18.8" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#A6B8CC" letter-spacing=".04em">API</text>
+<text x="140.0" y="19.4" text-anchor="middle" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0B1220">OpenAI · Anthropic</text>
+</svg>

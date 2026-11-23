@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Free-tier capacity re-checked on 2026-11-23: about 30M chat / 70M agent tokens a month with no purchase, about 650M agent tokens after a one-time 10 OpenRouter credits, and a 2.7B theoretical ceiling with NVIDIA's prototyping tier. `scripts/free_tier_capacity.py` now models request-per-month caps (Cohere) and Cloudflare neurons, prints four scenarios, and reflects SambaNova's reduced model list. See [docs/FREE_TIER_CAPACITY.md](docs/FREE_TIER_CAPACITY.md).
+- Redesigned README with generated, theme-aware artwork (`scripts/readme_assets.py` writes `assets/readme/*.svg` and the social preview), a capacity chart and a comparison with OmniRoute and other gateways.
+- Community files: issue forms (bug, feature idea, provider or free-tier update), pull request template, `SUPPORT.md`, `CITATION.cff` and Dependabot for uv, GitHub Actions and Docker.
+- Package metadata for discovery: PyPI keywords, classifiers and project URLs.
 - Hugging Face device-code sign-in (RFC 8628) for servers without a browser: `"mode": "device"`, a short user code, and `POST .../oauth/{flow_id}/poll` honouring `interval` and `slow_down`.
 - `oasis-route dev --connect-env [--free-tier --age N --country CC]` connects the provider keys in your environment on every start and pauses the mock providers once a real one is active.
 - Paste-your-keys now lets you pick the provider for keys whose format several providers share (`providers_by_line`, from the dry run's `line`).

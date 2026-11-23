@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="203" height="30" viewBox="0 0 203 30" role="img" aria-label="agent: ~650M tok/mo">
+<title>agent: ~650M tok/mo</title>
+<defs>
+<linearGradient id="agent-tokens-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#131D2E"/><stop offset="1" stop-color="#0B1220"/></linearGradient>
+<linearGradient id="agent-tokens-val" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A78BFA"/><stop offset="1" stop-color="#8A6CF0"/></linearGradient>
+<linearGradient id="agent-tokens-edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A78BFA" stop-opacity=".6"/><stop offset=".5" stop-color="#A78BFA" stop-opacity=".15"/><stop offset="1" stop-color="#8A6CF0" stop-opacity=".55"/></linearGradient>
+<linearGradient id="agent-tokens-shine" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="agent-tokens-clip"><rect width="203" height="30" rx="15"/></clipPath>
+</defs>
+<style>@media (prefers-reduced-motion: no-preference) {
+.sw{animation:sw 9s 2s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes sw{0%{transform:translateX(-80px)}20%,100%{transform:translateX(283px)}}
+}</style>
+<g clip-path="url(#agent-tokens-clip)">
+<rect width="203" height="30" fill="url(#agent-tokens-bg)"/>
+<rect x="83.1" y="3" width="116.9" height="24" rx="12" fill="url(#agent-tokens-val)"/>
+<rect class="sw" x="-60" y="0" width="46" height="30" fill="url(#agent-tokens-shine)" transform="translate(-80 0)"/>
+</g>
+<rect x=".5" y=".5" width="202" height="29" rx="14.5" fill="none" stroke="url(#agent-tokens-edge)"/>
+<g transform="translate(12 6) scale(.75)" fill="none" stroke="#A78BFA" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v4H9zM5 7h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM9 12h.01M15 12h.01M9 16h6"/></g>
+<text x="38" y="18.8" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#A6B8CC" letter-spacing=".04em">AGENT</text>
+<text x="141.6" y="19.4" text-anchor="middle" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0B1220">~650M tok/mo</text>
+</svg>
