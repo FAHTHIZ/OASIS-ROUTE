@@ -140,8 +140,19 @@ async def test_existing_projects_keep_unrestricted_behaviour(ctx: AppContext) ->
     from sqlalchemy import text
 
     async with ctx.db.session() as s:
-        cols = (await s.execute(text("PRAGMA table_info(projects)"))).all()
-    default = next(c[4] for c in cols if c[1] == "spend_policy")
+        if ctx.db.engine.dialect.name == "postgresql":
+            default = (
+                await s.execute(
+                    text(
+                        "SELECT column_default FROM information_schema.columns "
+                        "WHERE table_name = 'projects' AND column_name = 'spend_policy'"
+                    )
+                )
+            ).scalar_one()
+        else:
+            cols = (await s.execute(text("PRAGMA table_info(projects)"))).all()
+            default = next(c[4] for c in cols if c[1] == "spend_policy")
+    default = str(default).split("::")[0]
     assert str(default).strip("'\"") == "allow_paid"
 
 

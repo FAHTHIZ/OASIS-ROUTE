@@ -1,5 +1,5 @@
-# Secret scanning configuration (gitleaks). Uses the default rules; only the redaction tests, which
-# deliberately contain fake credentials to prove they are scrubbed, are exempt.
+# Secret scanning configuration (gitleaks). Uses the default rules; only the tests that deliberately
+# contain fake credentials (to prove they are redacted or recognised) are exempt.
 title = "oasis-route"
 
 [extend]
@@ -10,4 +10,6 @@ description = "Fake credentials used to test redaction"
 paths = [
   '''^tests/test_redaction\.py$''',
   '''^tests/test_notifications\.py$''',
+  '''^tests/test_cli\.py$''',
+  '''^tests/test_quick_connect\.py$''',
 ]
