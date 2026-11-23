@@ -287,6 +287,8 @@ class Source(Base):
     depth: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     parent_id: Mapped[str | None] = mapped_column(String(36))
     extractor: Mapped[str | None] = mapped_column(String(40))  # html | openrouter_models | hf_router_models
+    # Extractor release that produced the stored claims; a newer release re-extracts once.
+    extractor_version: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = _created()
 
 

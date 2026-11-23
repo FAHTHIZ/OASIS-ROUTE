@@ -167,6 +167,73 @@ def _cmd_bootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
+def _connect_text(args: argparse.Namespace) -> str:
+    """Collect candidate keys: provider variables from the environment and/or a .env file."""
+    from oasis_route.connections.key_detect import ENV_NAMES
+
+    lines: list[str] = []
+    if args.from_env:
+        lines += [f"{n}={os.environ[n]}" for n in ENV_NAMES if os.environ.get(n)]
+    for path in args.env_file or []:
+        lines.append(Path(path).read_text(encoding="utf-8"))
+    if args.stdin:
+        lines.append(sys.stdin.read())
+    return "\n".join(lines)
+
+
+def _cmd_connect(args: argparse.Namespace) -> int:
+    """Send keys to a running Oasis Route over its API (one-step onboarding)."""
+    import httpx
+
+    oasis_key = args.oasis_key or os.environ.get("OASIS_API_KEY", "")
+    if not oasis_key:
+        print("set OASIS_API_KEY or pass --oasis-key", file=sys.stderr)
+        return 2
+    text = _connect_text(args)
+    if not text.strip():
+        print("no keys found: use --from-env, --env-file PATH or --stdin", file=sys.stderr)
+        return 2
+    headers = {"authorization": f"Bearer {oasis_key}"}
+    with httpx.Client(base_url=args.url.rstrip("/"), headers=headers, timeout=120) as c:
+        me = c.get("/api/v1/me")
+        if me.status_code != 200:
+            print(f"Oasis Key rejected: HTTP {me.status_code}", file=sys.stderr)
+            return 1
+        project = args.project or me.json()["project"]["id"]
+        r = c.post(
+            f"/api/v1/projects/{project}/connections/quick",
+            json={
+                "text": text,
+                "accept_terms": args.accept_terms,
+                "free_tier": args.free_tier,
+                "dry_run": not args.accept_terms,
+            },
+        )
+    if r.status_code != 200:
+        print(f"HTTP {r.status_code}: {r.text[:500]}", file=sys.stderr)
+        return 1
+    out = r.json()
+    for res in out["results"]:
+        provider = res.get("provider_id") or "?"
+        outcome = res.get("outcome") or res.get("detected_by")
+        extra = f" · {res['free_models']} free models" if res.get("free_models") else ""
+        note = f" · {res['message']}" if res.get("message") else ""
+        print(f"{res['key_hint']:>7}  {provider:<12} {outcome}{extra}{note}")
+    if out.get("dry_run"):
+        print(
+            "\nNothing was stored. Re-run with --accept-terms to confirm these accounts are yours "
+            "and connect them.",
+            file=sys.stderr,
+        )
+        return 0
+    print(
+        f"\n{out['connected']} connected, {out['already_connected']} already connected, "
+        f"{out['needs_attention']} need attention.",
+        file=sys.stderr,
+    )
+    return 0 if out["needs_attention"] == 0 else 3
+
+
 def _cmd_dev(args: argparse.Namespace) -> int:
     """One command: SQLite + migrations + two mock providers + API + worker + an admin Oasis Key."""
     import uvicorn
@@ -293,6 +360,24 @@ def build_parser() -> argparse.ArgumentParser:
     mp.add_argument("--host", default="127.0.0.1")
     mp.add_argument("--port", type=int, default=9100)
     mp.set_defaults(func=_cmd_mock_provider)
+
+    c = sub.add_parser(
+        "connect",
+        help="connect every provider key you hold in one step (detects each key's provider locally)",
+    )
+    c.add_argument("--url", default=os.environ.get("OASIS_ROUTE_URL", "http://127.0.0.1:8080"))
+    c.add_argument("--oasis-key", help="defaults to $OASIS_API_KEY")
+    c.add_argument("--project", help="defaults to the Oasis Key's project")
+    c.add_argument("--from-env", action="store_true", help="read GROQ_API_KEY, GEMINI_API_KEY, ... from env")
+    c.add_argument("--env-file", action="append", help="read keys from a .env file (repeatable)")
+    c.add_argument("--stdin", action="store_true", help="read pasted keys from standard input")
+    c.add_argument(
+        "--accept-terms",
+        action="store_true",
+        help="confirm you hold these accounts and accept each provider's terms (without it: dry run)",
+    )
+    c.add_argument("--free-tier", action="store_true", help="declare the accounts have no billing set up")
+    c.set_defaults(func=_cmd_connect)
 
     d = sub.add_parser("dev", help="local all-in-one: SQLite, mock providers, API, worker, admin key")
     d.add_argument("--port", type=int, default=8080)

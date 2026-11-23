@@ -4,6 +4,13 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+### Added
+
+- One-step onboarding. **Connections → Paste your keys** in the console, `POST /api/v1/projects/{id}/connections/quick` and `oasis-route connect --from-env` connect every key at once: each key's provider is recognised locally from its variable name or prefix (ambiguous keys are never tried against several providers), validated only with that provider, and its models and approved discovery sources refreshed.
+- Cohere (trial keys, OpenAI-compatible endpoint) and Z.ai (free GLM Flash models) providers, with key-only validation for providers that do not list models.
+- Atom/RSS announcement and release feeds as discovery sources (DTDs refused).
+- Sources record the extractor release that read them; after an upgrade each page is fetched unconditionally once and re-extracted (migration 0008).
+
 ### Fixed
 
 - The discovery fetcher decoded gzip responses twice, so every site that compresses robots.txt was recorded as `disallowed_by_robots`. Found by running discovery against the live seeds.

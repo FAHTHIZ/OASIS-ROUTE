@@ -59,3 +59,40 @@ def test_migrate_bootstrap_and_worker_once(
         assert "ledger.expire_reservations" in ran and "quota.refresh" in ran
     finally:
         get_settings.cache_clear()
+
+
+def test_connect_collects_only_provider_variables(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import httpx
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_" + "a" * 48)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:secretsecret@db/x")
+    env = tmp_path / ".env"
+    env.write_text("ZAI_API_KEY=0123456789abcdef0123456789abcdef.AbCdEfGhIjKl\n")
+    args = cli.build_parser().parse_args(["connect", "--from-env", "--env-file", str(env)])
+    text = cli._connect_text(args)
+    assert "GROQ_API_KEY=" in text and "ZAI_API_KEY=" in text and "secretsecret" not in text
+    assert args.accept_terms is False  # without consent the command is a dry run
+
+    sent: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/me":
+            return httpx.Response(200, json={"project": {"id": "p1"}})
+        sent.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "dry_run": True,
+                "results": [{"key_hint": "…aaaa", "provider_id": "groq", "detected_by": "prefix"}],
+            },
+        )
+
+    real = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    monkeypatch.setenv("OASIS_API_KEY", "oasis_test")
+    assert cli.main(["connect", "--from-env"]) == 0
+    assert sent and sent[0]["dry_run"] is True and sent[0]["accept_terms"] is False
+    out = capsys.readouterr()
+    assert "groq" in out.out and "Nothing was stored" in out.err

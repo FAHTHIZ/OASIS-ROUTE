@@ -37,6 +37,7 @@ class SeedSource:
     source_class: SourceClass = SourceClass.OFFICIAL_DOCS
     crawl_interval_s: int = DAY
     purpose: str = "rate limits"
+    reviewed_on: str = REVIEWED_ON
 
 
 SEEDS: tuple[SeedSource, ...] = (
@@ -67,12 +68,18 @@ SEEDS: tuple[SeedSource, ...] = (
     SeedSource("nvidia", "https://docs.api.nvidia.com/nim/reference/llm-apis", purpose="models"),
     SeedSource("openai", "https://developers.openai.com/api/docs/guides/rate-limits"),
     SeedSource("anthropic", "https://platform.claude.com/docs/en/api/rate-limits"),
+    # Added 2026-11-23 (robots.txt allowed generic agents on these paths at review time).
+    SeedSource("cohere", "https://docs.cohere.com/docs/rate-limits", reviewed_on="2026-11-23"),
+    SeedSource(
+        "zai", "https://docs.z.ai/guides/overview/pricing", purpose="pricing", reviewed_on="2026-11-23"
+    ),
 )
 
 
 def terms_note(seed: SeedSource) -> str:
     return (
-        f"Built-in seed ({seed.purpose}) reviewed by the Oasis Route maintainers on {REVIEWED_ON}: public "
+        f"Built-in seed ({seed.purpose}) reviewed by the Oasis Route maintainers on {seed.reviewed_on}: "
+        "public "
         "page published by the provider, no login required, robots.txt permitted generic agents at review "
         "time. robots.txt is re-checked before every fetch and per-origin rate limits apply."
     )

@@ -120,6 +120,25 @@ ACCESS: dict[str, AccessInfo] = {
         free_tier_hint="Accounts include a small monthly inference credit; PRO and Team include more.",
         card_required=False,
     ),
+    "cohere": AccessInfo(
+        signup="https://dashboard.cohere.com/welcome/register",
+        console="https://dashboard.cohere.com/",
+        api_key="https://dashboard.cohere.com/api-keys",
+        docs="https://docs.cohere.com/docs/compatibility-api",
+        pricing="https://cohere.com/pricing",
+        rate_limits="https://docs.cohere.com/docs/rate-limits",
+        free_tier_hint="Trial keys are free: 1,000 API calls a month, 20 requests a minute per chat model, "
+        "for evaluation only.",
+        card_required=False,
+    ),
+    "zai": AccessInfo(
+        console="https://z.ai/model-api",
+        api_key="https://z.ai/manage-apikey/apikey-list",
+        docs="https://docs.z.ai/guides/develop/http/introduction",
+        pricing="https://docs.z.ai/guides/overview/pricing",
+        free_tier_hint="GLM-4.7-Flash, GLM-4.5-Flash and GLM-4.6V-Flash are priced at zero; other models "
+        "are pay-as-you-go.",
+    ),
     "custom": AccessInfo(free_tier_hint="Your own OpenAI-compatible endpoint (for example a local server)."),
 }
 
