@@ -32,7 +32,7 @@ class OAuthStartIn(BaseModel):
     accept_terms: bool = False
     display_name: str = Field(default="", max_length=200)
     priority: int = 0
-    mode: str = Field(default="redirect", pattern="^(redirect|manual)$")
+    mode: str = Field(default="redirect", pattern="^(redirect|manual|device)$")
 
 
 class OAuthCompleteIn(BaseModel):
@@ -65,6 +65,7 @@ async def start(
         priority=body.priority,
         redirect=body.mode == "redirect",
         request_base_url=str(request.base_url),
+        device=body.mode == "device",
     )
     binding = out.pop("_browser_binding", None)
     if binding:
@@ -101,6 +102,17 @@ async def complete(
     async with ctx.db.session() as session:
         await project_access(project_id, p, session, write=True)
     return await oauth.complete_manual(ctx, project_id=project_id, flow_id=flow_id, code=body.code)
+
+
+@router.post("/projects/{project_id}/connections/oauth/{flow_id}/poll")
+async def poll(
+    project_id: str, flow_id: str, p: Principal = MANAGE, ctx: AppContext = Depends(get_ctx)
+) -> dict[str, Any]:
+    """Check a ``device`` flow once. Returns ``pending`` with the ``interval`` to wait before the next
+    poll, or the final status (``completed`` with ``connection_id``, ``failed``, ``expired``)."""
+    async with ctx.db.session() as session:
+        await project_access(project_id, p, session, write=True)
+    return await oauth.poll_device(ctx, project_id=project_id, flow_id=flow_id)
 
 
 def _page(title: str, message: str, status: int) -> HTMLResponse:

@@ -225,6 +225,14 @@ oasis-route connect --from-env                 # preview: shows what was recogni
 oasis-route connect --from-env --env-file .env --accept-terms --free-tier
 ~~~
 
+Or let the local all-in-one pick them up every time it starts (keys already connected are skipped, and the built-in mock providers are paused once a real provider is active):
+
+~~~bash
+GROQ_API_KEY=gsk_... GEMINI_API_KEY=AIza... oasis-route dev --connect-env --free-tier --age 25 --country BD
+~~~
+
+`--age` and `--country` are your own declaration, needed by providers whose terms set an age or country rule. Hugging Face can also be connected on a headless server by **Hugging Face with a code**: enter the short code shown on any device where you are signed in.
+
 Then call the gateway:
 
 ~~~bash
@@ -288,7 +296,7 @@ OASIS Route is deliberately explicit about what it does not serve or guarantee t
 - **Inference endpoints:** Chat Completions, Responses, Anthropic Messages, and Models are supported. Embeddings, images, audio, and legacy completions are not served.
 - **Responses state:** the Responses API is currently stateless; <code>previous_response_id</code> is not supported.
 - **Mid-stream recovery:** failover is possible only before the first response byte. A stream that fails midway ends with an error event rather than being spliced into another model's output.
-- **Sign-in coverage:** OpenRouter and Hugging Face only. Hugging Face sign-in needs an https `public_url` (for its Client ID Metadata Document) or `OASIS_ROUTE_HF_OAUTH_CLIENT_ID`. Other providers use API keys, which can all be pasted at once.
+- **Sign-in coverage:** OpenRouter and Hugging Face only. Hugging Face sign-in (browser redirect or device code) needs an https `public_url` (for its Client ID Metadata Document) or `OASIS_ROUTE_HF_OAUTH_CLIENT_ID`. Other providers use API keys, which can all be pasted at once.
 - **Billing detection:** only OpenRouter and Hugging Face expose whether an account can be billed. For other providers a connection stays `unknown` (blocked in free-only projects) until the owner confirms it is free tier.
 - **Accounts and keys are yours to create:** Oasis Route never signs up for provider accounts, solves sign-up checks or collects keys published elsewhere. Providers' terms tie free tiers to a person's own account (usually with email or phone verification), and leaked keys belong to someone else. You create each free account once; everything after pasting the key is automatic. This is the same model OmniRoute and FreeLLMAPI use.
 - **Discovery reach:** official pages, catalogues and Atom/RSS announcement or release feeds that an operator has approved. No general web search. Discovered offers are proposed for review and are not routed until approved.

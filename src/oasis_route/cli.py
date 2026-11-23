@@ -234,6 +234,64 @@ def _cmd_connect(args: argparse.Namespace) -> int:
     return 0 if out["needs_attention"] == 0 else 3
 
 
+async def _dev_connect_env(
+    ctx: Any, project_id: str, *, free_tier: bool, age: int | None = None, country: str | None = None
+) -> None:
+    """Connect every provider key found in the environment (GROQ_API_KEY, HF_TOKEN, ...).
+
+    Passing ``--connect-env`` is the owner's confirmation that the keys are theirs. Re-running is
+    idempotent: keys already connected are reported, not duplicated. Once any real provider is active the
+    local mock providers are paused so ``auto`` never answers with mock output.
+    """
+    from sqlalchemy import select
+
+    from oasis_route.connections import key_detect
+    from oasis_route.connections import quick_connect as quick
+    from oasis_route.db.models import Connection, User
+    from oasis_route.domain.enums import ConnectionStatus
+
+    text = "\n".join(f"{n}={os.environ[n]}" for n in key_detect.ENV_NAMES if os.environ.get(n))
+    parsed = key_detect.parse_text(text)
+    if not parsed.keys:
+        print("oasis-route dev: --connect-env found no provider keys in the environment", file=sys.stderr)
+        return
+    async with ctx.db.transaction() as sess:
+        admin = (await sess.execute(select(User).order_by(User.created_at))).scalars().first()
+        if admin is None:
+            return
+        # Self-declared, like the console profile: providers with an age or country rule need it.
+        if age is not None:
+            admin.declared_age = age
+        if country:
+            admin.country = country.upper()
+    summary = await quick.quick_connect(
+        ctx,
+        project_id=project_id,
+        user=admin,
+        keys=parsed.keys,
+        accept_terms=True,
+        free_tier_declared=free_tier,
+    )
+    for r in summary.results:
+        extra = f" ({r.free_models} free models)" if r.free_models else ""
+        note = f": {r.message}" if r.message and r.outcome not in ("connected", "already_connected") else ""
+        print(
+            f"  {r.env_name or r.key_hint}: {r.provider_id or '?'} {r.outcome}{extra}{note}", file=sys.stderr
+        )
+    async with ctx.db.transaction() as sess:
+        conns_ = list(
+            (await sess.execute(select(Connection).where(Connection.project_id == project_id))).scalars()
+        )
+        real_active = any(
+            c.status == ConnectionStatus.ACTIVE.value and not c.provider_id.startswith("mock") for c in conns_
+        )
+        if real_active:
+            for c in conns_:
+                if c.provider_id.startswith("mock") and c.status == ConnectionStatus.ACTIVE.value:
+                    c.status = ConnectionStatus.SUSPENDED.value
+                    c.last_error = "paused: real providers are connected"
+
+
 def _cmd_dev(args: argparse.Namespace) -> int:
     """One command: SQLite + migrations + two mock providers + API + worker + an admin Oasis Key."""
     import uvicorn
@@ -302,6 +360,8 @@ def _cmd_dev(args: argparse.Namespace) -> int:
             for cid in ids:
                 await conns.validate(ctx, cid)
         pid, secret = key_file.read_text().split()[:2] if key_file.exists() else ("?", "?")
+        if args.connect_env and pid != "?":
+            await _dev_connect_env(ctx, pid, free_tier=args.free_tier, age=args.age, country=args.country)
         base = f"http://{s.host}:{args.port}"
         print(
             f"\nOasis Route dev is running.\n  console:  {base}/console/\n  API docs: {base}/docs\n"
@@ -383,6 +443,18 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--port", type=int, default=8080)
     d.add_argument("--mock-port", type=int, default=9100)
     d.add_argument("--state-dir", default=os.environ.get("OASIS_ROUTE_DEV_STATE_DIR", ".oasis-dev"))
+    d.add_argument(
+        "--connect-env",
+        action="store_true",
+        default=os.environ.get("OASIS_ROUTE_DEV_CONNECT_ENV", "").lower() in ("1", "true", "yes"),
+        help="connect the provider keys in your environment (GROQ_API_KEY, HF_TOKEN, ...): "
+        "confirms they are your own accounts and you accept each provider's terms",
+    )
+    d.add_argument(
+        "--free-tier", action="store_true", help="with --connect-env: the accounts have no billing set up"
+    )
+    d.add_argument("--age", type=int, help="with --connect-env: your age (some providers require 18+)")
+    d.add_argument("--country", help="with --connect-env: your ISO country code, e.g. BD")
     d.set_defaults(func=_cmd_dev)
     return p
 

@@ -251,3 +251,60 @@ async def test_free_tier_declaration_never_applies_to_billed_providers(
     res: dict[str, Any] = r.json()["results"][0]
     assert res["outcome"] == "connected" and res["billing_mode"] == "paid"
     assert "free-only projects will not route" in res["message"]
+
+
+async def test_dev_connect_env_connects_environment_keys_and_pauses_mocks(
+    client: httpx.AsyncClient, ctx: AppContext, providers: FakeProviders, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from oasis_route import cli
+    from oasis_route.connections import service as conns
+    from oasis_route.db.models import User
+
+    admin = await bootstrap(client)
+    pid = admin["project"]["id"]
+    async with ctx.db.transaction() as s:
+        user = (await s.execute(select(User))).scalar_one()
+        mock = await conns.create_connection(
+            ctx,
+            s,
+            project_id=pid,
+            user=user,
+            data=conns.ConnectionInput(provider_id="mock", secret={"api_key": "m"}, accept_terms=True),
+        )
+        mock.status = "active"
+    for name in key_detect.ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("GROQ_API_KEY", GROQ)
+    monkeypatch.setenv("DATABASE_PASSWORD", "not-a-provider-key")
+    await cli._dev_connect_env(ctx, pid, free_tier=True, age=30, country="bd")
+    await cli._dev_connect_env(ctx, pid, free_tier=True)  # idempotent on restart
+    async with ctx.db.session() as s:
+        rows = {c.provider_id: c for c in (await s.execute(select(Connection))).scalars()}
+        user = (await s.execute(select(User))).scalar_one()
+    assert set(rows) == {"mock", "groq"} and rows["groq"].status == "active"
+    assert rows["mock"].status == "suspended"  # `auto` never answers with mock output now
+    assert (user.declared_age, user.country) == (30, "BD")
+
+
+async def test_dry_run_reports_lines_and_choice_resolves_ambiguous_key(
+    client: httpx.AsyncClient, ctx: AppContext, providers: FakeProviders
+) -> None:
+    key, pid = await _user(client)
+    text = f"# my keys\n{AMBIGUOUS}\nGROQ_API_KEY={GROQ}\n"
+    url = f"/api/v1/projects/{pid}/connections/quick"
+    r = await client.post(url, json={"text": text, "dry_run": True}, headers=auth(key))
+    rows = {x["line"]: x for x in r.json()["results"]}
+    assert rows[2]["detected_by"] == "ambiguous" and "openai" in rows[2]["candidates"]
+    assert rows[3]["provider_id"] == "groq"
+    r = await client.post(
+        url,
+        json={"text": text, "accept_terms": True, "providers_by_line": {"2": "openai"}},
+        headers=auth(key),
+    )
+    out = {x["provider_id"]: x for x in r.json()["results"]}
+    assert set(out) == {"openai", "groq"} and out["openai"]["detected_by"] == "user", r.text
+    # The chosen provider, and only it, was asked about the ambiguous key.
+    asked = {
+        q.url.host for q in providers.requests if q.headers.get("authorization") == f"Bearer {AMBIGUOUS}"
+    }
+    assert asked == {"api.openai.com"}

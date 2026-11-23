@@ -109,7 +109,8 @@ Scope from [LIVE_PROVIDER_DISCOVERY_AND_ONBOARDING.md](LIVE_PROVIDER_DISCOVERY_A
 - [x] Account sync: OpenRouter key status (free tier, credits, free-model daily quota) and Hugging Face billing status (`canPay`).
 - [x] Official sign-in: OpenRouter PKCE key exchange; Hugging Face OAuth 2.0 + PKCE with a Client ID Metadata Document and background token refresh.
 - [x] Discover catalogue API and console tab with access requirements, verified offers, evidence links and next actions.
-- [ ] Device-code sign-in (Hugging Face publishes a device endpoint; not wired yet).
+- [x] Device-code sign-in (Hugging Face, RFC 8628): console "with a code" button and `/oauth/{flow_id}/poll`.
+- [x] `oasis-route dev --connect-env`: provider keys in the environment are connected at every start; mocks paused once a real provider is active.
 - [x] Announcement and GitHub release feeds (Atom/RSS) as sources. Permitted search APIs remain out of scope.
 - [x] Re-extraction of unchanged pages after an extractor upgrade (`sources.extractor_version`, migration 0008).
 - [x] One-step onboarding: paste every key (or a `.env`) in the console or run `oasis-route connect`; providers detected locally, each key validated only with its issuer, models synced and discovery refreshed.
