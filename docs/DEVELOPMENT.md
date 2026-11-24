@@ -8,6 +8,9 @@
 
 ## Five-minute local run
 
+For connecting this gateway to the OASIS agent runtime, see [OASIS integration](OASIS_INTEGRATION.md). Route remains independently deployable and can serve other compatible clients.
+
+
 ```bash
 git clone https://github.com/FAHTHIZ/OASIS-ROUTE.git
 cd OASIS-ROUTE
