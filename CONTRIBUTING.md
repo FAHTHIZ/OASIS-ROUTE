@@ -28,6 +28,23 @@ Thanks for helping improve Oasis Route.
 
 Use a short imperative summary line (for example `router: prefer pooled capacity on ties`), followed by detail if needed. By contributing you agree your work is licensed under the [Apache License 2.0](LICENSE).
 
+
+## Local commit attribution hook
+
+Enable the repository's commit-message filter in your checkout:
+
+```sh
+python scripts/install-git-hooks.py
+```
+
+The hook removes recognized AI-tool and bot credit trailers from new local commit messages while preserving
+human co-authors, human sign-offs, the commit body and issue references. Run
+`python scripts/test_commit_attribution.py` for its regression tests.
+
+This is a local Git hook, not a history rewrite or GitHub-side filter. Existing commits, commits created through
+GitHub's web interface and external automation that does not use this checkout's installed hook are unchanged.
+Each clone must enable the hook separately.
+
 ## Conduct
 
 Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
