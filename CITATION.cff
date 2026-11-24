@@ -7,9 +7,9 @@ authors:
     alias: FAHTHIZ
 repository-code: "https://github.com/FAHTHIZ/OASIS-ROUTE"
 abstract: >-
-  Open-source, self-hosted LLM gateway that discovers verified free inference tiers, connects the
-  provider accounts a user owns and routes each request to the strongest model with available quota,
-  behind OpenAI- and Anthropic-compatible APIs.
+  First-party, open-source inference-routing companion for OASIS and a standalone self-hosted LLM
+  gateway. It discovers verified free inference tiers, connects user-authorized provider accounts,
+  and routes requests by capability, policy, and available quota behind OpenAI- and Anthropic-compatible APIs.
 keywords:
   - llm-gateway
   - llm-router
