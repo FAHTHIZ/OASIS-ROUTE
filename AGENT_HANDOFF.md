@@ -27,7 +27,7 @@ Build a provider-neutral inference control plane with:
 8. Capacity analytics that distinguish advertised, verified, and usable tokens.
 9. An auditable administration interface and operational documentation.
 
-Oasis Route is independent of Oasis. Oasis may be a first-party client, but no core capability may require Oasis.
+OASIS Route is the first-party, optional inference-routing companion in the OASIS ecosystem. OASIS is the primary agent-runtime integration: it can delegate provider access, quota-aware routing, and inference failover to Route. Keep Route separately deployable and protocol-compatible, with no circular imports or hard runtime dependency; OASIS must remain usable with direct providers and other gateways, while Route must remain usable by non-OASIS clients. Until OASIS has a dedicated built-in provider entry and setup preset, describe the connection as the documented OpenAI-compatible integration—not as a shipped native preset. See [OASIS integration](docs/OASIS_INTEGRATION.md).
 
 ## Hard boundaries
 
