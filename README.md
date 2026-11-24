@@ -12,9 +12,15 @@
 </p>
 
 <p align="center">
-  <b>OASIS Route is an open-source, self-hosted LLM gateway and free-tier router.</b><br>
-  It finds verified free inference tiers, connects the provider accounts you own, and sends every request<br>
-  to the strongest model that still has quota, behind one OpenAI- and Anthropic-compatible endpoint and one key.
+  <b>OASIS Route is the first-party, open-source inference-routing companion to OASIS.</b><br>
+  It is a self-hosted LLM gateway and free-tier router: verified provider access, quota-aware model selection,<br>
+  and honest failover behind one OpenAI- and Anthropic-compatible endpoint and one key.
+</p>
+
+<p align="center">
+  OASIS owns the agent runtime, tools, and orchestration. OASIS Route handles authorized upstream
+  connections, eligibility and spend policy, quota-aware inference routing, and failover. Route is
+  deployed separately and remains usable by any OpenAI- or Anthropic-compatible client.
 </p>
 
 <p align="center">
@@ -62,6 +68,7 @@
 <br>
 
 - [Quickstart](#quickstart)
+- [Use with OASIS](#use-with-oasis)
 - [How many free tokens?](#how-many-free-tokens)
 - [Why OASIS Route](#why-oasis-route)
 - [Discover free capacity](#discover-free-capacity)
@@ -180,6 +187,14 @@ For a PostgreSQL-backed deployment, follow the [deployment guide](docs/DEPLOYMEN
 docker compose up -d --build
 docker compose run --rm api bootstrap --email you@example.com
 ~~~
+
+## Use with OASIS
+
+OASIS Route is the first-party inference-routing companion for the OASIS agent runtime. OASIS remains responsible for agent execution, tools, and orchestration; Route manages upstream provider connections, eligibility, quota reservations, model selection, and inference failover.
+
+The service already exposes a standard OpenAI-compatible endpoint, so OASIS can connect to it today using its custom-provider configuration. A dedicated built-in OASIS provider entry and setup preset are the next integration step; they are **not** claimed as shipped yet.
+
+See [OASIS integration](docs/OASIS_INTEGRATION.md) for the exact local setup, current limitations, and the intended boundary. OASIS does not depend on Route: it can continue using direct providers or other gateways, and Route remains useful to other compatible clients.
 
 ## How many free tokens?
 
