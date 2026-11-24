@@ -192,7 +192,7 @@ docker compose run --rm api bootstrap --email you@example.com
 
 OASIS Route is the first-party inference-routing companion for the OASIS agent runtime. OASIS remains responsible for agent execution, tools, and orchestration; Route manages upstream provider connections, eligibility, quota reservations, model selection, and inference failover.
 
-OASIS now includes a built-in `oasis-route` provider and a dedicated **OASIS Route** setup choice on its `main` branch. For local development, run Route on port `8081` to avoid colliding with llama.cpp's common port `8080`; the exact key and connection steps are in the [OASIS integration guide](docs/OASIS_INTEGRATION.md).
+OASIS `main` now includes a built-in `oasis-route` provider and a dedicated **OASIS Route** setup choice; the integration is pending the next OASIS release. Released builds can use the generic OpenAI-compatible endpoint in the meantime. For local development, run Route on port `8081` to avoid colliding with llama.cpp's common port `8080`; the exact key and connection steps are in the [OASIS integration guide](docs/OASIS_INTEGRATION.md).
 
 See [OASIS integration](docs/OASIS_INTEGRATION.md) for the exact local setup, current limitations, and the intended boundary. OASIS does not depend on Route: it can continue using direct providers or other gateways, and Route remains useful to other compatible clients.
 

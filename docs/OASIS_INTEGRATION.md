@@ -39,7 +39,7 @@ export OASIS_MODEL="auto"
 oasis
 ```
 
-OASIS now has a built-in `oasis-route` provider and a dedicated **OASIS Route** setup choice. The default registry endpoint is `http://127.0.0.1:8081/v1`, and `OASIS_ROUTE_API_KEY` is read only for that endpoint. The `auto` model alias is resolved by Route, which chooses an eligible upstream model for each request. Port 8081 avoids the common llama.cpp port 8080. Keep Route bound to loopback for local development; for remote use, follow the TLS and reverse-proxy guidance in [Deployment](DEPLOYMENT.md).
+OASIS `main` now has a built-in `oasis-route` provider and a dedicated **OASIS Route** setup choice; these will ship in the next OASIS release. Released builds can connect through the generic OpenAI-compatible endpoint. The default registry endpoint is `http://127.0.0.1:8081/v1`, and `OASIS_ROUTE_API_KEY` is read only for that endpoint. The `auto` model alias is resolved by Route, which chooses an eligible upstream model for each request. Port 8081 avoids the common llama.cpp port 8080. Keep Route bound to loopback for local development; for remote use, follow the TLS and reverse-proxy guidance in [Deployment](DEPLOYMENT.md).
 
 ## Current integration boundary
 
