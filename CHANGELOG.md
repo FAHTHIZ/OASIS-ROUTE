@@ -19,6 +19,11 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 - Atom/RSS announcement and release feeds as discovery sources (DTDs refused).
 - Sources record the extractor release that read them; after an upgrade each page is fetched unconditionally once and re-extracted (migration 0008).
 
+### Changed
+
+- Position OASIS Route as the first-party, optional inference-routing companion to OASIS while preserving standalone deployment and standard OpenAI/Anthropic API compatibility. Add an integration guide that distinguishes the working generic endpoint configuration from the upcoming native OASIS provider preset.
+- Upgrade GitHub Actions to current Node 24-compatible major releases (`checkout`/`setup-uv`/`upload-artifact` v7 and Docker login/build-push v4/v7).
+
 ### Fixed
 
 - The discovery fetcher decoded gzip responses twice, so every site that compresses robots.txt was recorded as `disallowed_by_robots`. Found by running discovery against the live seeds.
