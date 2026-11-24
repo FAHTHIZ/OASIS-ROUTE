@@ -14,7 +14,7 @@ From the OASIS-ROUTE repository:
 
 ```bash
 uv sync
-uv run oasis-route dev --port 8080
+uv run oasis-route dev --port 8081
 ```
 
 The development command creates a local SQLite state directory and an Oasis Key. By default it also starts deterministic mock providers, so the first run can be checked without an upstream account or inference charge.
@@ -22,7 +22,7 @@ The development command creates a local SQLite state directory and an Oasis Key.
 The local key is stored in `.oasis-dev/admin.key`. The second line is the bearer token:
 
 ```bash
-export OASIS_API_KEY="$(sed -n 2p .oasis-dev/admin.key)"
+export OASIS_ROUTE_API_KEY="$(sed -n 2p .oasis-dev/admin.key)"
 ```
 
 Before expecting real inference, connect at least one provider account you are authorized to use in **Connections** in the Route console. The mock providers make the development instance testable; they do not represent real upstream capacity.
@@ -32,20 +32,20 @@ Before expecting real inference, connect at least one provider account you are a
 In the same shell where OASIS runs:
 
 ```bash
-export OASIS_BASE_URL="http://127.0.0.1:8080/v1"
-export OASIS_API_KEY="<the Oasis Key printed by Route>"
+export OASIS_BASE_URL="http://127.0.0.1:8081/v1"
+export OASIS_ROUTE_API_KEY="<the Oasis Key printed by Route>"
 export OASIS_MODEL="auto"
 
 oasis
 ```
 
-OASIS treats this as a custom OpenAI-compatible endpoint. The `auto` model alias is resolved by OASIS Route, which chooses an eligible upstream model for each request. Keep the Route service bound to loopback for local development; for remote use, follow the TLS and reverse-proxy guidance in [Deployment](DEPLOYMENT.md).
+OASIS now has a built-in `oasis-route` provider and a dedicated **OASIS Route** setup choice. The default registry endpoint is `http://127.0.0.1:8081/v1`, and `OASIS_ROUTE_API_KEY` is read only for that endpoint. The `auto` model alias is resolved by Route, which chooses an eligible upstream model for each request. Port 8081 avoids the common llama.cpp port 8080. Keep Route bound to loopback for local development; for remote use, follow the TLS and reverse-proxy guidance in [Deployment](DEPLOYMENT.md).
 
 ## Current integration boundary
 
-The generic OpenAI-compatible connection works today. OASIS does **not yet** ship a named `oasis-route` provider entry, dedicated setup preset, or Route-aware free-budget classification. Those are the next native-integration tasks in the OASIS repository.
+The native provider entry and setup preset are now present on OASIS `main`. The integration remains intentionally separate: OASIS sends inference requests to Route's OpenAI-compatible API, while Route owns upstream provider credentials, eligibility, quota and spend policy.
 
-In particular, OASIS `--zero-budget` intentionally rejects unknown local gateway endpoints: it cannot infer which downstream provider an arbitrary router selects. Route's own `free_only` spend policy is a separate server-side control and does not currently change that OASIS decision. Do not label `auto` as free merely to bypass the guard; the native integration should make the trust boundary explicit and preserve both systems' spend protections.
+OASIS `--zero-budget` still treats the Route gateway as unknown: it cannot infer which downstream provider an arbitrary router selects. Route's own `free_only` spend policy is a separate server-side control and does not change that OASIS decision. Do not label `auto` as free merely to bypass the guard; the two systems retain independent spend protections.
 
 ## Production
 
