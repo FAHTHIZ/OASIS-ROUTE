@@ -1,11 +1,11 @@
 [project]
 name = "oasis-route"
 version = "0.1.0"
-description = "Open-source LLM gateway and free-tier router: verified free inference tiers, quota-aware routing and honest failover behind OpenAI- and Anthropic-compatible APIs."
+description = "First-party, open-source inference-routing companion for OASIS; a standalone LLM gateway with verified free tiers, quota-aware routing, and honest failover."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
-authors = [{ name = "Oasis Route contributors" }]
+authors = [{ name = "Fahim Hussain" }]
 keywords = [
   "llm", "llm-gateway", "llm-router", "ai-gateway", "openai-compatible", "anthropic", "free-tier",
   "inference", "rate-limiting", "failover", "fastapi", "self-hosted", "claude-code",
