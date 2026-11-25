@@ -63,7 +63,9 @@ PROFILES: dict[str, OpenAIProfile] = {
         list_models_supported=False,
         probe_model="glm-4.5-flash",
     ),
-    "custom": OpenAIProfile("custom", stream_usage_option=False),
+    # A custom OpenAI-compatible endpoint can be any server: its listing says nothing about
+    # tools, JSON mode or vision, so they stay unknown (not "no") until stated or set by an admin.
+    "custom": OpenAIProfile("custom", stream_usage_option=False, default_capabilities={"streaming": True}),
     "mock": OpenAIProfile("mock", default_capabilities=dict(_FULL)),
     "mock_alt": OpenAIProfile("mock_alt", default_capabilities=dict(_FULL)),
 }

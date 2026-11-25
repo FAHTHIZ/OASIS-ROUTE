@@ -855,6 +855,22 @@ class Engine:
                 f"{blocked[0]} free_tier` (or Connections in the console); to allow paid use, change "
                 "the project's spend mode"
             )
+        # A model set aside only for a capability (most often tools): say which, and how to use it.
+        lacking = sorted(
+            {
+                (r.provider_id, r.upstream_model, r.reason.split(":", 1)[1])
+                for r in rejected
+                if r.reason.startswith("missing_capability:")
+            }
+        )
+        if lacking and not blocked:
+            p_id, model, feat = lacking[0]
+            message += (
+                f"; {p_id}/{model} was set aside because it is not known to support {feat}, and "
+                f'model "auto" only picks models that are. To try it anyway, request it by name '
+                f'(model "{p_id}/{model}"); if it does support {feat}, record that with PATCH '
+                '/api/v1/admin/models/{id} so "auto" can choose it'
+            )
         return GatewayError(
             503,
             "no_eligible_route",

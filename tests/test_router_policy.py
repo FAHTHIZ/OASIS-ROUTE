@@ -223,3 +223,84 @@ async def test_eligibility_rechecked_at_route_time(
     await client.patch("/api/v1/admin/providers/mock_alt", json={"min_age": 40}, headers=auth(g["admin"]))
     plan = await _preview(client, g)
     assert _reasons(plan)[("mock_alt", "mock-large")].startswith("ineligible:under_min_age")
+
+
+async def test_no_route_for_a_capability_says_which_model_and_how(
+    client: httpx.AsyncClient, ctx: AppContext, upstreams: dict[str, Any]
+) -> None:
+    """auto with tools and no tool-capable model: the error names the model and the way through."""
+    g = await gateway_setup(client, two_providers=False)
+    async with ctx.db.transaction() as s:
+        for m in (await s.execute(select(Model))).scalars():
+            m.capabilities = {**m.capabilities, "tools": None}
+    tools = [{"type": "function", "function": {"name": "f", "parameters": {"type": "object"}}}]
+    r = await chat(client, g["key"], tools=tools)
+    assert r.status_code == 503, r.text
+    message = r.json()["error"]["message"]
+    assert "not known to support tools" in message and 'request it by name (model "mock/' in message
+    # Named explicitly, a model whose tool support is unknown is tried.
+    named = await chat(client, g["key"], model="mock/mock-large", tools=tools)
+    assert named.status_code == 200, named.text
+
+
+def test_custom_endpoint_capabilities_start_unknown() -> None:
+    """A custom server's listing says nothing about tools: unknown, not a stated "no"."""
+    from oasis_route.adapters.registry import PROFILES
+
+    caps = PROFILES["custom"].default_capabilities
+    assert "tools" not in caps and caps.get("streaming") is True
+
+
+async def test_model_sync_drops_an_old_default_guess(
+    client: httpx.AsyncClient, ctx: AppContext, upstreams: dict[str, Any]
+) -> None:
+    """Rows saved with an earlier default ("tools": false) follow today's defaults on the next sync."""
+    from oasis_route.adapters.base import ModelInfo
+    from oasis_route.connections.service import upsert_models
+
+    await gateway_setup(client, two_providers=False)
+    async with ctx.db.transaction() as s:
+        m = (
+            (
+                await s.execute(
+                    select(Model).where(Model.provider_id == "mock", Model.upstream_id == "mock-medium")
+                )
+            )
+            .scalars()
+            .one()
+        )
+        m.capabilities = {"streaming": True, "tools": False, "source": "adapter_default"}
+        admin = (
+            (
+                await s.execute(
+                    select(Model).where(Model.provider_id == "mock", Model.upstream_id == "mock-small")
+                )
+            )
+            .scalars()
+            .one()
+        )
+        admin.capabilities = {"streaming": True, "tools": False, "source": "admin"}
+    async with ctx.db.transaction() as s:
+        infos = [ModelInfo("mock-medium"), ModelInfo("mock-small")]
+        await upsert_models(s, "mock", infos, {"streaming": True})
+    async with ctx.db.session() as s:
+        medium = (
+            (
+                await s.execute(
+                    select(Model).where(Model.provider_id == "mock", Model.upstream_id == "mock-medium")
+                )
+            )
+            .scalars()
+            .one()
+        )
+        small = (
+            (
+                await s.execute(
+                    select(Model).where(Model.provider_id == "mock", Model.upstream_id == "mock-small")
+                )
+            )
+            .scalars()
+            .one()
+        )
+        assert medium.capabilities == {"streaming": True, "source": "adapter_default"}
+        assert small.capabilities["tools"] is False  # an admin's edit is kept

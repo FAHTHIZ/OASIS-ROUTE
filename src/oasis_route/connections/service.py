@@ -425,7 +425,15 @@ async def upsert_models(
             # (a model gaining tool support shows up on the next sync). Edits made
             # by an admin (any other source) are left alone.
             current = dict(m.capabilities or {})
-            if info.capabilities and current.get("source") in ("adapter_default", "omniroute_catalog"):
+            if current.get("source") == "adapter_default":
+                # Rebuilt from today's defaults and listing, so a default guess that was later
+                # corrected (an unknown recorded as "no") does not stick to existing rows.
+                fresh = {**default_caps, **info.capabilities, "source": "adapter_default"}
+                if current.get("chat") is False:
+                    fresh["chat"] = False
+                if fresh != current:
+                    m.capabilities = fresh
+            elif info.capabilities and current.get("source") == "omniroute_catalog":
                 merged = {**current, **info.capabilities}
                 if merged != current:
                     m.capabilities = merged
