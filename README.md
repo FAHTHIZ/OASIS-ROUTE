@@ -460,12 +460,14 @@ OASIS Route is working software. The implementation roadmap is tracked phase by 
 |---|---|
 | **Gateway** | OpenAI Chat Completions, OpenAI Responses, Anthropic Messages, streaming, cancellation, timeouts, and normalized errors |
 | **Identity and security** | Project isolation, scoped Oasis Keys, encrypted credential vault, envelope encryption, KEK rotation, audit trails, and redaction |
-| **Routing and quotas** | Capability-aware quality-first routing, route preview, atomic reservations, idempotency, shared quota pools, and usage settlement |
+| **Unified catalogue** | About 220 providers and 2,000 models imported as advertised, unverified data, served through OpenAI-compatible and Anthropic adapters with per-provider profiles; nothing is treated as verified or free until checked |
+| **Routing and quotas** | Capability-aware routing strategies with full route explanations,  route preview, atomic reservations, idempotency, shared quota pools, and usage settlement |
 | **Recovery** | Circuit breakers, cooldowns, Retry-After handling, reset-aware recovery, and honest downgrade signalling |
 | **Discovery** | Seed sources, bounded frontier, catalogue and rate-limit-table extraction, provider candidates, safe fetcher, evidence provenance, review workflow, and the Discover catalogue |
-| **Onboarding and spend** | One-step paste-all-keys connect (console and `oasis-route connect`) with local provider detection, OpenRouter and Hugging Face sign-in, token refresh, account free-tier detection, per-connection billing modes, and the free-only spend policy |
+| **Onboarding and spend** | One-step paste-all-keys connect (console and `oasis-route connect`) with local provider detection, OpenRouter and Hugging Face sign-in, token refresh, account free-tier detection, per-connection billing modes, spend modes (zero-budget, bounded autonomy with single-use paid approvals, continuity), a USD budget ledger with atomic holds and receipts |
 | **Capacity and telemetry** | Capacity analytics and forecasting, usage ledger, health metrics, Prometheus metrics, and OpenTelemetry instrumentation |
 | **Worker** | Database-leased jobs, backoff, timeouts, crash recovery, and stall alerts |
+| **Clients and operators** | Paste-ready recipes for Claude Code, Codex CLI, Cursor, Cline, Aider and SDKs (`oasis-route integrate`), and an operator CLI (`providers`, `models`, `routes`, `quota`, `verify`, `preview`, `explain`, `doctor`) |
 | **Console and deployment** | Web console, onboarding, Docker deployment, backup/restore guidance, and production runbooks |
 | **Data rights** | Secret-free account export and account erasure that destroys stored credentials |
 | **Mail notices** | Forwarded-mail support; Gmail integration is implemented but disabled by default behind its compliance gate |

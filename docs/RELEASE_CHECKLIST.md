@@ -59,3 +59,4 @@ locally.
 | Date | Version | Result |
 |---|---|---|
 | 2026-11-17 | 0.1.0 + unreleased | Sections 1–3 pass: lint, types, 270 tests (SQLite and PostgreSQL), pip-audit clean, 47 runtime licenses compatible, gitleaks clean over 30 commits, Trivy clean, SBOM built; wheel install verified on Python 3.12 and 3.14; upgrade 0002 → 0004 verified with live data. Threat model review: T21 added (account data export/erasure). No open critical or high findings. |
+| 2026-11-25 | 0.2.0 | Sections 1–3 pass: lint, types, 409 tests (SQLite and PostgreSQL in CI), supply-chain job clean (audit, licenses, secrets, SBOM), container build verified; upgrade from 0.1.0 (schema 0008 → 0012) verified with live data. Imported catalogue entries stay advertised/unverified; no paid route is enabled or used without explicit policy or approval. No open critical or high findings. |

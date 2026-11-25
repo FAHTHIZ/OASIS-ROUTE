@@ -4,6 +4,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-25
+
+Unified gateway release: an advertised catalogue of about 220 providers and 2,000 models (always labelled unverified until checked), protocol adapters, turnkey onboarding, routing strategies with explanations, spend modes with explicit paid approval, a USD budget ledger with receipts, client integration recipes, and an operator CLI and console. Nothing paid is ever enabled or used silently.
+
 ### Fixed
 
 - Routing on PostgreSQL broke ties between equally ranked connections by undefined row order, so failover could try candidates in a different order each run; ties now resolve by connection creation time and id.
