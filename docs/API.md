@@ -205,6 +205,9 @@ All paths are under `/api/v1`. Project-scoped endpoints require the key's own pr
 | `DELETE` | `/projects/{id}/connections/{cid}` | Revoke the connection and destroy its stored credential. |
 | `GET`, `POST` | `/projects/{id}/quota-pools` | Quota pools. Pools are learned automatically from provider rate-limit headers; manual pools are optional. |
 | `PATCH`, `DELETE` | `/projects/{id}/quota-pools/{pool_id}` | Adjust or remove a pool. |
+| `GET` | `/projects/{id}/routes` | Every route (connection × model) classified: `cost_class` (`free`, `paid`, `unknown`), `cost_basis`, `free_evidence` (`local`, `provider_price_list`, `account_declared`), `state` (`eligible`, `blocked`, `exhausted`), `reason`, `retry_in_s`, plus a `summary` (counts, `eligible_free`, spend policy, `unconfirmed_catalog_models`). Read-only. |
+| `GET` | `/projects/{id}/setup` | Turnkey onboarding report ([ONBOARDING.md](ONBOARDING.md)): `steps`, detected `local_servers` (only when private upstreams are allowed), `connectable_providers` split into `verified` and `advertised`, classified `routes`, and the single OpenAI-compatible `endpoint`. Probes loopback default ports only; connects nothing. |
+| `POST` | `/projects/{id}/setup` | Body `{"connect_local": true}`. Connects reachable local servers at priority `-10` (last resort), validates them and returns the same report with `connected_local`. Never changes the spend policy or any billing mode. Audited as `project.setup_applied`. |
 | `POST` | `/projects/{id}/route-preview` | Same body as a chat request. Returns ordered candidates, rejections with reasons and retry times, downgrade flags and the fallback budget, without calling a provider or reserving quota. |
 
 ### Capacity, usage and notifications

@@ -49,6 +49,26 @@ ENV_NAMES: dict[str, str] = {
 }
 
 
+def _imported_env_names() -> dict[str, str]:
+    """``<PROVIDER>_API_KEY`` for connectable providers from the imported catalogue (docs/CATALOG.md).
+
+    Only the conventional name is derived; a key is still sent only to the provider its variable names.
+    """
+    from oasis_route.registry import imported
+
+    out: dict[str, str] = {}
+    for p in imported.providers():
+        if p.status != "active" or not p.base_url:
+            continue
+        for stem in {p.id, str(p.raw.get("omniroute_id") or "")}:
+            if stem:
+                out[re.sub(r"[^A-Z0-9]+", "_", stem.upper()).strip("_") + "_API_KEY"] = p.id
+    return out
+
+
+ENV_NAMES = {**_imported_env_names(), **ENV_NAMES}  # curated names win
+
+
 @dataclass(frozen=True)
 class KeyPattern:
     provider_id: str

@@ -142,6 +142,8 @@ oasis-route connect --from-env                 # preview: shows what was recogni
 oasis-route connect --from-env --env-file .env --accept-terms --free-tier
 ~~~
 
+`oasis-route setup` does the rest in one go: it finds Ollama, llama.cpp, vLLM, LM Studio and other local servers on their default ports, connects them as last-resort free routes, lists the verified free providers you can still connect, classifies every route as free, paid or unknown and eligible, blocked or exhausted, and prints the single endpoint to use. It never enables a paid route. See [docs/ONBOARDING.md](docs/ONBOARDING.md).
+
 Or let the local all-in-one pick them up every time it starts (keys already connected are skipped, and the built-in mock providers are paused once a real provider is active):
 
 ~~~bash
@@ -509,6 +511,7 @@ Read the [security and compliance model](docs/SECURITY_AND_COMPLIANCE.md), [thre
 | **Explore the design** | [Architecture](docs/ARCHITECTURE.md) · [Decision records](docs/adr/): [stack](docs/adr/0001-stack-and-architecture.md), [free-only spend](docs/adr/0002-free-only-spend-policy.md), [seed sources and frontier](docs/adr/0003-seed-sources-and-frontier.md) |
 | **Review the project** | [Implementation audit](docs/IMPLEMENTATION_AUDIT.md) · [Release checklist](docs/RELEASE_CHECKLIST.md) |
 | **Compare alternatives** | [Comparison with LiteLLM, OmniRoute, and others](docs/COMPARISON.md) · [OmniRoute alignment report](docs/OMNIROUTE_ALIGNMENT.md) |
+| **Get started fast** | [Turnkey onboarding: `oasis-route setup`](docs/ONBOARDING.md) |
 | **Provider catalogue** | [Unified catalogue: curated seeds plus 220 imported providers, with provenance](docs/CATALOG.md) |
 | **Contribute** | [Development guide](docs/DEVELOPMENT.md) · [Agent handoff](AGENT_HANDOFF.md) |
 

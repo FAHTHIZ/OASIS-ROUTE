@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -234,6 +235,86 @@ def _cmd_connect(args: argparse.Namespace) -> int:
     return 0 if out["needs_attention"] == 0 else 3
 
 
+def _api(args: argparse.Namespace) -> tuple[Any, str] | None:
+    """An HTTP client for a running Oasis Route plus the project id (from --project or the Oasis Key)."""
+    import httpx
+
+    oasis_key = getattr(args, "oasis_key", None) or os.environ.get("OASIS_API_KEY", "")
+    if not oasis_key:
+        print("set OASIS_API_KEY or pass --oasis-key", file=sys.stderr)
+        return None
+    c = httpx.Client(
+        base_url=args.url.rstrip("/"), headers={"authorization": f"Bearer {oasis_key}"}, timeout=120
+    )
+    me = c.get("/api/v1/me")
+    if me.status_code != 200:
+        print(f"Oasis Key rejected: HTTP {me.status_code}", file=sys.stderr)
+        c.close()
+        return None
+    return c, getattr(args, "project", None) or me.json()["project"]["id"]
+
+
+def _add_api_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--url", default=os.environ.get("OASIS_ROUTE_URL", "http://127.0.0.1:8080"))
+    p.add_argument("--oasis-key", help="defaults to $OASIS_API_KEY")
+    p.add_argument("--project", help="defaults to the Oasis Key's project")
+    p.add_argument("--json", action="store_true", help="print the raw JSON response")
+
+
+def _print_setup(out: dict[str, Any]) -> None:
+    local = out["local_servers"]
+    print("Local servers")
+    if not local["enabled"]:
+        print(f"  detection off: {local['reason']}")
+    for srv in local["servers"]:
+        if srv["reachable"]:
+            state = "connected" if srv.get("connected") else "found"
+            print(f"  {srv['provider_id']:<20} {state:<10} {srv['base_url']}  {len(srv['models'])} models")
+    if local["enabled"] and not any(x["reachable"] for x in local["servers"]):
+        print("  none running on their default ports")
+    for c in out.get("connected_local") or []:
+        print(f"  connected {c['provider_id']}: {c['validation'].get('status')}")
+    cp = out["connectable_providers"]
+    print("\nVerified free providers you can connect")
+    for e in cp["verified"]:
+        print(f"  {e['provider_id']:<20} {'connected' if e['connected'] else 'available':<10} {e['name']}")
+    if not cp["verified"]:
+        print("  none reviewed yet")
+    print(
+        f"  plus {len(cp['advertised'])} advertised free tiers awaiting review "
+        "(oasis-route providers --advertised)"
+    )
+    rs = out["routes"]["summary"]
+    print("\nRoutes")
+    print(f"  {rs['total']} total · cost {rs['by_cost_class']} · state {rs['by_state']}")
+    print(f"  {rs['eligible_free']} eligible free routes · spend policy {rs['spend_policy']}")
+    ep = out["endpoint"]
+    print("\nOne OpenAI-compatible endpoint")
+    print(f"  OPENAI_BASE_URL={ep['base_url']}  OPENAI_API_KEY=$OASIS_API_KEY  model=auto")
+
+
+def _cmd_setup(args: argparse.Namespace) -> int:
+    """Turnkey onboarding against a running server: detect local servers, connect them, classify routes."""
+    api = _api(args)
+    if api is None:
+        return 2
+    c, project = api
+    with c:
+        if args.dry_run:
+            r = c.get(f"/api/v1/projects/{project}/setup")
+        else:
+            r = c.post(f"/api/v1/projects/{project}/setup", json={"connect_local": not args.no_local})
+    if r.status_code != 200:
+        print(f"HTTP {r.status_code}: {r.text[:500]}", file=sys.stderr)
+        return 1
+    out = r.json()
+    if args.json:
+        print(json.dumps(out, indent=2))
+    else:
+        _print_setup(out)
+    return 0 if out["routes"]["summary"]["eligible_free"] > 0 else 3
+
+
 async def _dev_connect_env(
     ctx: Any, project_id: str, *, free_tier: bool, age: int | None = None, country: str | None = None
 ) -> None:
@@ -438,6 +519,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     c.add_argument("--free-tier", action="store_true", help="declare the accounts have no billing set up")
     c.set_defaults(func=_cmd_connect)
+
+    st = sub.add_parser(
+        "setup",
+        help="turnkey onboarding: detect local servers, list connectable free providers, classify routes",
+    )
+    _add_api_args(st)
+    st.add_argument("--dry-run", action="store_true", help="only report; connect nothing")
+    st.add_argument("--no-local", action="store_true", help="do not connect detected local servers")
+    st.set_defaults(func=_cmd_setup)
 
     d = sub.add_parser("dev", help="local all-in-one: SQLite, mock providers, API, worker, admin key")
     d.add_argument("--port", type=int, default=8080)
