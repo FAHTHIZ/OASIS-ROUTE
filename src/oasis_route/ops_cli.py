@@ -124,7 +124,9 @@ def _providers(c: Any, project: str, args: argparse.Namespace) -> tuple[Any, str
     rows = []
     for p in providers:
         cat = p.get("catalog") or {}
-        source = cat.get("source") or "curated"
+        # Curated entries win over an imported catalogue row with the same id: show them as curated/reviewed.
+        curated = bool(cat.get("curated_override")) or not cat.get("source")
+        source = "curated" if curated else cat["source"]
         claim = _free_claim(cat)
         n = connected.get(p["id"], 0)
         if args.connected and not n:
@@ -135,7 +137,9 @@ def _providers(c: Any, project: str, args: argparse.Namespace) -> tuple[Any, str
             continue
         if args.status and p["status"] != args.status:
             continue
-        verification = (cat.get("provenance") or {}).get("verification") or "reviewed"
+        verification = (
+            "reviewed" if curated else (cat.get("provenance") or {}).get("verification") or "advertised"
+        )
         rows.append((p, source, verification, claim, n))
     out = [
         {**p, "connected_accounts": n, "verification": v, "advertised_free_tier": claim}
@@ -584,8 +588,15 @@ def _doctor(c: Any, project: str, args: argparse.Namespace) -> tuple[Any, str, i
     add(
         "free routes",
         "ok" if routes["eligible_free"] else "fail",
-        f"{routes['eligible_free']} eligible free of {routes['total']} routes",
+        f"{routes['eligible_free']} eligible free of {routes['total']} routes"
+        + ("" if routes["eligible_free"] else "; run `oasis-route setup` for free keys or local models"),
     )
+    if routes.get("eligible_demo") and not routes["eligible_free"]:
+        add(
+            "demo only",
+            "warn",
+            "only demo providers are connected: `auto` answers with canned echoes, not a real model",
+        )
     add("spend policy", "ok", f"{routes['spend_policy']} (paid routes are never used silently)")
     budgets = _get(c, f"/api/v1/projects/{project}/budgets")["budgets"]
     for b in budgets:

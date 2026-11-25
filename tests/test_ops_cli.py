@@ -69,7 +69,11 @@ async def test_imported_catalogue_is_labelled_advertised(
     assert await run_cli("providers", "--advertised", "--json") == 0
     rows = json.loads(capsys.readouterr().out)
     assert len(rows) > 50
-    assert all(r["verification"] == "advertised" and r["advertised_free_tier"] for r in rows)
+    assert all(r["advertised_free_tier"] for r in rows)
+    curated = {r["id"] for r in rows if (r.get("catalog") or {}).get("curated_override")}
+    assert {"groq", "cerebras", "gemini"} <= curated  # hand-written adapters keep their reviewed label
+    assert all(r["verification"] == "reviewed" for r in rows if r["id"] in curated)
+    assert all(r["verification"] == "advertised" for r in rows if r["id"] not in curated)
     assert await run_cli("providers", "--advertised") == 0
     assert "advertised data: unverified" in capsys.readouterr().out
     assert await run_cli("models", "--search", "cerebras/zai-glm-4.7") == 0
@@ -144,3 +148,27 @@ def test_parser_has_operator_commands() -> None:
         ["explain", "req_x"],
     ):
         assert callable(p.parse_args(argv).func)
+
+
+async def test_billing_command_declares_free_tier(
+    run_cli: Any, client: httpx.AsyncClient, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert await run_cli("billing", "mock", "free_tier") == 0
+    assert "billing_mode=free_tier" in capsys.readouterr().out
+    g = run_cli.g
+    conns = (await client.get(f"/api/v1/projects/{g['pid']}/connections", headers=auth(g["key"]))).json()
+    assert {c["billing_mode"] for c in conns if c["provider_id"] == "mock"} == {"free_tier"}
+    assert await run_cli("billing", "groq", "free_tier") == 2  # nothing connected for it
+
+
+async def test_connect_without_confirmation_stores_nothing(
+    run_cli: Any, client: httpx.AsyncClient, tmp_path: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    env = tmp_path / ".env"
+    env.write_text("GROQ_API_KEY=gsk_" + "a" * 52 + "\n")
+    assert await run_cli("connect", "--env-file", str(env)) == 0
+    io = capsys.readouterr()
+    assert "groq" in io.out and "Nothing was stored" in io.err
+    g = run_cli.g
+    conns = (await client.get(f"/api/v1/projects/{g['pid']}/connections", headers=auth(g["key"]))).json()
+    assert "groq" not in {c["provider_id"] for c in conns}

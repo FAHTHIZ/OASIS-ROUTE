@@ -8,6 +8,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 - `oasis-route connect` with no flags now asks you to paste keys (hidden), shows what it detected, and asks the two confirmations (your own accounts and terms; whether billing is set up) instead of stopping with "no keys found" or a silent dry run. Like other commands, it now uses the dev key in `.oasis-dev/admin.key` when `OASIS_API_KEY` is unset. Scripts keep `--from-env`/`--env-file`/`--stdin` with `--accept-terms`.
 - `oasis-route setup` printed raw Python dictionaries for route counts and gave no next step on a fresh install; it now prints readable counts, the free-key links, a warning when only demo providers answer, and the one-line fix for accounts with unknown billing.
+- `oasis-route providers` labelled the hand-written adapters (Groq, Cerebras, Gemini, OpenRouter, Mistral, NVIDIA, OpenAI, Anthropic, Cohere, Hugging Face, SambaNova, Z.ai) as imported `omniroute`/`advertised` because an imported row shares their id; they now show `curated`/`reviewed`. Their free-tier column is still marked advertised.
+- `oasis-route doctor` warns when only demo providers are connected, and its "no free routes" failure points to `oasis-route setup`.
 - `model=auto` kept answering with the built-in demo echo (`mock`, `mock_alt`) after a real provider or local model was connected. Demo providers now step aside for `auto` as soon as any real connection is active (gate `demo_provider_superseded`); pinning a demo model still works.
 - Route summaries counted demo routes as ready free capacity. `eligible_free` now counts real models only, and demo routes are reported separately as `eligible_demo`; routes carry a `demo` flag.
 
