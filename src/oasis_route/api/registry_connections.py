@@ -773,6 +773,7 @@ async def route_preview(
 ) -> dict[str, Any]:
     """Explain how a request would be routed right now, without calling any provider or reserving quota."""
     from oasis_route.gateway.engine import GatewayError, parse_body
+    from oasis_route.routing.explain import explain
     from oasis_route.routing.router import build_plan
 
     async with ctx.db.session() as session:
@@ -785,6 +786,7 @@ async def route_preview(
             raise ValidationFailed(err.message) from err
         plan = await build_plan(session, project, parsed.options)
     out = plan.describe()
+    out["explanation"] = explain(out, pinned=plan.pinned)
     out["downgrade_flags"] = [plan.is_downgrade(c) for c in plan.candidates]
     out["max_fallback_hops"] = (
         project.max_fallback_hops if project.max_fallback_hops is not None else ctx.settings.max_fallback_hops

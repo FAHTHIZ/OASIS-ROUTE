@@ -65,6 +65,28 @@ A prior is an ordering hint, not evidence: it is reported as `prior` with `prior
 
 A strict quality-first mode should exhaust eligible capacity at the highest suitable quality tier before descending. A balanced mode may trade a small quality difference for reliability or latency. Expose the mode to users.
 
+### 3.1 Routing strategies
+
+A strategy only orders routes that already passed every gate (authentication, authorization, verification, eligibility, budget, quota, health, capability, privacy). It never admits a route a gate rejected, so `lowest_cost` cannot reach a paid route under `free_only`.
+
+| `routing_mode` | Orders by |
+|---|---|
+| `strict_quality` (default) | Quality evidence; cost and latency break ties. |
+| `balanced` | Quality tier, then health and quota headroom. |
+| `lowest_cost` | Estimated worst-case cost: free first, then verified prices, then estimated prices; unknown cost last. |
+| `most_quota` | Largest remaining fraction of the tightest quota window; unmetered last. |
+| `lowest_latency` | Observed latency (EWMA); unobserved last. |
+| `reliability` | Observed success rate. |
+| `context_fit` | Smallest context window that still fits the request, so large-context routes stay free for large requests. |
+| `reset_aware` | Routes whose quota resets soonest first, spending capacity that would otherwise expire unused. |
+| `diversity` | Quality order, then interleaved one route per provider so consecutive fallbacks hit different providers. |
+
+Set it per project (`PATCH /api/v1/projects/{id}`) or per request (`oasis_route.mode`). A pinned model keeps its own order.
+
+### 3.2 Explanations
+
+Every route preview and persisted decision carries an `explanation` (see `routing/explain.py`): the selected route and reason, alternatives with their ranking factors, rejected routes grouped by reason and gate, verification (cost basis, free evidence, whether the price is verified), quota state, estimated and actual cost, and the fallback chain (planned order and attempts). `GET /api/v1/projects/{id}/route-decisions/{request_id}` returns it for a past request.
+
 ## 4. Quota model
 
 Represent limits independently:

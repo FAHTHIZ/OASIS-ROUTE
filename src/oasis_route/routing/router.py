@@ -31,6 +31,7 @@ from oasis_route.domain.enums import ConnectionStatus, QuotaPeriod, RoutingMode,
 from oasis_route.health import breaker
 from oasis_route.quota import ledger
 from oasis_route.quota.windows import next_reset
+from oasis_route.routing.cost import CostEstimate, estimate_cost
 from oasis_route.routing.priors import PRIOR_SOURCE, model_prior
 
 QUALITY_EPSILON = 0.5  # score difference treated as "same quality" for downgrade detection
@@ -72,11 +73,18 @@ class Candidate:
     preference_rank: int
     prior: float | None = None  # heuristic ordering hint for unrated models; never quality evidence
     cost_basis: str = "unknown"  # free_model | free_tier_account | local | paid | unknown
+    # Worst-case cost of this request on this route (routing/cost.py): status free | priced | unknown.
+    cost_status: str = "unknown"
+    est_cost_usd_micros: int | None = None
+    price_verified: bool = False
+    context_window: int | None = None
+    pricing: dict[str, Any] = field(default_factory=dict)
 
     def describe(self) -> dict[str, Any]:
         d = asdict(self)
         d.pop("adapter_key")
         d.pop("multi_account_permitted")
+        d.pop("pricing")
         d["prior_source"] = PRIOR_SOURCE if self.prior is not None else None
         return d
 
@@ -381,6 +389,7 @@ async def build_plan(
                 rejected.append(Rejection(prov.id, m.upstream_id, c.id, q_reason, reset_in))
                 continue
             rec = breaker.records_for(health, c.id, breaker.CONNECTION_SCOPE)
+            est = route_cost(basis, m.pricing, opts.input_tokens, opts.max_output_tokens)
             survivors.append(
                 Candidate(
                     connection_id=c.id,
@@ -402,6 +411,11 @@ async def build_plan(
                     preference_rank=opts.providers.index(prov.id) if prov.id in opts.providers else 0,
                     prior=model_prior(m.upstream_id, opts.task) if q is None else None,
                     cost_basis=basis,
+                    cost_status=est.status,
+                    est_cost_usd_micros=est.usd_micros,
+                    price_verified=est.verified,
+                    context_window=m.context_window,
+                    pricing=dict(m.pricing or {}),
                 )
             )
 
@@ -416,14 +430,50 @@ async def build_plan(
             )
             continue
         final.append(cand)
-    final.sort(key=lambda c: rank_key(c, opts.mode))
+    final.sort(key=lambda c: rank_key(c, opts.mode, opts))
+    if opts.mode is RoutingMode.DIVERSITY:
+        final = diversify(final)
     if not opts.allow_fallback:
         final = final[:1]
     plan.candidates = final
     return plan
 
 
-def rank_key(c: Candidate, mode: RoutingMode) -> tuple[float, ...]:
+def route_cost(
+    basis: str, pricing: dict[str, Any] | None, input_tokens: int, output_tokens: int
+) -> CostEstimate:
+    """Cost of a request on a route given its cost basis (a declared free-tier account costs nothing)."""
+    if basis == "free_tier_account":
+        return CostEstimate("free", 0, False, "account_declared_free_tier")
+    return estimate_cost(pricing, input_tokens, output_tokens, local=basis == "local")
+
+
+def diversify(cands: list[Candidate]) -> list[Candidate]:
+    """Keep the ranked order but take one candidate per provider per round, so fallback crosses providers."""
+    buckets: dict[str, list[Candidate]] = {}
+    for c in cands:
+        buckets.setdefault(c.provider_id, []).append(c)
+    out: list[Candidate] = []
+    while any(buckets.values()):
+        for pid in list(buckets):
+            if buckets[pid]:
+                out.append(buckets[pid].pop(0))
+    return out
+
+
+_UNKNOWN_COST = 1e18
+
+
+def _cost_key(c: Candidate) -> float:
+    if c.cost_status == "free":
+        return 0.0
+    if c.est_cost_usd_micros is None:
+        return _UNKNOWN_COST
+    # An unverified (estimated) price ranks after an equal verified one.
+    return float(c.est_cost_usd_micros) + (0.0 if c.price_verified else 0.5)
+
+
+def rank_key(c: Candidate, mode: RoutingMode, opts: RouteOptions | None = None) -> tuple[float, ...]:
     # Rated candidates (tier 0) always precede unrated ones (tier 1); unrated are ordered by heuristic prior.
     if c.quality is None:
         q_tier, q_val = 1.0, c.prior if c.prior is not None else 0.0
@@ -436,4 +486,23 @@ def rank_key(c: Candidate, mode: RoutingMode) -> tuple[float, ...]:
     reset_key = round((c.reset_in_s if c.reset_in_s is not None else 86_400.0 * 31) / 3600.0)
     frac_key = -(c.quota_fraction if c.quota_fraction is not None else 0.5)
     pref = (float(c.preference_rank), float(-c.priority))
+    quality = (q_tier, q_key)
+    if mode is RoutingMode.LOWEST_COST:
+        return (*pref, _cost_key(c), *quality, rel_key, lat_key)
+    if mode is RoutingMode.MOST_QUOTA:
+        # Unmetered (no known pool) sorts after metered capacity with headroom: its limit is unknown.
+        frac = c.quota_fraction if c.quota_fraction is not None else 0.0
+        return (*pref, -round(frac, 2), *quality, rel_key, lat_key)
+    if mode is RoutingMode.LOWEST_LATENCY:
+        lat = c.latency_ms if c.latency_ms is not None else 5_000.0
+        return (*pref, round(lat / 50.0), *quality, rel_key)
+    if mode is RoutingMode.RELIABILITY:
+        return (*pref, -round(c.reliability, 2), *quality, lat_key)
+    if mode is RoutingMode.CONTEXT_FIT:
+        need = (opts.input_tokens + opts.max_output_tokens) if opts else 0
+        # Tightest fit first keeps large-context routes for large requests; unknown windows last.
+        headroom = (c.context_window - need) if c.context_window else 1e12
+        return (*pref, float(headroom), *quality, rel_key)
+    if mode is RoutingMode.RESET_AWARE:
+        return (*pref, reset_key, frac_key, *quality, rel_key)
     return (*pref, q_tier, q_key, rel_key, lat_key, reset_key, frac_key)

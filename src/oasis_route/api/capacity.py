@@ -78,24 +78,47 @@ async def list_route_decisions(
             .limit(limit)
         )
     ).scalars()
-    return [
-        {
-            "request_id": d.request_id,
-            "requested_model": d.requested_model,
-            "task": d.task,
-            "mode": d.mode,
-            "candidates": d.candidates,
-            "rejected": d.rejected,
-            "attempts": d.attempts,
-            "served_model": d.served_model,
-            "served_provider": d.served_provider,
-            "fallback_used": d.fallback_used,
-            "downgraded": d.downgraded,
-            "outcome": d.outcome,
-            "created_at": d.created_at,
-        }
-        for d in rows
-    ]
+    return [_decision_out(d) for d in rows]
+
+
+def _decision_out(d: RouteDecision) -> dict[str, Any]:
+    return {
+        "request_id": d.request_id,
+        "requested_model": d.requested_model,
+        "task": d.task,
+        "mode": d.mode,
+        "candidates": d.candidates,
+        "rejected": d.rejected,
+        "attempts": d.attempts,
+        "served_model": d.served_model,
+        "served_provider": d.served_provider,
+        "fallback_used": d.fallback_used,
+        "downgraded": d.downgraded,
+        "outcome": d.outcome,
+        "explanation": d.explanation or {},
+        "created_at": d.created_at,
+    }
+
+
+@router.get("/projects/{project_id}/route-decisions/{request_id}")
+async def get_route_decision(
+    project_id: str,
+    request_id: str,
+    p: Principal = READ,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Explain one past request: the route chosen and why, alternatives, rejections, cost, fallback chain."""
+    await project_access(project_id, p, session)
+    d = (
+        await session.execute(
+            select(RouteDecision).where(
+                RouteDecision.project_id == project_id, RouteDecision.request_id == request_id
+            )
+        )
+    ).scalar_one_or_none()
+    if d is None:
+        raise NotFound("no route decision for this request id in this project")
+    return _decision_out(d)
 
 
 class NotificationOut(BaseModel):

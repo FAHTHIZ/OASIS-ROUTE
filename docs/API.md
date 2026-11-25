@@ -60,7 +60,7 @@ Optional routing controls go in an `oasis_route` object:
 | Field | Default | Meaning |
 |---|---|---|
 | `task` | `general` | `general`, `coding`, `reasoning`, `creative`, `extraction`, `vision`. Selects which quality evidence ranks models. The model names `auto/coding`, `auto/reasoning`, ... are shorthand for `"model": "auto"` plus this task, for clients that can only set a model name. |
-| `mode` | project `routing_mode` | `strict_quality`: strongest first, cost and latency only break ties. `balanced`: quality still dominates, with more weight on health and headroom. |
+| `mode` | project `routing_mode` | `strict_quality`: strongest first, cost and latency only break ties. `balanced`: quality still dominates, with more weight on health and headroom. Strategies (after every policy gate): `lowest_cost`, `most_quota`, `lowest_latency`, `reliability`, `context_fit`, `reset_aware`, `diversity`; see [ROUTING_AND_QUOTAS.md](ROUTING_AND_QUOTAS.md#31-routing-strategies). |
 | `min_quality` | none | Never route below this score. |
 | `allow_fallback` | `true` | Fail over to other eligible candidates on retryable errors. |
 | `allow_downgrade` | project `allow_downgrade` | Allow falling back to a lower-quality model. A project setting of `false` cannot be overridden per request. |
@@ -78,6 +78,8 @@ x-oasis-route-downgraded: false
 x-oasis-route-attempts: 1
 x-request-id: req_...
 ```
+
+The body's `oasis_route.route` object summarises the decision (`strategy`, `reason`, `cost_basis`, `free`, `estimated_cost_usd`, `actual_cost_usd`, `fallback_chain`) and links to the full explanation at `explain`.
 
 ```json
 "oasis_route": {
@@ -216,7 +218,8 @@ All paths are under `/api/v1`. Project-scoped endpoints require the key's own pr
 |---|---|---|
 | `GET` | `/projects/{id}/capacity` | Advertised, verified, authorized, usable, consumed (confirmed vs estimated) and forecast capacity, per provider account and unit. Unknown limits are reported as unknown, never as unlimited. |
 | `GET` | `/projects/{id}/usage` | Per-attempt usage records (`?limit`, `?since`). |
-| `GET` | `/projects/{id}/route-decisions` | Recent routing decisions with candidates, rejections and attempts. |
+| `GET` | `/projects/{id}/route-decisions` | Recent routing decisions with candidates, rejections, attempts and explanation. |
+| `GET` | `/projects/{id}/route-decisions/{request_id}` | Explain one past request: selected route and reason, alternatives, rejections by gate, verification, quota state, estimated and actual cost, fallback chain. |
 | `GET` | `/notifications` | Notifications for the caller (administrators also see instance-wide ones). |
 | `POST` | `/notifications/{id}/read` | Mark read. |
 | `DELETE` | `/notifications/{id}` | Delete. |

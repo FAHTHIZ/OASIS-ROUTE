@@ -502,6 +502,9 @@ class RouteDecision(Base):
     fallback_used: Mapped[bool] = mapped_column(Boolean, default=False)
     downgraded: Mapped[bool] = mapped_column(Boolean, default=False)
     outcome: Mapped[str] = mapped_column(String(30), default="pending")
+    # routing/explain.py: selected route and reason, alternatives, rejections by gate, verification,
+    # quota state, estimated and actual cost, fallback chain.
+    explanation: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, server_default="{}")
     created_at: Mapped[datetime] = _created()
 
 

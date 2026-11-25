@@ -97,8 +97,17 @@ class ErrorCategory(StrEnum):
 
 
 class RoutingMode(StrEnum):
+    """Ranking strategy, applied only after every policy gate has passed (docs/ROUTING_AND_QUOTAS.md)."""
+
     STRICT_QUALITY = "strict_quality"
     BALANCED = "balanced"
+    LOWEST_COST = "lowest_cost"  # free first, then lowest verified price; unknown cost last
+    MOST_QUOTA = "most_quota"  # highest remaining fraction of known quota
+    LOWEST_LATENCY = "lowest_latency"
+    RELIABILITY = "reliability"
+    CONTEXT_FIT = "context_fit"  # most context-window headroom for this request
+    RESET_AWARE = "reset_aware"  # use capacity that resets soonest (use it or lose it)
+    DIVERSITY = "diversity"  # quality order, but the fallback chain alternates providers
 
 
 class HealthState(StrEnum):

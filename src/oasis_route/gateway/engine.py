@@ -56,7 +56,9 @@ from oasis_route.domain.errors import STOP_CATEGORIES, UpstreamError
 from oasis_route.health import breaker
 from oasis_route.logging import get_logger
 from oasis_route.quota import ledger
-from oasis_route.routing.router import Candidate, RouteOptions, RoutePlan, build_plan
+from oasis_route.routing.cost import CostEstimate
+from oasis_route.routing.explain import explain
+from oasis_route.routing.router import Candidate, RouteOptions, RoutePlan, build_plan, route_cost
 from oasis_route.telemetry import tracer
 
 log = get_logger("oasis_route.gateway")
@@ -226,9 +228,25 @@ class RequestState:
     # the rest of the request (no account hopping); other models on the same connection still may be.
     excluded_providers: dict[str, str] = field(default_factory=dict)
     served: Candidate | None = None
+    actual_cost: CostEstimate | None = None
+
+    def explanation(self) -> dict[str, Any]:
+        plan = self.plan
+        desc = (
+            plan.describe() if plan else {"candidates": [], "rejected": [], "mode": self.parsed.options.mode}
+        )
+        return explain(
+            desc,
+            pinned=bool(plan and plan.pinned),
+            attempts=[a.public() for a in self.attempts],
+            served=self.served.describe() if self.served else None,
+            actual_cost=self.actual_cost,
+        )
 
     def meta(self) -> dict[str, Any]:
         served = self.served
+        ex = self.explanation()
+        sel = ex.get("selected") or {}
         return {
             "request_id": self.request_id,
             "provider": served.provider_id if served else None,
@@ -236,6 +254,16 @@ class RequestState:
             "fallback": self.fallback_used,
             "downgraded": bool(served and self.plan and self.plan.is_downgrade(served)),
             "attempts": [a.public() for a in self.attempts],
+            "route": {
+                "strategy": ex["strategy"],
+                "reason": sel.get("reason"),
+                "cost_basis": sel.get("cost", {}).get("cost_basis"),
+                "free": (ex.get("verification") or {}).get("free"),
+                "estimated_cost_usd": (ex.get("estimated_cost") or {}).get("usd"),
+                "actual_cost_usd": (ex.get("actual_cost") or {}).get("usd"),
+                "fallback_chain": ex["fallback_chain"]["planned"][:5],
+                "explain": f"/api/v1/projects/{self.project.id}/route-decisions/{self.request_id}",
+            },
         }
 
     @property
@@ -357,6 +385,7 @@ class Engine:
         reported = bool(usage and usage.provider_reported)
         in_tok = usage.input_tokens if reported and usage else st.parsed.options.input_tokens
         out_tok = usage.output_tokens if reported and usage else (output_estimate or 0)
+        st.actual_cost = route_cost(c.cost_basis, c.pricing, in_tok, out_tok)
         await self._usage(st, c, in_tok, out_tok, reported, "success", None, int(latency), streamed)
         m = self.ctx.metrics
         m.upstream_attempts.labels(c.provider_id, "success").inc()
@@ -476,6 +505,7 @@ class Engine:
                         fallback_used=st.fallback_used,
                         downgraded=bool(served and plan and plan.is_downgrade(served)),
                         outcome=outcome,
+                        explanation=st.explanation(),
                     )
                 )
         except IntegrityError:  # duplicate request id (client-supplied x-request-id reuse)
