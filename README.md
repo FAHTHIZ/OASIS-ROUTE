@@ -25,7 +25,7 @@
 
 <p align="center">
   <a href="https://github.com/FAHTHIZ/OASIS-ROUTE/actions/workflows/ci.yml"><img src="https://github.com/FAHTHIZ/OASIS-ROUTE/actions/workflows/ci.yml/badge.svg" alt="CI status" height="28" /></a>
-  <a href="https://github.com/FAHTHIZ/OASIS-ROUTE/actions/workflows/ci.yml"><img alt="Tests: 409" src="./assets/readme/badge-tests.svg" height="28" /></a>
+  <a href="https://github.com/FAHTHIZ/OASIS-ROUTE/actions/workflows/ci.yml"><img alt="Tests: 415" src="./assets/readme/badge-tests.svg" height="28" /></a>
   <a href="docs/DEVELOPMENT.md"><img alt="Python 3.12+" src="./assets/readme/badge-python.svg" height="28" /></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="./assets/readme/badge-license.svg" height="28" /></a>
   <br>
@@ -45,7 +45,10 @@
 </p>
 
 > [!NOTE]
-> **OASIS Route 0.2.0 is out: the unified gateway release.** About 220 providers and 2,000 models in an advertised catalogue (never shown as verified until checked), `oasis-route setup` onboarding, nine explainable routing strategies, spend modes that ask before paying, a USD budget ledger with receipts, paste-ready settings for Claude Code, Codex, Cursor and more, and a new operator CLI. Nothing paid is ever enabled or used silently.
+> **OASIS Route 0.2.1: a smoother first run.** `oasis-route dev --open` signs you in and connects local models, the new **Get started** page lists free no-card keys and takes them in one paste, and `auto` stops answering with the demo once something real is connected.
+> [Read the announcement](docs/releases/v0.2.1.md) · [GitHub release](https://github.com/FAHTHIZ/OASIS-ROUTE/releases/tag/v0.2.1) · [Changelog](CHANGELOG.md#021---2026-11-25)
+>
+> **OASIS Route 0.2.0: the unified gateway release.** About 220 providers and 2,000 models in an advertised catalogue (never shown as verified until checked), `oasis-route setup` onboarding, nine explainable routing strategies, spend modes that ask before paying, a USD budget ledger with receipts, paste-ready settings for Claude Code, Codex, Cursor and more, and a new operator CLI. Nothing paid is ever enabled or used silently.
 > [Read the announcement](docs/releases/v0.2.0.md) · [GitHub release](https://github.com/FAHTHIZ/OASIS-ROUTE/releases/tag/v0.2.0) · [Changelog](CHANGELOG.md#020---2026-11-25)
 
 <p align="center">
@@ -62,7 +65,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/stats-dark.svg" />
-    <img src="./assets/readme/stats-light.svg" alt="OASIS Route in numbers: about 32 million free tokens a month for chat and 71 million for coding agents with no purchase, about 650 million agent tokens a month after a one-time 10-credit OpenRouter unlock, and 409 tests on SQLite and PostgreSQL." width="100%" />
+    <img src="./assets/readme/stats-light.svg" alt="OASIS Route in numbers: about 32 million free tokens a month for chat and 71 million for coding agents with no purchase, about 650 million agent tokens a month after a one-time 10-credit OpenRouter unlock, and 415 tests on SQLite and PostgreSQL." width="100%" />
   </picture>
 </p>
 
@@ -519,7 +522,7 @@ Read the [security and compliance model](docs/SECURITY_AND_COMPLIANCE.md), [thre
 | **Explore the design** | [Architecture](docs/ARCHITECTURE.md) · [Decision records](docs/adr/): [stack](docs/adr/0001-stack-and-architecture.md), [free-only spend](docs/adr/0002-free-only-spend-policy.md), [seed sources and frontier](docs/adr/0003-seed-sources-and-frontier.md) |
 | **Review the project** | [Implementation audit](docs/IMPLEMENTATION_AUDIT.md) · [Release checklist](docs/RELEASE_CHECKLIST.md) |
 | **Compare alternatives** | [Comparison with LiteLLM, OmniRoute, and others](docs/COMPARISON.md) · [OmniRoute alignment report](docs/OMNIROUTE_ALIGNMENT.md) |
-| **What's new** | [0.2.0 release announcement](docs/releases/v0.2.0.md) · [Documentation home](docs/README.md) · [Changelog](CHANGELOG.md) |
+| **What's new** | [0.2.1 release announcement](docs/releases/v0.2.1.md) · [0.2.0](docs/releases/v0.2.0.md) · [Documentation home](docs/README.md) · [Changelog](CHANGELOG.md) |
 | **Get started fast** | [Turnkey onboarding: `oasis-route setup`](docs/ONBOARDING.md) · [Coding tools: `oasis-route integrate`](docs/INTEGRATIONS.md) |
 | **Inspect a running gateway** | [CLI: providers, models, routes, quota, verify, preview, doctor, explain](docs/CLI.md) |
 | **Provider catalogue** | [Unified catalogue: curated seeds plus 220 imported providers, with provenance](docs/CATALOG.md) |

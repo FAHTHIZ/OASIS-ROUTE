@@ -1,6 +1,6 @@
 [project]
 name = "oasis-route"
-version = "0.2.0"
+version = "0.2.1"
 description = "First-party, open-source inference-routing companion for OASIS; a standalone LLM gateway with verified free tiers, quota-aware routing, and honest failover."
 readme = "README.md"
 license = "Apache-2.0"

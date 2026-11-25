@@ -1,6 +1,8 @@
 # OASIS Route documentation
 
-> **New: OASIS Route 0.2.0, the unified gateway release.** About 220 providers and 2,000 models in an advertised catalogue, one-command onboarding, explainable routing, spend modes that ask before paying, a USD budget ledger, and ready-made settings for coding tools. [Read the announcement](releases/v0.2.0.md) · [GitHub release](https://github.com/FAHTHIZ/OASIS-ROUTE/releases/tag/v0.2.0)
+> **New: OASIS Route 0.2.1, a smoother first run.** One command opens the console signed in on a new Get started page; paste free keys once and send a test message. [Read the announcement](releases/v0.2.1.md)
+>
+> **OASIS Route 0.2.0, the unified gateway release.** About 220 providers and 2,000 models in an advertised catalogue, one-command onboarding, explainable routing, spend modes that ask before paying, a USD budget ledger, and ready-made settings for coding tools. [Read the announcement](releases/v0.2.0.md) · [GitHub release](https://github.com/FAHTHIZ/OASIS-ROUTE/releases/tag/v0.2.0)
 
 ## Start here
 
@@ -22,5 +24,6 @@
 
 | Version | Date | Notes |
 |---|---|---|
+| [0.2.1](releases/v0.2.1.md) | 2026-11-25 | Smoother first run: Get started page, one-click sign-in, interactive connect, real models supersede the demo, ~15 fixes |
 | [0.2.0](releases/v0.2.0.md) | 2026-11-25 | Unified gateway: catalogue, adapters, onboarding, routing strategies, spend modes, budget ledger, integrations, operator CLI |
 | 0.1.0 | 2026-11-17 | First release ([changelog](../CHANGELOG.md#010---2026-11-17)) |

@@ -4,6 +4,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-25
+
+Smoother first run. A new user can go from one command to a real model answering in a few clicks: `oasis-route dev --open` signs you in, connects local models, and the new **Get started** page lists free no-card keys, takes them in one paste box, and sends a test message. `model=auto` no longer answers with the demo echo once something real is connected. Fixes about 15 rough edges found by using 0.2.0 as a new user. No schema change.
+
 ### Fixed
 
 - Console: the paste-keys box was a narrow textarea with the confirmations squeezed beside it; it is now full width with one checkbox per line. **Connect one provider** defaulted to a blocked provider (`adapta-web`) and listed all 231; it now lists only connectable providers, reviewed adapters first, behind a "Choose a provider" placeholder. **Discover** rendered every provider card (about 27,000 px of mostly unavailable entries); it shows connected and connectable providers first with **Show all** for the rest.
@@ -26,7 +30,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 - `oasis-route dev` connects running local model servers (Ollama, LM Studio, vLLM, ...) on start, so `auto` answers with a real model without a separate `setup` step (`--no-local` to skip).
 - `GET /api/v1/projects/{id}/setup` now returns `free_keys` (where to create a no-card key for each reviewed hosted provider, with its environment variable and free-tier note) and `billing_attention` (connections whose routes are held back only because nobody declared whether billing is set up). A fresh install no longer ends at "none reviewed yet".
 - `oasis-route billing <provider> free_tier|paid|unknown` declares whether billing is set up on a connected account, so free-plan keys connected without `--free-tier` can be fixed in one command.
-- 0.2.0 release announcement ([docs/releases/v0.2.0.md](docs/releases/v0.2.0.md)), a documentation home page ([docs/README.md](docs/README.md)) with a release index, and a release banner in the README. The README test count now reads 409.
+- 0.2.0 release announcement ([docs/releases/v0.2.0.md](docs/releases/v0.2.0.md)), a documentation home page ([docs/README.md](docs/README.md)) with a release index, and a release banner in the README. The README test count now reads 409 (415 in 0.2.1).
 
 ## [0.2.0] - 2026-11-25
 
