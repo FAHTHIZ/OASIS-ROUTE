@@ -509,6 +509,7 @@ Read the [security and compliance model](docs/SECURITY_AND_COMPLIANCE.md), [thre
 | **Explore the design** | [Architecture](docs/ARCHITECTURE.md) · [Decision records](docs/adr/): [stack](docs/adr/0001-stack-and-architecture.md), [free-only spend](docs/adr/0002-free-only-spend-policy.md), [seed sources and frontier](docs/adr/0003-seed-sources-and-frontier.md) |
 | **Review the project** | [Implementation audit](docs/IMPLEMENTATION_AUDIT.md) · [Release checklist](docs/RELEASE_CHECKLIST.md) |
 | **Compare alternatives** | [Comparison with LiteLLM, OmniRoute, and others](docs/COMPARISON.md) · [OmniRoute alignment report](docs/OMNIROUTE_ALIGNMENT.md) |
+| **Provider catalogue** | [Unified catalogue: curated seeds plus 220 imported providers, with provenance](docs/CATALOG.md) |
 | **Contribute** | [Development guide](docs/DEVELOPMENT.md) · [Agent handoff](AGENT_HANDOFF.md) |
 
 ## Design principles

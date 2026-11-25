@@ -33,6 +33,7 @@ from oasis_route.db.models import Connection, Credential, Model, Provider, Sourc
 from oasis_route.domain.enums import ConnectionStatus, ErrorCategory, SourceReviewStatus
 from oasis_route.domain.errors import AppError, ValidationFailed
 from oasis_route.identity import audit
+from oasis_route.registry.imported import UNROUTABLE_LIFECYCLES
 
 VALIDATE_CONCURRENCY = 4
 
@@ -115,7 +116,9 @@ async def _free_model_count(ctx: AppContext, provider_id: str) -> tuple[int, int
         models = list(
             (
                 await s.execute(
-                    select(Model).where(Model.provider_id == provider_id, Model.lifecycle != "removed")
+                    select(Model).where(
+                        Model.provider_id == provider_id, Model.lifecycle.notin_(UNROUTABLE_LIFECYCLES)
+                    )
                 )
             ).scalars()
         )

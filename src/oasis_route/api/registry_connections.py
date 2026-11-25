@@ -182,7 +182,7 @@ class ModelPatch(BaseModel):
     aliases: list[str] | None = None
     context_window: int | None = Field(default=None, ge=1)
     max_output_tokens: int | None = Field(default=None, ge=1)
-    lifecycle: str | None = Field(default=None, pattern="^(active|deprecated|removed)$")
+    lifecycle: str | None = Field(default=None, pattern="^(active|deprecated|removed|catalog)$")
     display_name: str | None = None
     family: str | None = None
 

@@ -408,13 +408,14 @@ async def upsert_models(
             # (a model gaining tool support shows up on the next sync). Edits made
             # by an admin (any other source) are left alone.
             current = dict(m.capabilities or {})
-            if info.capabilities and current.get("source") == "adapter_default":
+            if info.capabilities and current.get("source") in ("adapter_default", "omniroute_catalog"):
                 merged = {**current, **info.capabilities}
                 if merged != current:
                     m.capabilities = merged
             if info.free is not None:
                 _set_reported_price(m, info.free)
-            if m.lifecycle == "removed":
+            if m.lifecycle in ("removed", "catalog"):
+                # Listed by the provider itself: confirmed (imported catalogue entries become routable here).
                 m.lifecycle = "active"
             continue
         caps = {**default_caps, **info.capabilities, "source": "adapter_default"}

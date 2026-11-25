@@ -70,6 +70,11 @@ class Settings(BaseSettings):
         description="Allow upstream endpoints on private networks (local models). Off by default.",
     )
 
+    catalog_import_enabled: bool = Field(
+        default=True,
+        description="Seed the imported OmniRoute provider/model catalogue (advertised data, never verified).",
+    )
+
     enable_mock_providers: bool | None = Field(
         default=None,
         description="Seed the deterministic mock providers. Defaults to on outside production.",

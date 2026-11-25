@@ -183,6 +183,9 @@ def _capability_reason(m: Model, opts: RouteOptions, explicit: bool = False) -> 
         return "not_a_chat_model"
     if m.lifecycle == "removed":
         return "model_removed"
+    if m.lifecycle == "catalog":
+        # Listed by the imported catalogue only; the provider's own model list has not confirmed it.
+        return "catalog_model_unconfirmed"
     for feat in sorted(opts.require):
         # A model the caller named explicitly is tried when a capability is
         # merely unknown (many listings, e.g. custom OpenAI-compatible servers,

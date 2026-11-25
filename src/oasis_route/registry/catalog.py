@@ -17,14 +17,16 @@ Facts we cannot verify from a primary source at build time are left **unknown** 
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select
 
 from oasis_route.config import Settings
-from oasis_route.db.models import Endpoint, Model, Provider
+from oasis_route.db.models import Endpoint, Evidence, Model, Offer, OfferTransition, Provider, utcnow
 from oasis_route.db.session import Database
+from oasis_route.registry import imported
 
 REVIEW_NOTE = (
     "Seeded from the built-in catalogue; an operator must re-verify terms, eligibility, and data policy."
@@ -329,4 +331,113 @@ async def sync_catalog(db: Database, settings: Settings) -> int:
                 if exists is None:
                     s.add(Model(provider_id=seed.id, lifecycle="active", aliases=[], **m))
                     inserted += 1
+    if settings.catalog_import_enabled:
+        inserted += await sync_imported(db)
+    return inserted
+
+
+async def sync_imported(db: Database) -> int:
+    """Seed the imported catalogue (registry/imported.py). Additive and idempotent; curated seeds win."""
+    src = imported.source()
+    curated = {p.id for p in PROVIDERS}
+    inserted = 0
+    async with db.transaction() as s:
+        existing_providers = {p.id: p for p in (await s.execute(select(Provider))).scalars()}
+        existing_models = {
+            (pid, uid) for pid, uid in (await s.execute(select(Model.provider_id, Model.upstream_id))).all()
+        }
+        has_endpoint = set((await s.execute(select(Endpoint.provider_id).distinct())).scalars())
+        existing_offers = set(
+            (await s.execute(select(Offer.dedupe_key).where(Offer.dedupe_key.like("omniroute:%")))).scalars()
+        )
+        for ip in imported.providers():
+            facts = ip.catalog_facts(src)
+            prov = existing_providers.get(ip.id)
+            if prov is None:
+                prov = Provider(
+                    id=ip.id,
+                    name=ip.name,
+                    adapter_key=ip.adapter_key,
+                    official_domains=list(ip.raw.get("official_domains") or []),
+                    terms_url=None,
+                    policy_url=None,
+                    status=ip.status,
+                    data_policy={},
+                    regions=[],
+                    min_age=None,
+                    allowed_countries=[],
+                    blocked_countries=[],
+                    multi_account_permitted=False,
+                    automated_access_permitted=ip.status == "active",
+                    notes=(
+                        f"Imported from the OmniRoute catalogue ({ip.status}: {ip.status_reason}). "
+                        if ip.status_reason
+                        else "Imported from the OmniRoute catalogue. "
+                    )
+                    + REVIEW_NOTE,
+                    catalog=facts,
+                )
+                s.add(prov)
+                existing_providers[ip.id] = prov
+                inserted += 1
+                await s.flush()
+            elif not prov.catalog:
+                # Curated providers keep their reviewed facts; only record what the import advertises.
+                prov.catalog = {**facts, "curated_override": ip.id in curated}
+            if ip.id not in curated and ip.base_url and ip.protocol and ip.id not in has_endpoint:
+                s.add(
+                    Endpoint(provider_id=ip.id, base_url=ip.base_url, protocol=ip.protocol, is_default=True)
+                )
+                has_endpoint.add(ip.id)
+                inserted += 1
+            for m in ip.models:
+                key = (ip.id, str(m["upstream_id"])[:200])
+                if key in existing_models:
+                    continue
+                s.add(Model(provider_id=ip.id, **imported.model_row(m, src)))
+                existing_models.add(key)
+                inserted += 1
+            for o in imported.offer_rows(ip, src):
+                if o["dedupe_key"] in existing_offers:
+                    continue
+                evidence_url = o.pop("evidence_url")
+                excerpt = o.pop("excerpt")
+                now = utcnow()
+                offer = Offer(
+                    provider_id=ip.id,
+                    first_observed_at=now,
+                    last_observed_at=now,
+                    next_review_at=now,
+                    extractor_version="omniroute-1",
+                    **o,
+                )
+                s.add(offer)
+                await s.flush()
+                s.add(
+                    OfferTransition(
+                        offer_id=offer.id,
+                        from_state=None,
+                        to_state=offer.state,
+                        actor="system:catalog_import",
+                        rationale="Advertised by the imported OmniRoute free-tier research snapshot; "
+                        "requires review against the provider's own documentation.",
+                        evidence_ids=[],
+                    )
+                )
+                s.add(
+                    Evidence(
+                        offer_id=offer.id,
+                        url=str(evidence_url)[:2000],
+                        publisher="OmniRoute catalogue (MIT)",
+                        excerpt=excerpt,
+                        sha256=hashlib.sha256(excerpt.encode()).hexdigest(),
+                        claim_type="free_tier",
+                        claim_value={"quota_claims": o["quota_claims"], **o["billing"]},
+                        method="catalog_import",
+                        confidence=0.2,
+                        next_review_at=now,
+                    )
+                )
+                existing_offers.add(o["dedupe_key"])
+                inserted += 1
     return inserted

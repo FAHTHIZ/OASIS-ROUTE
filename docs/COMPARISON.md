@@ -42,7 +42,7 @@ Reviewed on 2026-11-17 against the most-starred open-source LLM gateways and rou
 
 - **Surface area.** LiteLLM and new-api cover embeddings, images, audio, batches and rerank. Oasis Route only routes text generation.
 - **Install.** OmniRoute, Bifrost and Portkey start with one `npx` or `docker run`. Oasis Route needs `uv` or Docker (one command each), but has no npm package.
-- **Provider count.** OmniRoute lists hundreds of providers and LiteLLM over a hundred. Oasis Route seeds twelve real providers (Cohere and Z.ai were added on 2026-11-23) and accepts any OpenAI-compatible endpoint, including Cloudflare Workers AI and local servers.
+- **Provider count.** OmniRoute lists hundreds of providers and LiteLLM over a hundred. Oasis Route seeds twelve reviewed providers and imports OmniRoute's catalogue (about 220 providers and 2,000 models, labelled as advertised until confirmed, see [CATALOG.md](CATALOG.md)), and accepts any OpenAI-compatible endpoint, including Cloudflare Workers AI and local servers.
 - **Operations features.** Caching, guardrails, cost and spend analytics, and experiment tooling (TensorZero) are not in scope yet. The built-in console covers overview, capacity, connections, keys, models, route preview, usage, offers and notices.
 
 ## Where Oasis Route is different

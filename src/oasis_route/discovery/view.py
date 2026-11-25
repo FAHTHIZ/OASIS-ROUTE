@@ -34,6 +34,7 @@ from oasis_route.db.models import (
     utcnow,
 )
 from oasis_route.domain.enums import ConnectionStatus, OfferState, SourceReviewStatus
+from oasis_route.registry.imported import UNROUTABLE_LIFECYCLES
 
 PUBLIC_STATES = {OfferState.CONNECTABLE.value, OfferState.ACTIVE.value}
 REVIEW_STATES = {
@@ -189,7 +190,9 @@ async def discover(
     for e in ev_rows:
         evidence.setdefault(e.offer_id or "", []).append(e)
     model_rows = (
-        await session.execute(select(Model.provider_id, Model.pricing).where(Model.lifecycle != "removed"))
+        await session.execute(
+            select(Model.provider_id, Model.pricing).where(Model.lifecycle.notin_(UNROUTABLE_LIFECYCLES))
+        )
     ).all()
     total_models: dict[str, int] = {}
     free_models: dict[str, int] = {}

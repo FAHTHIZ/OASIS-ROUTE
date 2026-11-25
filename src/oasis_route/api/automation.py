@@ -31,6 +31,7 @@ from oasis_route.db.models import (
 from oasis_route.domain.enums import ApiKeyScope, ConnectionStatus
 from oasis_route.domain.errors import NotFound
 from oasis_route.identity import audit
+from oasis_route.registry.imported import UNROUTABLE_LIFECYCLES
 from oasis_route.worker import runner
 
 router = APIRouter(prefix="/api/v1", tags=["status"])
@@ -123,7 +124,10 @@ async def project_status(
                     await session.execute(
                         select(func.count())
                         .select_from(Model)
-                        .where(Model.provider_id.in_(active_providers), Model.lifecycle != "removed")
+                        .where(
+                            Model.provider_id.in_(active_providers),
+                            Model.lifecycle.notin_(UNROUTABLE_LIFECYCLES),
+                        )
                     )
                 ).scalar_one()
             )

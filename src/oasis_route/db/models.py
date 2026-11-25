@@ -177,6 +177,9 @@ class Provider(Base):
     multi_account_permitted: Mapped[bool] = mapped_column(Boolean, default=False)
     automated_access_permitted: Mapped[bool] = mapped_column(Boolean, default=True)
     notes: Mapped[str] = mapped_column(Text, default="")
+    # Imported catalogue facts with provenance (source URL, curated/imported dates, review state, advertised
+    # free tier, auth requirements). Advertised data only: never evidence that an offer is verified.
+    catalog: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, server_default="{}")
     created_at: Mapped[datetime] = _created()
 
 
@@ -203,11 +206,14 @@ class Model(Base):
     capabilities: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     context_window: Mapped[int | None] = mapped_column(Integer)
     max_output_tokens: Mapped[int | None] = mapped_column(Integer)
-    lifecycle: Mapped[str] = mapped_column(String(20), default="active")  # active|deprecated|removed
+    # active | deprecated | removed | catalog (listed by an imported catalogue, not yet confirmed by the
+    # provider's own model list; never routable)
+    lifecycle: Mapped[str] = mapped_column(String(20), default="active")
     # {task: {score: 0-100, source, date, methodology, confidence}}
     quality: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     # {free: bool|None, prompt_usd_per_mtok, completion_usd_per_mtok, source, observed_at}. Empty == unknown.
     pricing: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, server_default="{}")
+    catalog: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, server_default="{}")
     created_at: Mapped[datetime] = _created()
 
 

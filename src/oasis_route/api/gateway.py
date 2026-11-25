@@ -29,6 +29,7 @@ from oasis_route.gateway.engine import (
     idem_finish,
     parse_body,
 )
+from oasis_route.registry.imported import UNROUTABLE_LIFECYCLES
 from oasis_route.routing.priors import model_prior
 from oasis_route.routing.router import quality_of
 
@@ -150,7 +151,9 @@ async def _map_requested_model(ctx: AppContext, name: str) -> str:
     async with ctx.db.session() as session:
         found = (
             await session.execute(
-                select(Model.id).where(Model.upstream_id == name, Model.lifecycle != "removed").limit(1)
+                select(Model.id)
+                .where(Model.upstream_id == name, Model.lifecycle.notin_(UNROUTABLE_LIFECYCLES))
+                .limit(1)
             )
         ).first()
     return name if found is not None else "auto"
@@ -318,7 +321,7 @@ async def list_models(
         allow = allowed.get(m.provider_id)
         if (allow is not None and m.upstream_id not in allow) or (m.capabilities or {}).get("chat") is False:
             continue
-        if m.lifecycle == "removed":
+        if m.lifecycle in UNROUTABLE_LIFECYCLES:
             continue
         q, src = quality_of(m, Task.GENERAL)
         data.append(

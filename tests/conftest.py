@@ -63,6 +63,8 @@ def settings(db_url: str) -> Settings:
         admin_bootstrap_token="bootstrap-test-token",
         breaker_base_cooldown_s=1.0,
         worker_mode="off",
+        # The imported catalogue (~2,000 rows) is exercised by tests/test_catalog_import.py only.
+        catalog_import_enabled=False,
     )
 
 
