@@ -7,6 +7,7 @@ providers that document an OpenAI-compatible endpoint). Provider differences are
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import uuid
@@ -256,7 +257,41 @@ class OpenAICompatibleAdapter:
                         free=_reported_free(conn.provider_id, it),
                     )
                 )
+        if conn.provider_id == "ollama" and out:
+            await self._ollama_capabilities(conn, out)
         return out
+
+    async def _ollama_capabilities(self, conn: ConnectionContext, models: list[ModelInfo]) -> None:
+        """Fill tools/vision from Ollama's ``POST /api/show`` ``capabilities`` list.
+
+        Ollama's OpenAI-compatible ``/v1/models`` says nothing about tools, but its native API states them
+        per model (``["completion", "tools", "vision", ...]``; https://docs.ollama.com/api/show). Without
+        this, every local model stayed "tools unknown" and agent clients that send tools could not be
+        routed to them. Only the first 50 models are asked; a failure leaves a model as it was.
+        """
+        root = conn.base_url.rstrip("/")
+        root = root[: -len("/v1")] if root.endswith("/v1") else root
+
+        async def show(info: ModelInfo) -> None:
+            try:
+                r = await conn.client.post(
+                    root + "/api/show", json={"model": info.upstream_id}, timeout=timeout_for(conn)
+                )
+                caps = json.loads(r.content).get("capabilities") if r.status_code == 200 else None
+            except (httpx.HTTPError, ValueError, AttributeError):
+                return
+            if not isinstance(caps, list):
+                return
+            stated = {str(c).lower() for c in caps}
+            info.capabilities = {
+                **info.capabilities,
+                "tools": "tools" in stated,
+                "vision": "vision" in stated,
+            }
+            if "embedding" in stated and "completion" not in stated:
+                info.capabilities["chat"] = False
+
+        await asyncio.gather(*(show(m) for m in models[:50]))
 
     async def _probe(self, conn: ConnectionContext) -> None:
         """Authenticate with a 1-token request to a zero-priced model (providers without a model list)."""

@@ -509,3 +509,42 @@ async def test_list_models(kind: str) -> None:
     with pytest.raises(UpstreamError):
         await factory().validate_connection(conn(lambda r: httpx.Response(401, json={}), provider=provider))
     assert not await factory().health_check(conn(lambda r: httpx.Response(500, json={}), provider=provider))
+
+
+async def test_ollama_tools_come_from_api_show() -> None:
+    from oasis_route.adapters.registry import LOCAL_PROFILES
+
+    shown = {
+        "qwen3:4b": {"capabilities": ["completion", "tools"]},
+        "llava": {"capabilities": ["completion", "vision"]},
+        "nomic-embed-text": {"capabilities": ["embedding"]},
+    }
+    seen: list[str] = []
+
+    def handler(r: httpx.Request) -> httpx.Response:
+        seen.append(r.url.path)
+        if r.url.path == "/v1/models":
+            return httpx.Response(200, json={"data": [{"id": k} for k in [*shown, "broken"]]})
+        if r.url.path == "/api/show":
+            name = json.loads(r.content)["model"]
+            return httpx.Response(200, json=shown[name]) if name in shown else httpx.Response(404, json={})
+        return httpx.Response(404)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    c = ConnectionContext(
+        provider_id="ollama",
+        base_url="http://127.0.0.1:11434/v1",
+        secret={},
+        client=client,
+        max_response_bytes=1_000_000,
+        read_timeout_s=5,
+    )
+    models = {
+        m.upstream_id: m.capabilities
+        for m in await OpenAICompatibleAdapter(LOCAL_PROFILES["ollama"]).list_models(c)
+    }
+    assert models["qwen3:4b"]["tools"] is True and models["qwen3:4b"]["vision"] is False
+    assert models["llava"]["vision"] is True and models["llava"]["tools"] is False
+    assert models["nomic-embed-text"]["chat"] is False
+    assert "tools" not in models["broken"], "a failed /api/show leaves the model unknown"
+    assert seen.count("/api/show") == 4

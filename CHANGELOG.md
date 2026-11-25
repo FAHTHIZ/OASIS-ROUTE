@@ -5,6 +5,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 ## [Unreleased]
 
 ### Fixed
+- Ollama models now show their real tool and vision support. Ollama's OpenAI-compatible model list says nothing about tools, so every local model stayed "tools unknown" and agent clients (OASIS, Claude Code) could not be routed to them with `model=auto`. Model sync now reads each model's `capabilities` from Ollama's `/api/show`; embedding-only models are marked as not chat models.
 - A "Background maintenance is failing" or "stopped" notice now resolves itself once every job is healthy again: it is marked read with a "Recovered at …" note instead of staying in Notices as if the problem continued.
 - The console's Send test message button is disabled while a test runs, so a second click no longer fires another request that a one-at-a-time free endpoint rejects. It also says free models can take up to a minute.
 - After a restart, background jobs no longer wait out the old process's lease (up to 15 minutes) when that worker has stopped or stopped heart-beating; this also stops a false "Background maintenance is failing" notice right after restarting.
