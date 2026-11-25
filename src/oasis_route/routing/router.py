@@ -50,6 +50,8 @@ class RouteOptions:
     input_tokens: int = 0
     max_output_tokens: int = 0
     free_only: bool = False  # per-request tightening; a free_only project is always free-only
+    # bounded_autonomy: the (connection_id, upstream_model) a single-use paid approval admits.
+    approved_paid: tuple[str, str] | None = None
 
 
 @dataclass
@@ -109,6 +111,9 @@ class RoutePlan:
     best_quality: float | None
     pinned: bool
     free_only: bool = False
+    spend_mode: str = "free_only"
+    # bounded_autonomy: paid routes that passed every other gate and need explicit approval.
+    approval_candidates: list[Candidate] = field(default_factory=list)
 
     def is_downgrade(self, c: Candidate) -> bool:
         if self.best_quality is None:
@@ -122,6 +127,8 @@ class RoutePlan:
             "mode": self.options.mode.value,
             "best_quality": self.best_quality,
             "free_only": self.free_only,
+            "spend_mode": self.spend_mode,
+            "approval_candidates": [c.describe() for c in self.approval_candidates],
             "candidates": [c.describe() for c in self.candidates],
             "rejected": [r.describe() for r in self.rejected],
         }
@@ -135,8 +142,22 @@ def quality_of(model: Model, task: Task) -> tuple[float | None, str | None]:
     return None, None
 
 
-SPEND_FREE_ONLY = "free_only"
-SPEND_ALLOW_PAID = "allow_paid"
+SPEND_FREE_ONLY = "free_only"  # zero-budget: verified free routes only; fail clearly when none remain
+SPEND_BOUNDED = "bounded_autonomy"  # free first; a paid route needs a per-request single-use approval
+SPEND_ALLOW_PAID = "allow_paid"  # continuity: free first; authorised paid fallback, always labelled
+SPEND_ALIASES = {"zero_budget": SPEND_FREE_ONLY, "continuity": SPEND_ALLOW_PAID}
+SPEND_MODES = (SPEND_FREE_ONLY, SPEND_BOUNDED, SPEND_ALLOW_PAID)
+SPEND_LABELS = {
+    SPEND_FREE_ONLY: "zero_budget",
+    SPEND_BOUNDED: "bounded_autonomy",
+    SPEND_ALLOW_PAID: "continuity",
+}
+
+
+def spend_mode(project: Project) -> str:
+    v = project.spend_policy or SPEND_FREE_ONLY
+    v = SPEND_ALIASES.get(v, v)
+    return v if v in SPEND_MODES else SPEND_FREE_ONLY  # unknown values fail closed
 
 
 def cost_basis(conn: Connection, provider: Provider, model: Model) -> str:
@@ -312,8 +333,10 @@ async def build_plan(
             Rejection(pinned_provider or "*", name, None, "model_not_found_in_authorized_connections")
         )
 
-    free_only = opts.free_only or (project.spend_policy or SPEND_FREE_ONLY) == SPEND_FREE_ONLY
+    spend = SPEND_FREE_ONLY if opts.free_only else spend_mode(project)
+    free_only = spend == SPEND_FREE_ONLY
     survivors: list[Candidate] = []
+    pending: list[Candidate] = []
     static_ok_quality: list[float | None] = []
     for c in conns:
         prov = providers.get(c.provider_id)
@@ -351,6 +374,11 @@ async def build_plan(
                 rejected.append(Rejection(prov.id, m.upstream_id, c.id, conn_reason))
                 continue
             basis = cost_basis(c, prov, m)
+            needs_approval = (
+                spend == SPEND_BOUNDED
+                and basis in ("paid", "unknown")
+                and opts.approved_paid != (c.id, m.upstream_id)
+            )
             if free_only and basis in ("paid", "unknown"):
                 rejected.append(
                     Rejection(
@@ -390,7 +418,7 @@ async def build_plan(
                 continue
             rec = breaker.records_for(health, c.id, breaker.CONNECTION_SCOPE)
             est = route_cost(basis, m.pricing, opts.input_tokens, opts.max_output_tokens)
-            survivors.append(
+            (pending if needs_approval else survivors).append(
                 Candidate(
                     connection_id=c.id,
                     provider_id=prov.id,
@@ -421,7 +449,13 @@ async def build_plan(
 
     rated = [q for q in static_ok_quality if q is not None]
     best = max(rated) if rated else None
-    plan = RoutePlan(opts, [], rejected, best, pinned_provider is not None or not auto, free_only)
+    plan = RoutePlan(opts, [], rejected, best, pinned_provider is not None or not auto, free_only, spend)
+    for cand in pending:
+        rejected.append(
+            Rejection(cand.provider_id, cand.upstream_model, cand.connection_id, "approval_required")
+        )
+    pending.sort(key=lambda c: (_cost_key(c), rank_key(c, opts.mode, opts)))
+    plan.approval_candidates = pending[:3]
     final: list[Candidate] = []
     for cand in survivors:
         if not opts.allow_downgrade and plan.is_downgrade(cand):
@@ -430,9 +464,14 @@ async def build_plan(
             )
             continue
         final.append(cand)
-    final.sort(key=lambda c: rank_key(c, opts.mode, opts))
-    if opts.mode is RoutingMode.DIVERSITY:
-        final = diversify(final)
+    if spend == SPEND_FREE_ONLY:
+        final.sort(key=lambda c: rank_key(c, opts.mode, opts))
+    else:  # bounded_autonomy and continuity always prefer free routes; paid ones are fallback only
+        final.sort(key=lambda c: (c.cost_status != "free", rank_key(c, opts.mode, opts)))
+    if opts.mode is RoutingMode.DIVERSITY:  # diversify within free, then within paid: never paid before free
+        final = diversify([c for c in final if c.cost_status == "free"]) + diversify(
+            [c for c in final if c.cost_status != "free"]
+        )
     if not opts.allow_fallback:
         final = final[:1]
     plan.candidates = final

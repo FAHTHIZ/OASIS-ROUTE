@@ -46,6 +46,7 @@ from oasis_route.context import AppContext
 from oasis_route.db.models import (
     Connection,
     IdempotencyRecord,
+    PaidApproval,
     Project,
     RouteDecision,
     UsageRecord,
@@ -54,11 +55,24 @@ from oasis_route.db.models import (
 from oasis_route.domain.enums import ErrorCategory, RoutingMode, Task
 from oasis_route.domain.errors import STOP_CATEGORIES, UpstreamError
 from oasis_route.health import breaker
+from oasis_route.identity import audit
 from oasis_route.logging import get_logger
 from oasis_route.quota import ledger
 from oasis_route.routing.cost import CostEstimate
 from oasis_route.routing.explain import explain
-from oasis_route.routing.router import Candidate, RouteOptions, RoutePlan, build_plan, route_cost
+from oasis_route.routing.router import (
+    SPEND_BOUNDED,
+    SPEND_FREE_ONLY,
+    SPEND_LABELS,
+    Candidate,
+    Rejection,
+    RouteOptions,
+    RoutePlan,
+    build_plan,
+    route_cost,
+    spend_mode,
+)
+from oasis_route.spend import approvals
 from oasis_route.telemetry import tracer
 
 log = get_logger("oasis_route.gateway")
@@ -116,6 +130,7 @@ class ParsedRequest:
     options: RouteOptions
     include_usage_chunk: bool
     raw_hash: str
+    approve_paid: str | None = None  # bounded_autonomy single-use approval token
 
 
 def parse_body(body: Any, project: Project, settings_default_max: int) -> ParsedRequest:
@@ -184,12 +199,21 @@ def parse_body(body: Any, project: Project, settings_default_max: int) -> Parsed
         max_output_tokens=max_tokens or settings_default_max,
         free_only=ext.get("free_only") is True,  # can only tighten the project's spend policy
     )
+    approve = ext.get("approve_paid")
+    if approve is not None and not (isinstance(approve, str) and 0 < len(approve) <= 200):
+        raise GatewayError(
+            400,
+            "invalid_request",
+            "'oasis_route.approve_paid' must be a token string",
+            type_="invalid_request_error",
+        )
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str)
     return ParsedRequest(
         chat=chat,
         options=opts,
         include_usage_chunk=bool((body.get("stream_options") or {}).get("include_usage")),
         raw_hash=hashlib.sha256(canonical.encode()).hexdigest(),
+        approve_paid=approve,
     )
 
 
@@ -204,15 +228,20 @@ class Attempt:
     latency_ms: int | None = None
     message: str | None = None
     retry_in_s: float | None = None
+    retry_source: str | None = None  # provider (Retry-After / reset header) | cooldown (local breaker)
 
     def public(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "provider": self.provider,
             "model": self.model,
             "outcome": self.outcome,
             "category": self.category,
             "latency_ms": self.latency_ms,
         }
+        if self.retry_in_s is not None:
+            out["retry_in_s"] = round(self.retry_in_s, 1)
+            out["retry_source"] = self.retry_source or "quota"
+        return out
 
 
 @dataclass
@@ -229,6 +258,35 @@ class RequestState:
     excluded_providers: dict[str, str] = field(default_factory=dict)
     served: Candidate | None = None
     actual_cost: CostEstimate | None = None
+    approval_id: str | None = None
+
+    def spend(self) -> dict[str, Any]:
+        """Spend mode and, when a paid route served, a clear label with cost estimate and reason."""
+        plan, served = self.plan, self.served
+        policy = plan.spend_mode if plan else SPEND_FREE_ONLY
+        out: dict[str, Any] = {"mode": SPEND_LABELS.get(policy, policy), "policy": policy, "paid": False}
+        if served is None or served.cost_status == "free":
+            return out
+        failed_free = [a for a in self.attempts if a.outcome != "success"]
+        reason = (
+            "free routes failed or were skipped: "
+            + ", ".join(sorted({a.category or a.outcome for a in failed_free}))
+            if failed_free
+            else "no free route passed the routing gates"
+        )
+        micros = served.est_cost_usd_micros
+        out.update(
+            paid=True,
+            label="PAID FALLBACK" if policy != SPEND_FREE_ONLY else "PAID",
+            provider=served.provider_id,
+            model=served.upstream_model,
+            cost_status=served.cost_status,
+            estimated_cost_usd=None if micros is None else micros / 1_000_000,
+            price_verified=served.price_verified,
+            authorized_by="single_use_approval" if self.approval_id else "project_spend_policy",
+            reason=reason,
+        )
+        return out
 
     def explanation(self) -> dict[str, Any]:
         plan = self.plan
@@ -241,6 +299,7 @@ class RequestState:
             attempts=[a.public() for a in self.attempts],
             served=self.served.describe() if self.served else None,
             actual_cost=self.actual_cost,
+            spend=self.spend(),
         )
 
     def meta(self) -> dict[str, Any]:
@@ -254,6 +313,17 @@ class RequestState:
             "fallback": self.fallback_used,
             "downgraded": bool(served and self.plan and self.plan.is_downgrade(served)),
             "attempts": [a.public() for a in self.attempts],
+            "spend": self.spend(),
+            "cooldowns": [
+                {
+                    "provider": a.provider,
+                    "model": a.model,
+                    "retry_in_s": round(a.retry_in_s, 1),
+                    "category": a.category,
+                }
+                for a in self.attempts
+                if a.retry_in_s is not None
+            ],
             "route": {
                 "strategy": ex["strategy"],
                 "reason": sel.get("reason"),
@@ -293,11 +363,126 @@ class Engine:
         )
 
     async def _plan(self, st: RequestState) -> RoutePlan:
+        approval: PaidApproval | None = None
         async with self.ctx.db.session() as s:
             project = await s.get(Project, st.project.id)
             assert project is not None
             st.project = project
-            return await build_plan(s, project, st.parsed.options, exclude=st.exclude)
+            token = st.parsed.approve_paid
+            if token:
+                if spend_mode(project) != SPEND_BOUNDED or st.parsed.options.free_only:
+                    raise GatewayError(
+                        400,
+                        "approval_not_applicable",
+                        "paid approvals apply only to bounded_autonomy projects, not to free_only requests",
+                        type_="spend_policy_error",
+                    )
+                found = await approvals.find(s, project.id, token)
+                if found.problem or found.approval is None:
+                    raise GatewayError(
+                        403,
+                        found.problem or "approval_unknown",
+                        "the paid-route approval is unknown, already used or expired; nothing was charged",
+                        type_="spend_policy_error",
+                    )
+                approval = found.approval
+                st.parsed.options.approved_paid = (approval.connection_id, approval.upstream_model)
+            plan = await build_plan(s, project, st.parsed.options, exclude=st.exclude)
+        if approval is not None:
+            await self._apply_approval(st, plan, approval)
+        return plan
+
+    async def _apply_approval(self, st: RequestState, plan: RoutePlan, approval: PaidApproval) -> None:
+        key = (approval.connection_id, approval.upstream_model)
+        cand = next((c for c in plan.candidates if (c.connection_id, c.upstream_model) == key), None)
+        if cand is None:
+            return  # the approved route did not pass the gates now; the plan explains why
+        problem: str | None = None
+        cap = approval.max_cost_usd_micros
+        if cap is not None and (cand.est_cost_usd_micros is None or cand.est_cost_usd_micros > cap):
+            problem = "approval_cost_exceeded"
+        else:
+            async with self.ctx.db.transaction() as s:
+                if await approvals.consume(s, approval.id, st.request_id):
+                    st.approval_id = approval.id
+                    await audit.record(
+                        s,
+                        "spend.paid_approval_used",
+                        actor_key_id=st.api_key_id,
+                        project_id=st.project.id,
+                        target_type="paid_approval",
+                        target_id=approval.id,
+                        details={
+                            "request_id": st.request_id,
+                            "provider": cand.provider_id,
+                            "model": cand.upstream_model,
+                            "estimated_cost_usd_micros": cand.est_cost_usd_micros,
+                        },
+                    )
+                else:
+                    problem = "approval_used"
+        if problem:
+            plan.candidates.remove(cand)
+            plan.rejected.append(
+                Rejection(cand.provider_id, cand.upstream_model, cand.connection_id, problem)
+            )
+
+    async def _failure(self, st: RequestState) -> GatewayError:
+        """The terminal error. Under bounded_autonomy, offer single-use approvals for paid routes."""
+        base = self._no_route(st)
+        plan = st.plan
+        if (
+            plan is None
+            or plan.spend_mode != SPEND_BOUNDED
+            or not plan.approval_candidates
+            or base.code == "model_not_found"
+            or base.type == "provider_policy_error"
+        ):
+            return base
+        why = ", ".join(sorted(base.meta.get("rejections", {}))) or "no free route"
+        reason = f"no free route remained ({why})"
+        options: list[dict[str, Any]] = []
+        async with self.ctx.db.transaction() as s:
+            for c in plan.approval_candidates:
+                token, row = await approvals.issue(
+                    s,
+                    project_id=st.project.id,
+                    request_id=st.request_id,
+                    connection_id=c.connection_id,
+                    provider_id=c.provider_id,
+                    upstream_model=c.upstream_model,
+                    max_cost_usd_micros=c.est_cost_usd_micros,
+                    cost_status=c.cost_status,
+                    reason=reason,
+                )
+                options.append(approvals.option(token, row, price_verified=c.price_verified))
+            await audit.record(
+                s,
+                "spend.paid_approval_requested",
+                actor_key_id=st.api_key_id,
+                project_id=st.project.id,
+                details={
+                    "request_id": st.request_id,
+                    "reason": reason,
+                    "options": [
+                        {k: o[k] for k in ("provider", "model", "cost_status", "estimated_cost_usd_micros")}
+                        for o in options
+                    ],
+                },
+            )
+        meta = {
+            **base.meta,
+            "approval": {"spend_mode": "bounded_autonomy", "reason": reason, "options": options},
+        }
+        return GatewayError(
+            402,
+            "paid_approval_required",
+            "No free route remains for this request and this project requires approval before any paid "
+            "route is used. Nothing was charged. To proceed, resend the same request with "
+            "oasis_route.approve_paid set to one of the approval tokens in oasis_route.approval.options.",
+            type_="spend_policy_error",
+            meta=meta,
+        )
 
     def _skip(self, st: RequestState, c: Candidate) -> str | None:
         if (c.connection_id, c.upstream_model) in st.exclude or (c.connection_id, "*") in st.exclude:
@@ -433,6 +618,9 @@ class Engine:
         )
         if rec is None and d.probe:
             await breaker.release_probe(self.ctx.db, c.connection_id, c.upstream_model)
+        retry_in = err.retry_after_s
+        if retry_in is None and rec is not None and rec.open_until is not None:
+            retry_in = max(0.0, (rec.open_until - utcnow()).total_seconds())
         # Exclusions for the remainder of this request.
         st.exclude.add((c.connection_id, "*" if cat in _CONNECTION_WIDE else c.upstream_model))
         if cat in _ACCOUNT_SCOPED and not c.multi_account_permitted:
@@ -446,7 +634,10 @@ class Engine:
                 cat.value,
                 latency,
                 err.message,
-                err.retry_after_s,
+                retry_in,
+                retry_source="provider"
+                if err.retry_after_s is not None
+                else ("cooldown" if retry_in else None),
             )
         )
         await self._usage(st, c, 0, 0, False, "error", cat.value, latency, streamed)
@@ -627,8 +818,10 @@ class Engine:
             await self._on_success(st, d, result.usage, result.observations, output_estimate=out_est)
             await self._decision(st, "success")
             return result
-        failure = self._no_route(st)
-        await self._decision(st, "failed")
+        failure = await self._failure(st)
+        await self._decision(
+            st, "approval_required" if failure.code == "paid_approval_required" else "failed"
+        )
         raise failure
 
     async def open_stream(self, st: RequestState) -> tuple[Dispatch, StreamHandle, StreamChunk | None]:
@@ -677,8 +870,10 @@ class Engine:
                 raise
             finally:
                 span.end()  # covers dispatch and first chunk (time to first token)
-        err_out = self._no_route(st)
-        await self._decision(st, "failed")
+        err_out = await self._failure(st)
+        await self._decision(
+            st, "approval_required" if err_out.code == "paid_approval_required" else "failed"
+        )
         raise err_out
 
     async def relay(

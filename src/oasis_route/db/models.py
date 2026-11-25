@@ -508,6 +508,32 @@ class RouteDecision(Base):
     created_at: Mapped[datetime] = _created()
 
 
+class PaidApproval(Base):
+    """A single-use, short-lived approval for one paid route (bounded-autonomy spend mode).
+
+    Issued when a bounded-autonomy request finds no free route; the client must echo the token back in
+    ``oasis_route.approve_paid``. Only the hash is stored. Consumption is an atomic conditional update.
+    """
+
+    __tablename__ = "paid_approvals"
+    id: Mapped[str] = _id()
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    connection_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    provider_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    upstream_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    max_cost_usd_micros: Mapped[int | None] = mapped_column(BigInteger)
+    cost_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    used_by_request_id: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = _created()
+
+
 class IdempotencyRecord(Base):
     __tablename__ = "idempotency_records"
     __table_args__ = (UniqueConstraint("project_id", "key"),)

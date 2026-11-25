@@ -44,6 +44,8 @@ def _headers(st: RequestState) -> dict[str, str]:
         "x-oasis-route-fallback": "true" if m["fallback"] else "false",
         "x-oasis-route-downgraded": "true" if m["downgraded"] else "false",
         "x-oasis-route-attempts": str(len(m["attempts"])),
+        "x-oasis-route-spend-mode": str(m["spend"]["mode"]),
+        "x-oasis-route-paid": "true" if m["spend"]["paid"] else "false",
     }
 
 

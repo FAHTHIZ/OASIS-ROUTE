@@ -66,6 +66,7 @@ Optional routing controls go in an `oasis_route` object:
 | `allow_downgrade` | project `allow_downgrade` | Allow falling back to a lower-quality model. A project setting of `false` cannot be overridden per request. |
 | `providers` | all | Restrict routing to these provider ids. |
 | `free_only` | project `spend_policy` | `true` restricts this request to provably free capacity. It can only tighten a project's policy, never loosen it (see [ROUTING_AND_QUOTAS.md](ROUTING_AND_QUOTAS.md#21-spend-policy-never-silently-incur-paid-usage)). |
+| `approve_paid` | none | A single-use approval token from a `402 paid_approval_required` response (bounded-autonomy projects). Admits exactly the approved paid route once, within 15 minutes, if its worst-case estimate has not grown. |
 | `require` | inferred | Extra capabilities to require (`tools`, `vision`, `json_mode`, ...). Required features are also inferred from the request itself. |
 
 Every successful response says who actually served it, both in headers and in the body:
@@ -76,10 +77,12 @@ x-oasis-route-model: mock-large
 x-oasis-route-fallback: false
 x-oasis-route-downgraded: false
 x-oasis-route-attempts: 1
+x-oasis-route-spend-mode: zero_budget
+x-oasis-route-paid: false
 x-request-id: req_...
 ```
 
-The body's `oasis_route.route` object summarises the decision (`strategy`, `reason`, `cost_basis`, `free`, `estimated_cost_usd`, `actual_cost_usd`, `fallback_chain`) and links to the full explanation at `explain`.
+The body's `oasis_route.route` object summarises the decision (`strategy`, `reason`, `cost_basis`, `free`, `estimated_cost_usd`, `actual_cost_usd`, `fallback_chain`) and links to the full explanation at `explain`. `oasis_route.spend` names the spend mode (`zero_budget`, `bounded_autonomy`, `continuity`); when a paid route served it is labelled `"label": "PAID FALLBACK"` with provider, model, estimated cost, whether the price is verified, what authorised it (`single_use_approval` or `project_spend_policy`) and why no free route was used. `oasis_route.cooldowns` lists routes that were rate limited during this request with `retry_in_s` (from the provider's `Retry-After` / reset headers, or the local cooldown).
 
 ```json
 "oasis_route": {
@@ -116,6 +119,9 @@ Gateway errors use the OpenAI error envelope plus routing metadata:
 | 400 | `invalid_request`, `invalid_json`, `unsupported_parameter`, `invalid_idempotency_key` | The request itself is wrong. Not retried upstream. |
 | 400 | provider policy category | An upstream refused the content on policy grounds. Not retried on other providers. |
 | 401 / 403 | `unauthorized` / `forbidden` | Missing, invalid, revoked or under-scoped Oasis Key. |
+| 402 | `paid_approval_required` | Bounded-autonomy project and no free route remains. Nothing was dispatched or charged. `oasis_route.approval.options` lists up to three paid routes with provider, model, estimated cost, reason and an `approval_token`; resend with `oasis_route.approve_paid`. |
+| 403 | `approval_unknown`, `approval_used`, `approval_expired` | The `approve_paid` token is not valid for this project or was already used. |
+| 400 | `approval_not_applicable` | `approve_paid` sent to a project that is not bounded-autonomy, or with `free_only: true`. |
 | 404 | `model_not_found` | A pinned model is unknown or not reachable through this project's connections. |
 | 409 | `idempotency_key_reused`, `idempotency_in_progress` | See idempotency. |
 | 413 | `payload_too_large` | Body over `OASIS_ROUTE_MAX_REQUEST_BYTES`. |

@@ -33,8 +33,19 @@ Everything else is rejected with a visible reason: `paid_route_blocked` (connect
 the default for billed-only providers such as OpenAI and Anthropic) or `cost_unknown`. Route previews and
 `/projects/{id}/status` surface this ("Free-only mode is on and no connected model is confirmed free").
 
+#### Spend modes
+
+| `spend_policy` | Alias | Behaviour |
+|---|---|---|
+| `free_only` | `zero_budget` | Only verified free routes. When none remain the request fails clearly (`paid_route_blocked` / `cost_unknown` in the rejections). Never uses a paid route. |
+| `bounded_autonomy` | | Free routes first. When none remain, nothing is dispatched: the gateway returns `402 paid_approval_required` listing up to three paid routes (provider, model, estimated worst-case cost, whether the price is verified, reason) each with a single-use approval token. Resending with `"oasis_route": {"approve_paid": "<token>"}` admits exactly that route once, within 15 minutes, and only if its estimate has not grown. Tokens are stored hashed and consumed atomically; issue and use are audited (`spend.paid_approval_requested`, `spend.paid_approval_used`). |
+| `allow_paid` | `continuity` | Free routes first; paid routes follow as fallback without asking. Every response served by a paid route carries `oasis_route.spend` with `"label": "PAID FALLBACK"`, the estimated cost and the reason, plus `x-oasis-route-paid: true`. |
+
+Under `bounded_autonomy` and `allow_paid`, free routes always rank before paid ones regardless of strategy or connection priority. An unrecognised stored value fails closed to `free_only`.
+
 - Switching to `allow_paid` requires `acknowledge_paid_usage: true` and is audited as
-  `project.spend_policy_changed`.
+  `project.spend_policy_changed`. `bounded_autonomy` needs no acknowledgement because it never spends without a per-request approval.
+- On a 429 the route is cooled down (quota pool marked exhausted, or a breaker cooldown when no pool is known) until the provider's reset time or `Retry-After`, the next eligible route is chosen under the same spend mode, and `oasis_route.cooldowns` and the attempts record `retry_in_s` and its source. Cooled-down routes are rejected at planning time, so later requests do not hammer them.
 - A request may tighten the policy with `"oasis_route": {"free_only": true}`; it can never loosen it.
 - Provider-reported account status may only fill an `unknown` billing mode or revoke a stale `free_tier`
   (when the account has purchased credits); it never relaxes a user-declared `paid`.

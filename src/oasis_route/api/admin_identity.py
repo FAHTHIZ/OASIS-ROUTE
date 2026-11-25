@@ -25,6 +25,7 @@ from oasis_route.db.models import ApiKey, AuditEvent, Project, ProjectMember, Us
 from oasis_route.domain.enums import ApiKeyScope, ProjectRole, Role, RoutingMode
 from oasis_route.domain.errors import Conflict, Forbidden, NotFound, Unauthorized, ValidationFailed
 from oasis_route.identity import audit, data_rights, service
+from oasis_route.routing.router import SPEND_ALIASES
 
 router = APIRouter(prefix="/api/v1", tags=["identity"])
 
@@ -306,10 +307,14 @@ class ProjectPatch(BaseModel):
     max_fallback_hops: int | None = Field(default=None, ge=0, le=10)
     allow_downgrade: bool | None = None
     allow_unknown_quota: bool | None = None
-    spend_policy: Literal["free_only", "allow_paid"] | None = Field(
+    spend_policy: (
+        Literal["free_only", "zero_budget", "bounded_autonomy", "allow_paid", "continuity"] | None
+    ) = Field(
         default=None,
-        description="free_only (default) routes only provably free capacity; allow_paid requires "
-        "acknowledge_paid_usage=true and is audited.",
+        description="free_only / zero_budget (default) routes only verified free capacity and fails clearly "
+        "when none remains; bounded_autonomy prefers free and asks for a single-use approval before any paid "
+        "route; allow_paid / continuity prefers free and may use paid fallback (labelled), and requires "
+        "acknowledge_paid_usage=true. Changes are audited.",
     )
     acknowledge_paid_usage: bool = False
     kill_switch: bool | None = None
@@ -328,6 +333,8 @@ async def patch_project(
     service.require_project_role(role, {ProjectRole.OWNER}, p.user)
     changes = body.model_dump(exclude_unset=True, mode="json")
     ack = bool(changes.pop("acknowledge_paid_usage", False))
+    if changes.get("spend_policy") in SPEND_ALIASES:
+        changes["spend_policy"] = SPEND_ALIASES[changes["spend_policy"]]
     if changes.get("spend_policy") == "allow_paid" and project.spend_policy != "allow_paid" and not ack:
         raise ValidationFailed(
             "allow_paid lets the router use billed capacity; "
