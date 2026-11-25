@@ -6,12 +6,15 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- `oasis-route connect` with no flags now asks you to paste keys (hidden), shows what it detected, and asks the two confirmations (your own accounts and terms; whether billing is set up) instead of stopping with "no keys found" or a silent dry run. Like other commands, it now uses the dev key in `.oasis-dev/admin.key` when `OASIS_API_KEY` is unset. Scripts keep `--from-env`/`--env-file`/`--stdin` with `--accept-terms`.
+- `oasis-route setup` printed raw Python dictionaries for route counts and gave no next step on a fresh install; it now prints readable counts, the free-key links, a warning when only demo providers answer, and the one-line fix for accounts with unknown billing.
 - `model=auto` kept answering with the built-in demo echo (`mock`, `mock_alt`) after a real provider or local model was connected. Demo providers now step aside for `auto` as soon as any real connection is active (gate `demo_provider_superseded`); pinning a demo model still works.
 - Route summaries counted demo routes as ready free capacity. `eligible_free` now counts real models only, and demo routes are reported separately as `eligible_demo`; routes carry a `demo` flag.
 
 ### Added
 
-
+- `GET /api/v1/projects/{id}/setup` now returns `free_keys` (where to create a no-card key for each reviewed hosted provider, with its environment variable and free-tier note) and `billing_attention` (connections whose routes are held back only because nobody declared whether billing is set up). A fresh install no longer ends at "none reviewed yet".
+- `oasis-route billing <provider> free_tier|paid|unknown` declares whether billing is set up on a connected account, so free-plan keys connected without `--free-tier` can be fixed in one command.
 - 0.2.0 release announcement ([docs/releases/v0.2.0.md](docs/releases/v0.2.0.md)), a documentation home page ([docs/README.md](docs/README.md)) with a release index, and a release banner in the README. The README test count now reads 409.
 
 ## [0.2.0] - 2026-11-25

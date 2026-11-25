@@ -182,33 +182,95 @@ def _connect_text(args: argparse.Namespace) -> str:
     return "\n".join(lines)
 
 
-def _cmd_connect(args: argparse.Namespace) -> int:
-    """Send keys to a running Oasis Route over its API (one-step onboarding)."""
-    import httpx
+def _read_pasted_keys() -> str:
+    """Read keys pasted into a terminal without echoing them; an empty line ends the input."""
+    import getpass
 
-    oasis_key = args.oasis_key or os.environ.get("OASIS_API_KEY", "")
-    if not oasis_key:
-        print("set OASIS_API_KEY or pass --oasis-key", file=sys.stderr)
-        return 2
+    print(
+        "Paste your provider keys (one per line, KEY=value or the bare key; a whole .env works too).\n"
+        "Nothing is shown while you paste. Press Enter on an empty line when done.",
+        file=sys.stderr,
+    )
+    lines: list[str] = []
+    while True:
+        try:
+            line = getpass.getpass("")
+        except EOFError:
+            break
+        if not line.strip():
+            break
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _ask(question: str) -> bool:
+    try:
+        return input(f"{question} [y/N] ").strip().lower() in ("y", "yes")
+    except EOFError:
+        return False
+
+
+def _cmd_connect(args: argparse.Namespace) -> int:
+    """Send keys to a running Oasis Route over its API (one-step onboarding).
+
+    In a terminal with no flags it asks for the keys and the two confirmations; scripts pass
+    ``--from-env`` / ``--env-file`` / ``--stdin`` with ``--accept-terms`` and ``--free-tier``.
+    """
+    interactive = sys.stdin.isatty() and not args.stdin
     text = _connect_text(args)
     if not text.strip():
-        print("no keys found: use --from-env, --env-file PATH or --stdin", file=sys.stderr)
+        if not interactive:
+            print(
+                "no keys found: use --from-env, --env-file PATH or --stdin, or run `oasis-route connect` "
+                "in a terminal to paste them",
+                file=sys.stderr,
+            )
+            return 2
+        text = _read_pasted_keys()
+        if not text.strip():
+            print("no keys pasted; nothing changed", file=sys.stderr)
+            return 2
+    api = _api(args)
+    if api is None:
         return 2
-    headers = {"authorization": f"Bearer {oasis_key}"}
-    with httpx.Client(base_url=args.url.rstrip("/"), headers=headers, timeout=120) as c:
-        me = c.get("/api/v1/me")
-        if me.status_code != 200:
-            print(f"Oasis Key rejected: HTTP {me.status_code}", file=sys.stderr)
-            return 1
-        project = args.project or me.json()["project"]["id"]
+    c, project = api
+    path = f"/api/v1/projects/{project}/connections/quick"
+    with contextlib.closing(c):
+        accept, free_tier = args.accept_terms, args.free_tier
+        if not accept:
+            r = c.post(path, json={"text": text, "dry_run": True})
+            if r.status_code != 200:
+                print(f"HTTP {r.status_code}: {r.text[:500]}", file=sys.stderr)
+                return 1
+            found = r.json()["results"]
+            for res in found:
+                print(f"{res['key_hint']:>7}  {res.get('provider_id') or '?':<12} {res.get('detected_by')}")
+            if not found:
+                print("No provider keys recognised in that text.", file=sys.stderr)
+                return 2
+            if not interactive:
+                print(
+                    "\nNothing was stored. Re-run with --accept-terms to confirm these accounts are yours "
+                    "and connect them.",
+                    file=sys.stderr,
+                )
+                return 0
+            accept = _ask(
+                f"\nConnect {len(found)} key(s)? They must be your own accounts, and you accept each "
+                "provider's terms."
+            )
+            if not accept:
+                print("Nothing was stored.", file=sys.stderr)
+                return 0
+        if free_tier is None:
+            free_tier = (
+                not _ask("Is billing (a card or paid credits) set up on any of these accounts?")
+                if interactive
+                else False
+            )
         r = c.post(
-            f"/api/v1/projects/{project}/connections/quick",
-            json={
-                "text": text,
-                "accept_terms": args.accept_terms,
-                "free_tier": args.free_tier,
-                "dry_run": not args.accept_terms,
-            },
+            path,
+            json={"text": text, "accept_terms": True, "free_tier": bool(free_tier), "dry_run": False},
         )
     if r.status_code != 200:
         print(f"HTTP {r.status_code}: {r.text[:500]}", file=sys.stderr)
@@ -220,19 +282,44 @@ def _cmd_connect(args: argparse.Namespace) -> int:
         extra = f" · {res['free_models']} free models" if res.get("free_models") else ""
         note = f" · {res['message']}" if res.get("message") else ""
         print(f"{res['key_hint']:>7}  {provider:<12} {outcome}{extra}{note}")
-    if out.get("dry_run"):
-        print(
-            "\nNothing was stored. Re-run with --accept-terms to confirm these accounts are yours "
-            "and connect them.",
-            file=sys.stderr,
-        )
-        return 0
     print(
         f"\n{out['connected']} connected, {out['already_connected']} already connected, "
         f"{out['needs_attention']} need attention.",
         file=sys.stderr,
     )
+    if not free_tier and out["connected"]:
+        print(
+            "Billing was not declared absent, so only models the provider itself prices at zero are used. "
+            "For a free-plan account: oasis-route billing <provider> free_tier",
+            file=sys.stderr,
+        )
     return 0 if out["needs_attention"] == 0 else 3
+
+
+def _cmd_billing(args: argparse.Namespace) -> int:
+    """Declare whether billing is set up on a provider account (decides which of its routes are free)."""
+    api = _api(args)
+    if api is None:
+        return 2
+    c, project = api
+    with contextlib.closing(c):
+        conns = c.get(f"/api/v1/projects/{project}/connections")
+        if conns.status_code != 200:
+            print(f"HTTP {conns.status_code}: {conns.text[:300]}", file=sys.stderr)
+            return 1
+        targets = [x for x in conns.json() if x["provider_id"] == args.provider and x["status"] != "revoked"]
+        if not targets:
+            print(f"no connection for provider '{args.provider}' in this project", file=sys.stderr)
+            return 2
+        for x in targets:
+            r = c.patch(f"/api/v1/projects/{project}/connections/{x['id']}", json={"billing_mode": args.mode})
+            if r.status_code != 200:
+                print(f"HTTP {r.status_code}: {r.text[:300]}", file=sys.stderr)
+                return 1
+            print(f"{x['display_name']}: billing_mode={args.mode}")
+    if args.mode == "paid":
+        print("Paid accounts are only used if the project's spend mode allows it.", file=sys.stderr)
+    return 0
 
 
 def _clean_key(raw: str) -> str:
@@ -290,9 +377,13 @@ def _add_api_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--json", action="store_true", help="print the raw JSON response")
 
 
+def _counts(d: dict[str, int]) -> str:
+    return ", ".join(f"{v:,} {k}" for k, v in sorted(d.items(), key=lambda kv: -kv[1])) or "none"
+
+
 def _print_setup(out: dict[str, Any]) -> None:
     local = out["local_servers"]
-    print("Local servers")
+    print("Local models")
     if not local["enabled"]:
         print(f"  detection off: {local['reason']}")
     for srv in local["servers"]:
@@ -300,26 +391,48 @@ def _print_setup(out: dict[str, Any]) -> None:
             state = "connected" if srv.get("connected") else "found"
             print(f"  {srv['provider_id']:<20} {state:<10} {srv['base_url']}  {len(srv['models'])} models")
     if local["enabled"] and not any(x["reachable"] for x in local["servers"]):
-        print("  none running on their default ports")
+        print("  none running (optional: install Ollama from https://ollama.com and `ollama pull qwen2.5`)")
     for c in out.get("connected_local") or []:
         print(f"  connected {c['provider_id']}: {c['validation'].get('status')}")
+
+    keys = out.get("free_keys") or []
+    missing = [k for k in keys if not k["connected"]]
+    have = [k for k in keys if k["connected"]]
+    print("\nFree hosted providers (create a key on the provider's site, no card needed)")
+    for k in have:
+        print(f"  {k['provider_id']:<12} connected")
+    for k in missing:
+        print(f"  {k['provider_id']:<12} {k['get_key_url']:<46} {k['env_var'] or ''}")
+    if missing:
+        print("  then run: oasis-route connect   (paste the keys when asked)")
     cp = out["connectable_providers"]
-    print("\nVerified free providers you can connect")
-    for e in cp["verified"]:
-        print(f"  {e['provider_id']:<20} {'connected' if e['connected'] else 'available':<10} {e['name']}")
-    if not cp["verified"]:
-        print("  none reviewed yet")
-    print(
-        f"  plus {len(cp['advertised'])} advertised free tiers awaiting review "
-        "(oasis-route providers --advertised)"
-    )
+    if cp["verified"]:
+        print("  reviewed free offers: " + ", ".join(e["provider_id"] for e in cp["verified"]))
+    if cp["advertised"]:
+        print(
+            f"  {len(cp['advertised'])} more advertised free tiers, unreviewed: "
+            "oasis-route providers --advertised"
+        )
+
+    for a in out.get("billing_attention") or []:
+        print(
+            f"\n  ! {a['provider_id']}: {a['blocked_routes']} routes held back: its billing is unknown."
+            f"\n    If no billing is set up on that account: oasis-route billing {a['provider_id']} free_tier"
+        )
+
     rs = out["routes"]["summary"]
     print("\nRoutes")
-    print(f"  {rs['total']} total · cost {rs['by_cost_class']} · state {rs['by_state']}")
-    print(f"  {rs['eligible_free']} eligible free routes · spend policy {rs['spend_policy']}")
+    print(f"  {rs['total']:,} total: {_counts(rs['by_cost_class'])}; {_counts(rs['by_state'])}")
+    print(f"  {rs['eligible_free']:,} free routes ready on real models · spend policy {rs['spend_policy']}")
+    if rs.get("eligible_demo") and not rs["eligible_free"]:
+        print(
+            f"  only demo providers are connected ({rs['eligible_demo']} routes): `auto` answers with echoes "
+            "until you connect a real provider"
+        )
     ep = out["endpoint"]
     print("\nOne OpenAI-compatible endpoint")
     print(f"  OPENAI_BASE_URL={ep['base_url']}  OPENAI_API_KEY=$OASIS_API_KEY  model=auto")
+    print("  coding tools: oasis-route integrate")
 
 
 def _cmd_setup(args: argparse.Namespace) -> int:
@@ -600,8 +713,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="confirm you hold these accounts and accept each provider's terms (without it: dry run)",
     )
-    c.add_argument("--free-tier", action="store_true", help="declare the accounts have no billing set up")
+    c.add_argument(
+        "--free-tier",
+        action="store_true",
+        default=None,
+        help="declare the accounts have no billing set up (asked interactively when omitted)",
+    )
     c.set_defaults(func=_cmd_connect)
+
+    bl = sub.add_parser("billing", help="declare whether billing is set up on a connected provider account")
+    bl.add_argument("provider", help="provider id, e.g. groq")
+    bl.add_argument("mode", choices=["free_tier", "paid", "unknown"])
+    bl.add_argument("--url", default=os.environ.get("OASIS_ROUTE_URL", "http://127.0.0.1:8080"))
+    bl.add_argument("--oasis-key", help="defaults to $OASIS_API_KEY or the dev key")
+    bl.add_argument("--project", help="defaults to the Oasis Key's project")
+    bl.set_defaults(func=_cmd_billing)
 
     st = sub.add_parser(
         "setup",
