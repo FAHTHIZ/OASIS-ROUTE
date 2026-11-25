@@ -158,8 +158,8 @@ function quickConnectCard(back) {
         "then stored encrypted. Models, free tiers, limits and routing are set up automatically."
     ),
     text,
-    el("label", {}, el("span", {}, accept, " These are my own accounts and I accept each provider's terms")),
-    el("label", {}, el("span", {}, free, " No billing is set up on these accounts (free plans or trial keys)")),
+    el("label", { class: "check" }, accept, " These are my own accounts and I accept each provider's terms"),
+    el("label", { class: "check" }, free, " No billing is set up on these accounts (free plans or trial keys)"),
     el(
       "p",
       {},
@@ -494,11 +494,157 @@ async function explainRequest(requestId) {
 }
 
 const views = {
+  // First screen: what works right now, and the fewest steps to real, free models.
+  async start() {
+    const d = await api(`/api/v1/projects/${pid()}/setup`);
+    const rs = d.routes.summary;
+    const real = rs.eligible_free > 0;
+    const demoOnly = !real && rs.eligible_demo > 0;
+    const status = card(
+      null,
+      el("h1", { class: real ? "ok" : "warn" }, real ? "Ready: free models are connected" : demoOnly ? "Demo mode: replies are echoes" : "Connect a model to start"),
+      el(
+        "p",
+        {},
+        real
+          ? `${fmt(rs.eligible_free)} free route${rs.eligible_free === 1 ? "" : "s"} on real models. Requests with model "auto" go to the best one with quota left.`
+          : demoOnly
+            ? "Only the built-in demo provider is connected, so answers are canned echoes. Add a free key or a local model below: it takes about a minute."
+            : "No model can answer yet. Add a free key or a local model below."
+      ),
+      el("p", { class: "muted" }, `Spend policy ${rs.spend_policy}: nothing paid is used without your explicit approval.`)
+    );
+
+    const testOut = el("div", {});
+    const testCard = card(
+      "Send a test message",
+      el("p", { class: "muted" }, 'Sends "Say hello in five words." with model auto and shows who answered.'),
+      el(
+        "button",
+        {
+          type: "button",
+          onclick: async () => {
+            testOut.replaceChildren(el("p", { class: "muted" }, "Sending…"));
+            try {
+              const r = await api("/v1/chat/completions", {
+                method: "POST",
+                body: { model: "auto", messages: [{ role: "user", content: "Say hello in five words." }], max_tokens: 64 },
+              });
+              const m = r.oasis_route || {};
+              const sp = m.spend || {};
+              const parts = [
+                el("p", {}, el("strong", {}, `${m.provider || "?"} / ${m.model || r.model}`), sp.paid ? " · PAID" : " · free", m.fallback ? " · after fallback" : ""),
+                el("blockquote", {}, ((r.choices || [])[0] || {}).message ? r.choices[0].message.content : "(empty reply)"),
+                ["mock", "mock_alt"].includes(m.provider) ? el("p", { class: "warn" }, "That was the demo provider. Connect a real one below.") : null,
+              ];
+              testOut.replaceChildren(...parts.filter(Boolean));
+            } catch (e) {
+              testOut.replaceChildren(errorBox(e));
+            }
+          },
+        },
+        "Send test message"
+      ),
+      testOut
+    );
+
+    const missing = d.free_keys.filter((k) => !k.connected);
+    const keysCard = card(
+      "1 · Get free keys (no card)",
+      el("p", { class: "muted" }, "Open each link, sign in, create a key, and paste it in step 2. Each has its own free daily limits; connecting several gives you more."),
+      missing.length
+        ? table(
+            [
+              { label: "Provider", get: (k) => k.name },
+              { label: "Free tier", get: (k) => k.free_tier_hint || "" },
+              { label: "", get: (k) => safeLink(k.get_key_url, "Create key ↗") },
+            ],
+            missing
+          )
+        : el("p", { class: "ok" }, "All listed providers are connected."),
+      d.free_keys.some((k) => k.connected)
+        ? el("p", { class: "muted small" }, `Connected: ${d.free_keys.filter((k) => k.connected).map((k) => k.name).join(", ")}`)
+        : null
+    );
+
+    const qc = quickConnectCard("start");
+    qc.querySelector("h2").textContent = "2 · Paste your keys";
+    qc.append(el("p", {}, el("button", { type: "button", class: "secondary", onclick: () => render("start") }, "Refresh status")));
+
+    const attention = d.billing_attention.length
+      ? card(
+          "Confirm free-plan accounts",
+          el("p", { class: "muted" }, "These accounts are connected, but their routes are held back until you say whether billing is set up."),
+          d.billing_attention.map((a) =>
+            el(
+              "p",
+              {},
+              el("strong", {}, a.name), ` · ${a.blocked_routes} routes waiting `,
+              el("button", {
+                type: "button",
+                onclick: async () => {
+                  if (!confirm(`No billing (card or credits) is set up on ${a.name}? Free-only routing will then use it.`)) return;
+                  await api(`/api/v1/projects/${pid()}/connections/${a.connection_id}`, { method: "PATCH", body: { billing_mode: "free_tier" } });
+                  render("start");
+                },
+              }, "No billing: use it free")
+            )
+          )
+        )
+      : null;
+
+    const local = d.local_servers;
+    const found = (local.servers || []).filter((x) => x.reachable);
+    const localMsg = el("div", {});
+    const localCard = card(
+      "Or use a local model",
+      !local.enabled
+        ? el("p", { class: "muted" }, `Detection is off: ${local.reason}`)
+        : found.length
+          ? [
+              table(
+                [
+                  { label: "Server", get: (x) => x.provider_id },
+                  { label: "Address", get: (x) => el("code", {}, x.base_url) },
+                  { label: "Models", num: true, get: (x) => fmt(x.models.length) },
+                  { label: "", get: (x) => (x.connected ? pill("active") : "found") },
+                ],
+                found
+              ),
+              found.some((x) => !x.connected)
+                ? el("button", {
+                    type: "button",
+                    onclick: async () => {
+                      localMsg.replaceChildren(el("p", { class: "muted" }, "Connecting…"));
+                      try {
+                        await api(`/api/v1/projects/${pid()}/setup`, { method: "POST", body: { connect_local: true } });
+                        render("start");
+                      } catch (e) {
+                        localMsg.replaceChildren(errorBox(e));
+                      }
+                    },
+                  }, "Connect local models")
+                : null,
+            ]
+          : el("p", { class: "muted" }, "None running. Install ", safeLink("https://ollama.com", "Ollama"), ", run ", el("code", {}, "ollama pull qwen2.5"), ", then refresh. Free and unlimited, but runs on your own hardware."),
+      localMsg
+    );
+
+    const ep = d.endpoint;
+    const useCard = card(
+      "3 · Use it from your apps",
+      el("p", { class: "muted" }, "Any OpenAI-compatible client works. Your Oasis Key is the API key."),
+      el("pre", {}, `OPENAI_BASE_URL=${ep.base_url}\nOPENAI_API_KEY=<your Oasis Key>\nmodel: auto`),
+      el("p", {}, el("button", { type: "button", class: "secondary", onclick: () => render("integrations") }, "Settings for Claude Code, Cursor, Aider, …"))
+    );
+    return [status, testCard, attention, keysCard, qc, localCard, useCard];
+  },
+
   async discover() {
     const d = await api(`/api/v1/discover?project_id=${encodeURIComponent(pid())}`);
     const st = d.status;
     const kpi = (l, v, sub) => el("div", { class: "kpi" }, el("div", { class: "v" }, fmt(v)), el("div", { class: "l" }, l), sub ? el("div", { class: "l" }, sub) : null);
-    const filters = { q: "", free: false, oauth: false, nocard: false, connected: false };
+    const filters = { q: "", free: false, oauth: false, nocard: false, connected: false, all: false };
     const grid = el("div", { class: "pgrid" });
     const count = el("span", { class: "muted" });
     const draw = () => {
@@ -511,8 +657,18 @@ const views = {
           (!filters.nocard || p.card_required === false) &&
           (!filters.connected || p.connection)
       );
-      count.replaceChildren(`${rows.length} of ${d.providers.length} providers`);
-      grid.replaceChildren(...(rows.length ? rows.map(providerCard) : [el("p", { class: "muted" }, "No provider matches these filters.")]));
+      // Connected and connectable providers first; blocked/unsupported ones only on request.
+      const usable = (p) => p.connection || ["connect_api_key", "connect_oauth", "connected", "confirm_billing", "fix_connection"].includes(p.next_action.kind);
+      rows.sort((a, b) => Number(!!b.connection) - Number(!!a.connection) || Number(usable(b)) - Number(usable(a)));
+      const searching = q || filters.free || filters.oauth || filters.nocard || filters.connected;
+      const shown = filters.all || searching ? rows : rows.filter(usable).slice(0, 24);
+      count.replaceChildren(`${shown.length} of ${rows.length} providers`);
+      grid.replaceChildren(
+        ...(shown.length ? shown.map(providerCard) : [el("p", { class: "muted" }, "No provider matches these filters.")]),
+        shown.length < rows.length
+          ? el("p", {}, el("button", { type: "button", class: "secondary", onclick: () => { filters.all = true; draw(); } }, `Show all ${rows.length} providers`))
+          : null
+      );
     };
     const chip = (key, label) =>
       el("label", { class: "chip" }, el("input", { type: "checkbox", onchange: (ev) => { filters[key] = ev.target.checked; draw(); } }), ` ${label}`);
@@ -742,6 +898,11 @@ const views = {
       api("/api/v1/providers"),
     ]);
     const msg = el("p", {});
+    // Only providers that can actually be connected; hand-written adapters first, then by name.
+    const isCurated = (p) => !(p.catalog || {}).source || (p.catalog || {}).curated_override;
+    const connectable = providers
+      .filter((p) => p.status === "active" && !["mock", "mock_alt"].includes(p.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
     const form = el(
       "form",
       {
@@ -766,7 +927,18 @@ const views = {
           }
         },
       },
-      el("label", {}, "Provider", el("select", { name: "provider" }, providers.map((p) => el("option", { value: p.id }, p.name)))),
+      el(
+        "label",
+        {},
+        "Provider",
+        el(
+          "select",
+          { name: "provider", required: true },
+          el("option", { value: "" }, "Choose a provider"),
+          el("optgroup", { label: "Reviewed adapters" }, connectable.filter(isCurated).map((p) => el("option", { value: p.id }, p.name))),
+          el("optgroup", { label: "Catalogue (advertised, unverified)" }, connectable.filter((p) => !isCurated(p)).map((p) => el("option", { value: p.id }, p.name)))
+        )
+      ),
       el("label", {}, "Your API key", el("input", { name: "api_key", type: "password", autocomplete: "off" })),
       el("label", {}, "Base URL (optional)", el("input", { name: "base_url", placeholder: "provider default" })),
       el("label", {}, "Name", el("input", { name: "display_name" })),
@@ -1243,7 +1415,7 @@ async function start() {
     el("button", { class: "secondary", onclick: () => { sessionStorage.removeItem(KEY); location.reload(); } }, "Sign out")
   );
   if (state.me.user.role === "admin") document.querySelector('nav button[data-view="background"]').hidden = false;
-  render("discover");
+  render("start");
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1256,5 +1428,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const b = ev.target.closest("button[data-view]");
     if (b) render(b.dataset.view);
   });
+  // One-click sign-in: `oasis-route dev` prints /console/#key=<key>. The fragment never reaches the server;
+  // it is moved to sessionStorage and removed from the address bar and history entry at once.
+  const m = location.hash.match(/(?:^#|&)key=([^&]+)/);
+  if (m) {
+    sessionStorage.setItem(KEY, decodeURIComponent(m[1]).trim());
+    history.replaceState(null, "", location.pathname + location.search);
+  }
   if (sessionStorage.getItem(KEY)) start();
 });

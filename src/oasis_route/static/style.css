@@ -112,3 +112,9 @@ table.kv td { word-break: break-word; }
 nav button { white-space: nowrap; }
 /* Twelve views do not fit one row below ~1440px: wrap instead of hiding items off-screen. */
 @media (max-width: 1440px) { nav { flex-wrap: wrap; overflow-x: visible; row-gap: 2px; } }
+
+/* Paste boxes and checkboxes inside cards take the full width, one per line. */
+.card textarea { display: block; width: 100%; box-sizing: border-box; margin: 8px 0; font-family: ui-monospace, monospace; }
+.card label.check { margin: 6px 0; }
+.card blockquote { margin: 8px 0; padding: 8px 12px; border-left: 3px solid var(--line); }
+.card pre { white-space: pre-wrap; overflow-x: auto; }

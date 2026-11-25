@@ -89,7 +89,7 @@ async def test_discover_shows_verified_offers_and_next_actions(
     assert cards["openrouter"]["access_path"] == "official_oauth"
     mock = cards["mock"]
     assert mock["connection"]["id"] == g["conn_a"]["id"]
-    assert mock["next_action"]["kind"] in ("connected", "confirm_billing")
+    assert mock["next_action"]["kind"] == "connected"  # local/mock servers have no bill to confirm
 
     # Hugging Face sign-in needs an https public URL or a registered app; over plain http it is not offered.
     assert cards["huggingface"]["oauth_available"] is False

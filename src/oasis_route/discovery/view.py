@@ -109,7 +109,15 @@ def _next_action(
         return {"kind": "unavailable", "label": f"Provider is {provider.status}"}
     if connection is not None:
         if connection.status == ConnectionStatus.ACTIVE.value:
-            if connection.billing_mode in ("unknown", "paid"):
+            # Local servers and mocks are free by construction (no account, no bill): nothing to confirm.
+            local = "local" in (provider.regions or [])
+            if connection.billing_mode == "paid" and not local:
+                return {
+                    "kind": "connected",
+                    "label": "Connected as a paid account: used only if your spend mode allows paid routes.",
+                    "connection_id": connection.id,
+                }
+            if connection.billing_mode == "unknown" and not local:
                 return {
                     "kind": "confirm_billing",
                     "label": "Connected. Confirm the account is free-tier so free-only routing can use it.",

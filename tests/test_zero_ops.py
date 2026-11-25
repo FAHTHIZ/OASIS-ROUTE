@@ -327,3 +327,17 @@ async def test_console_is_served_with_strict_csp(client: httpx.AsyncClient) -> N
     js = (await client.get("/console/app.js")).text
     assert "innerHTML" not in js and "eval(" not in js
     assert "sessionStorage" in js and "localStorage" not in js
+
+
+async def test_console_nav_matches_views_and_supports_one_click_sign_in(client: httpx.AsyncClient) -> None:
+    import re
+
+    html = (await client.get("/console/")).text
+    js = (await client.get("/console/app.js")).text
+    nav = re.findall(r'data-view="([a-z_]+)"', html)
+    assert nav[0] == "start"  # Get started is the first screen
+    defined = set(re.findall(r"^  async ([a-z_]+)\(\)", js, re.M))
+    assert set(nav) <= defined, set(nav) - defined
+    assert 'render("start")' in js
+    # The #key= fragment is moved to sessionStorage and removed from the address bar.
+    assert "location.hash" in js and "history.replaceState" in js
