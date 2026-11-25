@@ -443,6 +443,9 @@ class Reservation(Base):
     created_at: Mapped[datetime] = _created()
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     settled_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # Worst-case USD held against every project spend budget in ``budget_ids`` (quota/ledger.py).
+    budget_usd_micros: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    budget_ids: Mapped[list[Any]] = mapped_column(JSON, default=list, server_default="[]")
 
     items: Mapped[list[ReservationItem]] = relationship(
         back_populates="reservation", lazy="selectin", cascade="all, delete-orphan"
@@ -505,6 +508,65 @@ class RouteDecision(Base):
     # routing/explain.py: selected route and reason, alternatives, rejections by gate, verification,
     # quota state, estimated and actual cost, fallback chain.
     explanation: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, server_default="{}")
+    created_at: Mapped[datetime] = _created()
+
+
+class SpendBudget(Base):
+    """A project-wide USD cap for one period (day, month, or one_time == lifetime), in integer micros.
+
+    Reserved atomically with the quota pools a request touches (``limit - used - reserved >= amount``) and
+    settled with the actual cost; ``drift`` accumulates actual minus reserved.
+    """
+
+    __tablename__ = "spend_budgets"
+    __table_args__ = (UniqueConstraint("project_id", "period"),)
+    id: Mapped[str] = _id()
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    period: Mapped[str] = mapped_column(String(20), nullable=False)
+    reset_tz: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC")
+    limit_usd_micros: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    used_usd_micros: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    reserved_usd_micros: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    drift_usd_micros: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    window_start: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class RequestReceipt(Base):
+    """One per gateway request: worst-case estimate, reservation, actual usage and cost, outcome.
+
+    ``digest`` is the SHA-256 of the canonical receipt body, so later tampering is detectable.
+    """
+
+    __tablename__ = "request_receipts"
+    __table_args__ = (UniqueConstraint("project_id", "request_id"),)
+    id: Mapped[str] = _id()
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    api_key_id: Mapped[str | None] = mapped_column(String(36))
+    outcome: Mapped[str] = mapped_column(String(30), nullable=False)
+    spend_mode: Mapped[str] = mapped_column(String(20), nullable=False)
+    provider_id: Mapped[str | None] = mapped_column(String(64))
+    upstream_model: Mapped[str | None] = mapped_column(String(200))
+    connection_id: Mapped[str | None] = mapped_column(String(36))
+    cost_basis: Mapped[str | None] = mapped_column(String(30))
+    cost_status: Mapped[str | None] = mapped_column(String(20))
+    price_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
+    estimated_usd_micros: Mapped[int | None] = mapped_column(BigInteger)
+    reserved_usd_micros: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    actual_usd_micros: Mapped[int | None] = mapped_column(BigInteger)
+    drift_usd_micros: Mapped[int | None] = mapped_column(BigInteger)
+    input_tokens: Mapped[int | None] = mapped_column(Integer)
+    output_tokens: Mapped[int | None] = mapped_column(Integer)
+    usage_source: Mapped[str] = mapped_column(String(20), default="none", server_default="none")
+    streamed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    fallback_used: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
+    approval_id: Mapped[str | None] = mapped_column(String(36))
+    reservation_ids: Mapped[list[Any]] = mapped_column(JSON, default=list, server_default="[]")
+    budgets_after: Mapped[list[Any]] = mapped_column(JSON, default=list, server_default="[]")
+    digest: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = _created()
 
 

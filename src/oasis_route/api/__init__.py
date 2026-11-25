@@ -9,6 +9,7 @@ def register_routers(app: FastAPI) -> None:
     from oasis_route.api import (
         admin_identity,
         automation,
+        budgets,
         capacity,
         discovery,
         gateway,
@@ -21,6 +22,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(admin_identity.router)
     app.include_router(registry_connections.router)
     app.include_router(setup.router)
+    app.include_router(budgets.router)
     app.include_router(discovery.router)
     app.include_router(capacity.router)
     app.include_router(mail.router)

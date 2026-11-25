@@ -22,7 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oasis_route.adapters.base import QuotaObservation, Usage
-from oasis_route.db.models import QuotaPool, Reservation, ReservationItem, utcnow
+from oasis_route.db.models import QuotaPool, Reservation, ReservationItem, SpendBudget, utcnow
 from oasis_route.db.session import Database
 from oasis_route.domain.enums import QuotaPeriod, QuotaSource, QuotaUnit, ReservationStatus
 from oasis_route.quota.windows import current_window, next_reset
@@ -46,6 +46,9 @@ class Demand:
         if u is QuotaUnit.TOTAL_TOKENS:
             return self.input_tokens + self.output_tokens
         return self.credits_micros
+
+
+BUDGET_UNIT = "budget_usd_micros"
 
 
 class QuotaUnavailable(Exception):
@@ -125,8 +128,15 @@ async def reserve(
     demand: Demand,
     allow_unknown: bool,
     ttl_s: int,
+    budgets: list[SpendBudget] | None = None,
+    budget_micros: int | None = 0,
     now: datetime | None = None,
 ) -> Reservation:
+    """Reserve every quota dimension and every project spend budget in one transaction.
+
+    ``budget_micros`` is the request's worst-case USD cost (``None`` == unknown). A route of unknown cost
+    can never be reserved against a budget: an unbounded amount cannot be held.
+    """
     now = now or utcnow()
     try:
         async with db.transaction() as s:
@@ -184,6 +194,7 @@ async def reserve(
                             )
                     raise QuotaUnavailable(p.id, p.unit, reason, retry_at)
                 items.append(ReservationItem(pool_id=p.id, unit=p.unit, amount=amount))
+            held = await _reserve_budgets(s, budgets or [], budget_micros, now)
             r = Reservation(
                 idempotency_key=idempotency_key,
                 request_id=request_id,
@@ -198,6 +209,8 @@ async def reserve(
                 },
                 expires_at=now + timedelta(seconds=ttl_s),
                 items=items,
+                budget_usd_micros=budget_micros if held else 0,
+                budget_ids=held,
             )
             s.add(r)
             await s.flush()
@@ -211,11 +224,84 @@ async def reserve(
             return winner
 
 
-def _actual(unit: str, amount: int, usage: Usage | None, output_estimate: int | None) -> tuple[int, bool]:
+async def roll_budgets(session: AsyncSession, budgets: list[SpendBudget], now: datetime) -> None:
+    for b in budgets:
+        target = current_window(QuotaPeriod(b.period), now, b.reset_tz, False, b.window_start)
+        if target is None or target == b.window_start:
+            continue
+        await session.execute(
+            update(SpendBudget)
+            .where(
+                SpendBudget.id == b.id,
+                or_(SpendBudget.window_start.is_(None), SpendBudget.window_start < target),
+            )
+            .values(used_usd_micros=0, drift_usd_micros=0, window_start=target)
+            .execution_options(synchronize_session=False)
+        )
+        b.window_start = target
+
+
+async def _reserve_budgets(
+    s: AsyncSession, budgets: list[SpendBudget], amount: int | None, now: datetime
+) -> list[str]:
+    if not budgets or amount == 0:
+        return []
+    await roll_budgets(s, budgets, now)
+    held: list[str] = []
+    for b in sorted(budgets, key=lambda x: x.id):
+        if amount is None:
+            raise QuotaUnavailable(b.id, BUDGET_UNIT, "cost_unknown")
+        res = await s.execute(
+            update(SpendBudget)
+            .where(
+                SpendBudget.id == b.id,
+                SpendBudget.limit_usd_micros - SpendBudget.used_usd_micros - SpendBudget.reserved_usd_micros
+                >= amount,
+            )
+            .values(reserved_usd_micros=SpendBudget.reserved_usd_micros + amount)
+            .execution_options(synchronize_session=False)
+        )
+        if res.rowcount != 1:  # type: ignore[attr-defined]
+            retry = next_reset(QuotaPeriod(b.period), now, b.reset_tz)
+            raise QuotaUnavailable(b.id, BUDGET_UNIT, "budget_exceeded", retry)
+        held.append(b.id)
+    return held
+
+
+async def _settle_budgets(
+    s: AsyncSession, r: Reservation, actual: int | None, *, release: bool = False
+) -> None:
+    """Move a budget hold to used (``actual`` micros; None keeps the worst case) or release it."""
+    if not r.budget_ids:
+        return
+    held = r.budget_usd_micros
+    spent = 0 if release else (held if actual is None else max(0, actual))
+    values: dict[str, Any] = {"reserved_usd_micros": SpendBudget.reserved_usd_micros - held}
+    if not release:
+        values["used_usd_micros"] = SpendBudget.used_usd_micros + spent
+        values["drift_usd_micros"] = SpendBudget.drift_usd_micros + (spent - held)
+    for bid in r.budget_ids:
+        await s.execute(
+            update(SpendBudget)
+            .where(SpendBudget.id == bid)
+            .values(**values)
+            .execution_options(synchronize_session=False)
+        )
+
+
+def _actual(
+    unit: str,
+    amount: int,
+    usage: Usage | None,
+    output_estimate: int | None,
+    cost_micros: int | None = None,
+) -> tuple[int, bool]:
     """Return (actual amount, is_estimate) for a reserved item."""
     u = QuotaUnit(unit)
     if u is QuotaUnit.REQUESTS:
         return 1, False
+    if u is QuotaUnit.CREDITS_USD_MICROS and cost_micros is not None:
+        return cost_micros, not (usage is not None and usage.provider_reported)
     if u is QuotaUnit.CONCURRENT:
         return 0, False
     if usage is not None and usage.provider_reported:
@@ -238,9 +324,14 @@ async def settle(
     usage: Usage | None,
     *,
     output_estimate: int | None = None,
+    cost_micros: int | None = None,
     now: datetime | None = None,
 ) -> bool:
-    """Commit actual usage exactly once. Returns False if already settled/expired."""
+    """Commit actual usage exactly once. Returns False if already settled/expired.
+
+    ``cost_micros`` is the actual USD cost computed from the settled usage; it replaces the worst-case
+    hold on credit pools and spend budgets (``None`` keeps the worst case: never under-count).
+    """
     now = now or utcnow()
     estimated = usage is None or not usage.provider_reported
     async with db.transaction() as s:
@@ -267,7 +358,7 @@ async def settle(
             .all()
         )
         for it in items:
-            actual, is_est = _actual(it.unit, it.amount, usage, output_estimate)
+            actual, is_est = _actual(it.unit, it.amount, usage, output_estimate, cost_micros)
             it.actual = actual
             values: dict[str, Any] = {"reserved": QuotaPool.reserved - it.amount}
             if it.unit != QuotaUnit.CONCURRENT.value:
@@ -281,6 +372,9 @@ async def settle(
                 .values(**values)
                 .execution_options(synchronize_session=False)
             )
+        r = await s.get(Reservation, reservation_id)
+        if r is not None:
+            await _settle_budgets(s, r, cost_micros)
     return True
 
 
@@ -321,6 +415,9 @@ async def release(
                 .values(**values)
                 .execution_options(synchronize_session=False)
             )
+        r = await s.get(Reservation, reservation_id)
+        if r is not None:
+            await _settle_budgets(s, r, None, release=True)
     return True
 
 

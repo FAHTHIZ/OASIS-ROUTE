@@ -225,6 +225,11 @@ All paths are under `/api/v1`. Project-scoped endpoints require the key's own pr
 | `GET` | `/projects/{id}/capacity` | Advertised, verified, authorized, usable, consumed (confirmed vs estimated) and forecast capacity, per provider account and unit. Unknown limits are reported as unknown, never as unlimited. |
 | `GET` | `/projects/{id}/usage` | Per-attempt usage records (`?limit`, `?since`). |
 | `GET` | `/projects/{id}/route-decisions` | Recent routing decisions with candidates, rejections, attempts and explanation. |
+| `GET` | `/projects/{id}/budgets` | USD caps with used, reserved, remaining, reset time and forecast. |
+| `PUT` | `/projects/{id}/budgets/{period}` | Owner: set the `day`, `month` or `total` cap (`{"limit_usd": 20}`). Audited. A budget never enables paid routes. |
+| `DELETE` | `/projects/{id}/budgets/{period}` | Owner: remove a cap. Audited. |
+| `GET` | `/projects/{id}/receipts` | Recent per-request receipts: worst-case estimate, reservation, actual tokens and cost, drift, outcome, digest. |
+| `GET` | `/projects/{id}/receipts/{request_id}` | One request's receipt. |
 | `GET` | `/projects/{id}/route-decisions/{request_id}` | Explain one past request: selected route and reason, alternatives, rejections by gate, verification, quota state, estimated and actual cost, fallback chain. |
 | `GET` | `/notifications` | Notifications for the caller (administrators also see instance-wide ones). |
 | `POST` | `/notifications/{id}/read` | Mark read. |

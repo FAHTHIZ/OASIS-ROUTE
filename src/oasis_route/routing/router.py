@@ -33,6 +33,7 @@ from oasis_route.quota import ledger
 from oasis_route.quota.windows import next_reset
 from oasis_route.routing.cost import CostEstimate, estimate_cost
 from oasis_route.routing.priors import PRIOR_SOURCE, model_prior
+from oasis_route.spend import budgets
 
 QUALITY_EPSILON = 0.5  # score difference treated as "same quality" for downgrade detection
 
@@ -337,6 +338,7 @@ async def build_plan(
     free_only = spend == SPEND_FREE_ONLY
     survivors: list[Candidate] = []
     pending: list[Candidate] = []
+    headroom = budgets.tightest(await budgets.for_project(session, project.id), now)
     static_ok_quality: list[float | None] = []
     for c in conns:
         prov = providers.get(c.provider_id)
@@ -418,6 +420,15 @@ async def build_plan(
                 continue
             rec = breaker.records_for(health, c.id, breaker.CONNECTION_SCOPE)
             est = route_cost(basis, m.pricing, opts.input_tokens, opts.max_output_tokens)
+            if headroom is not None and est.status != "free":
+                if est.usd_micros is None:
+                    rejected.append(Rejection(prov.id, m.upstream_id, c.id, "budget_cost_unknown"))
+                    continue
+                if est.usd_micros > headroom.remaining_usd_micros:
+                    rejected.append(
+                        Rejection(prov.id, m.upstream_id, c.id, "budget_exceeded", headroom.resets_in_s)
+                    )
+                    continue
             (pending if needs_approval else survivors).append(
                 Candidate(
                     connection_id=c.id,

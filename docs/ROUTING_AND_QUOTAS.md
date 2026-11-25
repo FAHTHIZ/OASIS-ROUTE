@@ -138,6 +138,20 @@ On completion:
 
 For concurrency, reservations must be made against the shared quota-pool row, not individual credential rows.
 
+### 5.1 Budget ledger (USD)
+
+A project may set USD caps per `day`, `month` or `total` (lifetime) with `PUT /api/v1/projects/{id}/budgets/{period}`. A budget only limits spend: it never enables a paid route, which still needs the spend policy (section 2.1). Every request follows the same seven steps:
+
+1. **Estimate the worst case.** Input tokens (estimated from the messages and tools) plus the full `max_tokens`, priced with the model's per-token prices, rounded up to the next micro-dollar. Free routes cost 0. A route whose price is unknown has no bound and is rejected (`budget_cost_unknown`) while any budget exists.
+2. **Reserve atomically.** The worst case is held against every budget of the project, and against provider credit pools (`credits_usd_micros`), in the same transaction as the token and request pools, using conditional updates (`limit - used - reserved >= amount`). If any dimension fails the whole reservation rolls back.
+3. **Dispatch only if the reservation succeeded.** A route that cannot fit is skipped (`budget:budget_exceeded`) and the next eligible route is tried; the planner already rejects routes whose worst case exceeds the tightest remaining budget (`budget_exceeded`, with time to reset).
+4. **Capture actual usage** from the provider's usage report, or for streams from the final usage chunk or measured output.
+5. **Settle the difference** exactly once: the hold is replaced by the actual cost, and `drift` records actual minus reserved. Without provider usage the worst case is kept, so spend is never under-counted. Failed attempts release their hold.
+6. **Update the forecast.** `GET /api/v1/projects/{id}/budgets` reports used, reserved (in flight), remaining, reset time, burn rate per hour, projected spend for the window and the projected exhaustion time.
+7. **Persist a receipt.** `GET /api/v1/projects/{id}/receipts/{request_id}` returns the estimate, reservation, actual tokens and cost, usage source (`provider` or `estimate`), drift, outcome, spend mode, approval used, reservation ids, budgets remaining afterwards and a SHA-256 digest of the canonical receipt (`digest_valid` shows whether it still matches).
+
+Protections: concurrent requests cannot overshoot a cap (conditional updates); duplicate submissions reuse the reservation keyed by request and attempt (and the `Idempotency-Key` header replays the stored response); retry storms are damped by cooldowns and the bounded hop count, and each failed attempt releases its hold; shared account quotas are pooled by `account_scope`; streams settle in a shielded block even when the client disconnects; provider usage discrepancies show up as drift on the receipt and the budget; stale holds expire after `OASIS_ROUTE_RESERVATION_TTL_S`.
+
 ## 6. Failure classification
 
 Normalize upstream errors into:

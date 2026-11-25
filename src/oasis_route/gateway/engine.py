@@ -32,6 +32,7 @@ from typing import Any
 import anyio
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from oasis_route.adapters.base import (
     ChatRequest,
@@ -48,6 +49,7 @@ from oasis_route.db.models import (
     IdempotencyRecord,
     PaidApproval,
     Project,
+    RequestReceipt,
     RouteDecision,
     UsageRecord,
     utcnow,
@@ -72,7 +74,7 @@ from oasis_route.routing.router import (
     route_cost,
     spend_mode,
 )
-from oasis_route.spend import approvals
+from oasis_route.spend import approvals, budgets, receipts
 from oasis_route.telemetry import tracer
 
 log = get_logger("oasis_route.gateway")
@@ -259,6 +261,11 @@ class RequestState:
     served: Candidate | None = None
     actual_cost: CostEstimate | None = None
     approval_id: str | None = None
+    reservation_ids: list[str] = field(default_factory=list)
+    held_usd_micros: int = 0
+    tokens: tuple[int, int] | None = None
+    usage_source: str = "none"
+    streamed: bool = False
 
     def spend(self) -> dict[str, Any]:
         """Spend mode and, when a paid route served, a clear label with cost estimate and reason."""
@@ -348,6 +355,7 @@ class Dispatch:
     pool_ids: list[str]
     started: float
     probe: bool
+    held_usd_micros: int = 0  # worst-case cost held against project spend budgets
 
 
 class Engine:
@@ -501,7 +509,10 @@ class Engine:
             return None
         async with self.ctx.db.session() as s:
             pools = await ledger.pools_for(s, st.project.id, c.provider_id, c.account_scope, c.upstream_model)
+            project_budgets = await budgets.for_project(s, st.project.id)
         o = st.parsed.options
+        # Worst-case USD cost of this attempt: free routes hold nothing; unknown cost is None (never zero).
+        worst = 0 if c.cost_status == "free" else c.est_cost_usd_micros
         try:
             res = await ledger.reserve(
                 self.ctx.db,
@@ -511,9 +522,13 @@ class Engine:
                 connection_id=c.connection_id,
                 model_id=c.model_id,
                 pools=pools,
-                demand=ledger.Demand(input_tokens=o.input_tokens, output_tokens=o.max_output_tokens),
+                demand=ledger.Demand(
+                    input_tokens=o.input_tokens, output_tokens=o.max_output_tokens, credits_micros=worst
+                ),
                 allow_unknown=st.project.allow_unknown_quota,
                 ttl_s=self.ctx.settings.reservation_ttl_s,
+                budgets=project_budgets,
+                budget_micros=worst,
             )
         except ledger.QuotaUnavailable as exc:
             self.ctx.metrics.reservations.labels("rejected").inc()
@@ -526,19 +541,37 @@ class Engine:
                     c.upstream_model,
                     c.connection_id,
                     "skipped",
-                    f"quota:{exc.reason}",
+                    f"budget:{exc.reason}" if exc.unit == ledger.BUDGET_UNIT else f"quota:{exc.reason}",
                     retry_in_s=retry_in,
                 )
             )
             return None
         self.ctx.metrics.reservations.labels("reserved").inc()
-        return Dispatch(c, res.id, [p.id for p in pools], time.perf_counter(), c.needs_probe)
+        st.reservation_ids.append(res.id)
+        return Dispatch(
+            c, res.id, [p.id for p in pools], time.perf_counter(), c.needs_probe, res.budget_usd_micros
+        )
 
     async def _target(self, c: Candidate) -> conns.CallTarget:
         async with self.ctx.db.session() as s:
             conn = await s.get(Connection, c.connection_id)
             assert conn is not None
             return await conns.load_target(self.ctx, s, conn)
+
+    @staticmethod
+    def _cost(
+        st: RequestState, c: Candidate, usage: Usage | None, output_estimate: int | None
+    ) -> CostEstimate:
+        """Actual cost from settled usage; without provider usage, the input estimate and measured output."""
+        reported = bool(usage and usage.provider_reported)
+        in_tok = usage.input_tokens if reported and usage else st.parsed.options.input_tokens
+        if reported and usage:
+            out_tok = usage.output_tokens
+        elif output_estimate is not None:
+            out_tok = output_estimate
+        else:  # nothing measured: keep the worst case
+            out_tok = st.parsed.options.max_output_tokens
+        return route_cost(c.cost_basis, c.pricing, in_tok, out_tok)
 
     async def _on_success(
         self,
@@ -552,7 +585,16 @@ class Engine:
     ) -> None:
         c = d.cand
         latency = (time.perf_counter() - d.started) * 1000
-        await ledger.settle(self.ctx.db, d.reservation_id, usage, output_estimate=output_estimate)
+        st.actual_cost = self._cost(st, c, usage, output_estimate)
+        await ledger.settle(
+            self.ctx.db,
+            d.reservation_id,
+            usage,
+            output_estimate=output_estimate,
+            cost_micros=st.actual_cost.usd_micros,
+        )
+        st.held_usd_micros = d.held_usd_micros
+        st.streamed = streamed
         await ledger.apply_observations(
             self.ctx.db,
             project_id=st.project.id,
@@ -570,7 +612,8 @@ class Engine:
         reported = bool(usage and usage.provider_reported)
         in_tok = usage.input_tokens if reported and usage else st.parsed.options.input_tokens
         out_tok = usage.output_tokens if reported and usage else (output_estimate or 0)
-        st.actual_cost = route_cost(c.cost_basis, c.pricing, in_tok, out_tok)
+        st.tokens = (in_tok, out_tok)
+        st.usage_source = "provider" if reported else "estimate"
         await self._usage(st, c, in_tok, out_tok, reported, "success", None, int(latency), streamed)
         m = self.ctx.metrics
         m.upstream_attempts.labels(c.provider_id, "success").inc()
@@ -699,12 +742,55 @@ class Engine:
                         explanation=st.explanation(),
                     )
                 )
+                s.add(await self._receipt(s, st, outcome))
         except IntegrityError:  # duplicate request id (client-supplied x-request-id reuse)
             log.warning("duplicate route decision", extra={"request_id": st.request_id})
         self.ctx.metrics.gateway_requests.labels(outcome).inc()
         if outcome == "success" and st.fallback_used:
             first_err = next((a.category for a in st.attempts if a.outcome != "success"), "unknown")
             self.ctx.metrics.fallbacks.labels(first_err or "unknown").inc()
+
+    async def _receipt(self, s: AsyncSession, st: RequestState, outcome: str) -> RequestReceipt:
+        served = st.served
+        est = served.est_cost_usd_micros if served else None
+        if served is not None and served.cost_status == "free":
+            est = 0
+        actual = st.actual_cost.usd_micros if st.actual_cost else None
+        held = st.held_usd_micros
+        rows = await budgets.for_project(s, st.project.id)
+        now = utcnow()
+        return receipts.build(
+            request_id=st.request_id,
+            project_id=st.project.id,
+            api_key_id=st.api_key_id,
+            outcome=outcome,
+            spend_mode=st.spend()["mode"],
+            provider_id=served.provider_id if served else None,
+            upstream_model=served.upstream_model[:200] if served else None,
+            connection_id=served.connection_id if served else None,
+            cost_basis=served.cost_basis if served else None,
+            cost_status=(st.actual_cost.status if st.actual_cost else served.cost_status) if served else None,
+            price_verified=bool(served and served.price_verified),
+            estimated_usd_micros=est,
+            reserved_usd_micros=held,
+            actual_usd_micros=actual,
+            drift_usd_micros=(actual - held) if (actual is not None and held) else None,
+            input_tokens=st.tokens[0] if st.tokens else None,
+            output_tokens=st.tokens[1] if st.tokens else None,
+            usage_source=st.usage_source,
+            streamed=st.streamed,
+            attempts=len(st.attempts),
+            fallback_used=st.fallback_used,
+            approval_id=st.approval_id,
+            reservation_ids=list(st.reservation_ids),
+            budgets_after=[
+                {
+                    "period": budgets.STORED.get(b.period, b.period),
+                    "remaining_usd_micros": budgets.remaining(b, now),
+                }
+                for b in rows
+            ],
+        )
 
     def _no_route(self, st: RequestState) -> GatewayError:
         plan = st.plan
@@ -938,7 +1024,15 @@ class Engine:
                         await self._decision(st, "success")
                     elif outcome == "error" and error is not None:
                         # Bytes already reached the client: charge what was produced; record health failure.
-                        await ledger.settle(self.ctx.db, d.reservation_id, usage, output_estimate=out_est)
+                        st.actual_cost = self._cost(st, d.cand, usage, out_est)
+                        st.held_usd_micros, st.streamed = d.held_usd_micros, True
+                        await ledger.settle(
+                            self.ctx.db,
+                            d.reservation_id,
+                            usage,
+                            output_estimate=out_est,
+                            cost_micros=st.actual_cost.usd_micros,
+                        )
                         await breaker.record_failure(
                             self.ctx.db,
                             self.ctx.settings,
@@ -961,7 +1055,15 @@ class Engine:
                         st.served = d.cand
                         await self._decision(st, "stream_error")
                     else:
-                        await ledger.settle(self.ctx.db, d.reservation_id, usage, output_estimate=out_est)
+                        st.actual_cost = self._cost(st, d.cand, usage, out_est)
+                        st.held_usd_micros, st.streamed = d.held_usd_micros, True
+                        await ledger.settle(
+                            self.ctx.db,
+                            d.reservation_id,
+                            usage,
+                            output_estimate=out_est,
+                            cost_micros=st.actual_cost.usd_micros,
+                        )
                         if d.probe:
                             await breaker.release_probe(
                                 self.ctx.db, d.cand.connection_id, d.cand.upstream_model
