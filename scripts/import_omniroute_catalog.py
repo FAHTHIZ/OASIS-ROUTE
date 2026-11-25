@@ -58,7 +58,17 @@ OAUTH_REASON = (
 )
 PLAN_MARKERS = ("coding", "token-plan", "codingplan")
 # Image/video/music generation services: no chat-completions API to route to.
-MEDIA_ONLY = {"ideogram", "leonardo", "haiper", "suno", "udio", "freepik", "stability-ai", "segmind", "runway"}
+MEDIA_ONLY = {
+    "ideogram",
+    "leonardo",
+    "haiper",
+    "suno",
+    "udio",
+    "freepik",
+    "stability-ai",
+    "segmind",
+    "runway",
+}
 TOS_RANK = {"ok": 0, "unknown": 1, "caution": 2, "ambiguous": 3, "avoid": 4}
 FREE_TYPES_RECURRING = {"recurring-daily", "recurring-monthly", "recurring-credit"}
 
@@ -118,7 +128,11 @@ def classify(omni_id: str, entry: dict[str, Any], tos: str) -> tuple[str, str | 
     if auth_type == "oauth":
         return "blocked", None, OAUTH_REASON
     if tos == "avoid":
-        return "blocked", None, "OmniRoute's terms review marks this provider 'avoid' (proxy or non-personal use)"
+        return (
+            "blocked",
+            None,
+            "OmniRoute's terms review marks this provider 'avoid' (proxy or non-personal use)",
+        )
     if any(m in omni_id for m in PLAN_MARKERS):
         return (
             "blocked",

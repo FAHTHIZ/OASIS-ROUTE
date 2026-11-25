@@ -112,8 +112,13 @@ def providers() -> list[ImportedProvider]:
     return out
 
 
+@lru_cache(maxsize=1)
+def _index() -> dict[str, ImportedProvider]:
+    return {p.id: p for p in providers()}
+
+
 def get(provider_id: str) -> ImportedProvider | None:
-    return next((p for p in providers() if p.id == provider_id), None)
+    return _index().get(provider_id)
 
 
 def local_servers() -> list[dict[str, Any]]:

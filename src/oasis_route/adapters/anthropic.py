@@ -16,6 +16,7 @@ import json
 import time
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -207,13 +208,26 @@ def from_anthropic(payload: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+@dataclass(frozen=True)
+class AnthropicProfile:
+    """Differences between Anthropic itself and Anthropic-compatible Messages APIs (MiniMax, Kimi, ...)."""
+
+    provider_id: str = "anthropic"
+    auth_header: str = "x-api-key"
+    auth_prefix: str = ""
+    extra_headers: dict[str, str] = field(default_factory=dict)
+
+
 class AnthropicAdapter:
-    def __init__(self) -> None:
+    def __init__(self, profile: AnthropicProfile | None = None) -> None:
+        self.profile = profile or AnthropicProfile()
         self.metadata = AdapterMetadata(
             adapter_id="anthropic",
             version="1.0.0",
             protocols=("anthropic_messages",),
-            auth_method="x-api-key",
+            auth_method=self.profile.auth_header.lower()
+            if self.profile.auth_header.lower() != "authorization"
+            else "bearer_api_key",
             streaming=True,
             cancellation=True,
             usage_reporting="reported",
@@ -224,10 +238,12 @@ class AnthropicAdapter:
         )
 
     def _headers(self, conn: ConnectionContext) -> dict[str, str]:
+        key = str(conn.secret.get("api_key", ""))
         return {
-            "x-api-key": str(conn.secret.get("api_key", "")),
+            self.profile.auth_header.lower(): f"{self.profile.auth_prefix}{key}",
             "anthropic-version": API_VERSION,
             "content-type": "application/json",
+            **self.profile.extra_headers,
             **conn.extra_headers,
         }
 

@@ -80,3 +80,19 @@ async def assert_safe_url(
     for addr in addresses:
         if not _is_public(ipaddress.ip_address(addr)):
             raise UnsafeUrlError(f"host '{host}' resolves to a non-public address")
+
+
+async def resolves_private_only(url: str, *, resolver: Resolver | None = None) -> bool:
+    """True when every address the URL's host resolves to is private or loopback (a local server)."""
+    try:
+        host, port = check_url_shape(url, allow_http=True)
+    except UnsafeUrlError:
+        return False
+    try:
+        addresses = [str(ipaddress.ip_address(host))]
+    except ValueError:
+        try:
+            addresses = await (resolver or system_resolver)(host, port)
+        except OSError:
+            return False
+    return bool(addresses) and not any(_is_public(ipaddress.ip_address(a)) for a in addresses)

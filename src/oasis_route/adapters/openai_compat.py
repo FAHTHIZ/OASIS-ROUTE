@@ -71,6 +71,11 @@ class OpenAIProfile:
     models_id_field: str = "id"
     list_models_supported: bool = True
     probe_model: str | None = None
+    # Credential placement. Most providers use ``Authorization: Bearer <key>``; some use ``x-api-key`` or a
+    # named header. Local servers set ``api_key_required=False`` (they ignore the key).
+    auth_header: str = "authorization"
+    auth_prefix: str = "Bearer "
+    api_key_required: bool = True
 
 
 ALLOWED_PASSTHROUGH = (
@@ -92,13 +97,15 @@ class OpenAICompatibleAdapter:
             adapter_id="openai_compatible",
             version="1.0.0",
             protocols=("openai_chat",),
-            auth_method="bearer_api_key",
+            auth_method="bearer_api_key"
+            if profile.auth_header.lower() == "authorization"
+            else f"header:{profile.auth_header.lower()}",
             streaming=True,
             cancellation=True,
             usage_reporting="reported" if profile.stream_usage_option else "reported_non_streaming",
             quota_headers=True,
             retry_behavior="no internal retries; gateway performs bounded fallback",
-            required_secrets=("api_key",),
+            required_secrets=("api_key",) if profile.api_key_required else (),
             notes="Chat completions only. Embeddings, images, audio, and Assistants are not proxied.",
         )
 
@@ -107,7 +114,7 @@ class OpenAICompatibleAdapter:
         h = {"content-type": "application/json", **self.profile.extra_headers, **conn.extra_headers}
         key = conn.secret.get("api_key")
         if key:
-            h["authorization"] = f"Bearer {key}"
+            h[self.profile.auth_header.lower()] = f"{self.profile.auth_prefix}{key}"
         return h
 
     def _url(self, conn: ConnectionContext, path: str) -> str:

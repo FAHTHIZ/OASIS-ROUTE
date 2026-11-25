@@ -52,6 +52,29 @@ class ProviderSeed:
     dev_only: bool = False
 
 
+# (id, name, default base URL, website). Ports follow each server's documented default.
+LOCAL_SERVERS: tuple[tuple[str, str, str, str], ...] = (
+    (
+        "ollama",
+        "Ollama (local)",
+        "http://127.0.0.1:11434/v1",
+        "https://docs.ollama.com/api/openai-compatibility",
+    ),
+    ("llama_cpp", "llama.cpp server", "http://127.0.0.1:8080/v1", "https://github.com/ggml-org/llama.cpp"),
+    ("vllm", "vLLM", "http://127.0.0.1:8000/v1", "https://docs.vllm.ai/"),
+    ("lm_studio", "LM Studio", "http://127.0.0.1:1234/v1", "https://lmstudio.ai/docs/app/api"),
+    ("lemonade", "Lemonade Server", "http://127.0.0.1:13305/api/v1", "https://lemonade-server.ai"),
+    ("llamafile", "llamafile", "http://127.0.0.1:8080/v1", "https://github.com/Mozilla-Ocho/llamafile"),
+    (
+        "docker_model_runner",
+        "Docker Model Runner",
+        "http://127.0.0.1:12434/engines/v1",
+        "https://docs.docker.com/ai/model-runner/",
+    ),
+    ("xinference", "Xinference", "http://127.0.0.1:9997/v1", "https://inference.readthedocs.io"),
+)
+LOCAL_SERVER_IDS = frozenset(s[0] for s in LOCAL_SERVERS)
+
 PROVIDERS: tuple[ProviderSeed, ...] = (
     ProviderSeed(
         "openai",
@@ -215,6 +238,30 @@ PROVIDERS: tuple[ProviderSeed, ...] = (
         (),
         notes="User-supplied base URL. Private-network URLs require "
         "OASIS_ROUTE_ALLOW_PRIVATE_UPSTREAMS=true.",
+    ),
+    # Local OpenAI-compatible servers (defaults from the OmniRoute catalogue's local-server list). Running on
+    # your own hardware they cost nothing, so they are the one "free tier" without a cap. The base URL must
+    # stay on a private or loopback address (enforced at connect time) and needs
+    # OASIS_ROUTE_ALLOW_PRIVATE_UPSTREAMS=true. Models come from the server's own /v1/models.
+    *(
+        ProviderSeed(
+            pid,
+            name,
+            "openai_compatible",
+            url,
+            "openai_chat",
+            ("localhost", "127.0.0.1"),
+            terms_url=site,
+            data_policy={
+                "trains_on_inputs": False,
+                "zero_retention": True,
+                "source": "runs on your own machine; no data leaves it",
+            },
+            regions=("local",),
+            multi_account_permitted=True,
+            notes="Local model server. The base URL must be a private or loopback address.",
+        )
+        for pid, name, url, site in LOCAL_SERVERS
     ),
     # Deterministic local providers used by `oasis-route dev`, demos, and tests. Never seeded in production.
     *(

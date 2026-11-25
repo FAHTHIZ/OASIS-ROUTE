@@ -2,7 +2,7 @@
 
 Any server that speaks the OpenAI Chat Completions API can be an Oasis Route provider. A model running on your own machine is the only "free tier" that has no daily cap. It is a good last fallback when every hosted free tier is rate-limited.
 
-Oasis Route reaches local servers through the built-in `custom` provider. Private and loopback addresses are blocked by default (SSRF protection), so turn them on first:
+Oasis Route has built-in presets for local servers: `ollama` (port 11434), `llama_cpp` (8080), `vllm` (8000), `lm_studio` (1234), `lemonade` (13305), `llamafile` (8080), `docker_model_runner` (12434) and `xinference` (9997). A preset needs no API key, counts as free (`cost_basis: local`), and must point at a private or loopback address. Any other OpenAI-compatible server works through the built-in `custom` provider. Private and loopback addresses are blocked by default (SSRF protection), so turn them on first:
 
 ```bash
 export OASIS_ROUTE_ALLOW_PRIVATE_UPSTREAMS=true   # only on a single-user host

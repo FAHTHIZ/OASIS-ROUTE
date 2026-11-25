@@ -48,7 +48,8 @@ from oasis_route.domain.errors import Conflict, NotFound, PolicyViolation, Upstr
 from oasis_route.identity import audit
 from oasis_route.notifications.service import notify
 from oasis_route.quota.ledger import FREE_MODELS_SCOPE
-from oasis_route.security.ssrf import UnsafeUrlError, assert_safe_url
+from oasis_route.registry.catalog import LOCAL_SERVER_IDS
+from oasis_route.security.ssrf import UnsafeUrlError, assert_safe_url, resolves_private_only
 from oasis_route.security.vault import SealedSecret
 
 # Model ids that are clearly not chat-completion models; synced but marked non-routable for chat.
@@ -132,9 +133,20 @@ class ConnectionInput:
     billing_mode: str | None = None  # free_tier | paid | unknown; None == provider default (see access.py)
 
 
+async def _validate_local_server_url(ctx: AppContext, base_url: str) -> None:
+    """Local presets are priced at zero, so they must really be local: a public URL is refused."""
+    if await resolves_private_only(base_url, resolver=ctx.resolver):
+        return
+    raise PolicyViolation(
+        "local server presets must point at a private or loopback address; use the 'custom' provider "
+        "for remote servers",
+        details={"base_url": base_url},
+    )
+
+
 def _validate_base_url_scope(provider: Provider, base_url: str) -> None:
     """Only user-defined providers may point anywhere; known providers must stay on official domains."""
-    if provider.id in _LOCAL_PROVIDERS:
+    if provider.id in _LOCAL_PROVIDERS or provider.id in LOCAL_SERVER_IDS:
         return
     host = (urlsplit(base_url).hostname or "").lower()
     domains = [d.lower() for d in provider.official_domains or []]
@@ -172,7 +184,12 @@ async def create_connection(
     reasons = eligibility_reasons(fresh_user, provider, offer, data.auth_method)
     if reasons:
         raise PolicyViolation("not eligible to connect this provider", details={"reasons": reasons})
-    if data.auth_method == AuthMethod.API_KEY.value:
+    if provider.id in LOCAL_SERVER_IDS and data.auth_method == AuthMethod.API_KEY.value:
+        # Local servers ignore the key; store an empty one so no Authorization header is sent.
+        data.secret = data.secret or {"api_key": ""}
+        if data.base_url:
+            await _validate_local_server_url(ctx, data.base_url)
+    if data.auth_method == AuthMethod.API_KEY.value and provider.id not in LOCAL_SERVER_IDS:
         if not data.secret or not str(data.secret.get("api_key") or "").strip():
             raise ValidationFailed("api_key is required for auth_method=api_key")
         if not data.accept_terms:

@@ -59,3 +59,30 @@ Every adapter must pass deterministic tests for:
 - quota headers and unknown quota;
 - secret redaction;
 - oversized responses and unsafe redirects.
+
+## Adding a provider without touching the router
+
+The router, ledger and gateway only see the `ProviderAdapter` protocol (`src/oasis_route/adapters/base.py`). A provider is resolved by `AdapterRegistry.for_provider(provider_id, adapter_key)` in this order:
+
+1. **Curated profile** in `adapters/registry.py` `PROFILES`: reviewed quirks (stream usage support, rate-limit header period, model-list URL and JSON shape, probe model for providers without a list).
+2. **Local-server preset** in `LOCAL_PROFILES`: Ollama, llama.cpp, vLLM, LM Studio, Lemonade, llamafile, Docker Model Runner, Xinference. No key is sent, and only streaming is assumed.
+3. **Generated from the imported catalogue** ([CATALOG.md](CATALOG.md)): `profile_from_catalog` reads the entry's auth style (`bearer`, `x-api-key`, `header:<Name>`, optional prefix), extra headers and HTTPS model-list URL. Anthropic-compatible Messages APIs get an `AnthropicProfile` with the same auth fields, so MiniMax-style `Authorization: Bearer` works next to Anthropic's own `x-api-key`.
+4. **Protocol defaults** otherwise.
+
+Two protocols are implemented: `openai_chat` (`OpenAICompatibleAdapter`) and `anthropic_messages` (`AnthropicAdapter`). Gemini / AI Studio, OpenRouter, Groq, Mistral, Cerebras, NVIDIA, SambaNova, Hugging Face, Cohere and Z.ai use their documented OpenAI-compatible endpoints with curated profiles. A provider that needs a different wire protocol needs a new adapter class registered in `AdapterRegistry._build`; the router never branches on provider ids.
+
+What each adapter is responsible for:
+
+| Concern | Where |
+|---|---|
+| Authentication | `_headers` from the profile (`auth_header`, `auth_prefix`, `api_key_required`) |
+| Request / streaming translation | `invoke` / `stream` (Anthropic: `to_anthropic`, SSE event translation) |
+| Model discovery | `list_models` (profile `models_url`, `models_key`, `models_id_field`) or `probe_model` |
+| Token usage extraction | `extract_usage`; stream usage requested when `stream_usage_option` |
+| Cost calculation | `routing/cost.py` `estimate_cost`: free / priced (verified or estimate) / unknown, integer USD micros rounded up. Unknown is never zero |
+| Rate-limit headers, quota and reset detection | `quota_observations`, `parse_retry_after`, `parse_reset` |
+| Retryability and error normalisation | `normalize_error` → `UpstreamError(category, retryable, retry_after)` |
+| Health checks | `health_check` (bounded, non-destructive) |
+| Capability declaration | `metadata` (`AdapterMetadata`) and `get_capabilities` |
+
+Local presets must point at a private or loopback address (checked by resolving the host at connect time) because they are priced as free; use the `custom` provider for a remote OpenAI-compatible server.
