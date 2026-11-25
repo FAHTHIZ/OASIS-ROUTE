@@ -315,6 +315,60 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     return 0 if out["routes"]["summary"]["eligible_free"] > 0 else 3
 
 
+def _check_integration(args: argparse.Namespace, r: dict[str, Any]) -> int:
+    """Smoke-test the endpoint a tool will use: model listing, one chat turn with route metadata."""
+    api = _api(args)
+    if api is None:
+        return 2
+    c, _project = api
+    model = r["model"]
+    for prefix in ("openai/", "oasis/"):
+        model = model.removeprefix(prefix)
+    with c:
+        m = c.get("/v1/models")
+        n = len(m.json().get("data", [])) if m.is_success else 0
+        print(f"  GET /v1/models: HTTP {m.status_code}, {n} models")
+        msgs = [{"role": "user", "content": "Reply with OK."}]
+        if r["protocol"] == "anthropic_messages":
+            resp = c.post("/v1/messages", json={"model": model, "max_tokens": 16, "messages": msgs})
+        elif r["protocol"] == "openai_responses":
+            resp = c.post(
+                "/v1/responses", json={"model": model, "max_output_tokens": 16, "input": "Reply with OK."}
+            )
+        else:
+            resp = c.post("/v1/chat/completions", json={"model": model, "max_tokens": 16, "messages": msgs})
+    served = f"{resp.headers.get('x-oasis-route-provider')}/{resp.headers.get('x-oasis-route-model')}"
+    paid = resp.headers.get("x-oasis-route-paid")
+    print(f"  {r['endpoint']}: HTTP {resp.status_code}, served by {served}, paid={paid}")
+    if not resp.is_success:
+        print(f"  {resp.text[:400]}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _cmd_integrate(args: argparse.Namespace) -> int:
+    """Print paste-ready settings for a coding tool or SDK (no secrets; uses $OASIS_API_KEY)."""
+    from oasis_route import integrations
+
+    base = args.url.rstrip("/")
+    if not args.tool:
+        rows = integrations.recipes(base)
+        if args.json:
+            print(json.dumps(rows, indent=2))
+            return 0
+        for r in rows:
+            print(f"  {r['id']:<14} {r['name']:<34} {r['protocol']:<18} model {r['model']}")
+        print("\noasis-route integrate <tool>  prints the settings; add --check to test them.")
+        return 0
+    found = integrations.recipe(args.tool, base)
+    if found is None:
+        ids = ", ".join(x["id"] for x in integrations.recipes(base))
+        print(f"unknown tool '{args.tool}'; choose one of: {ids}", file=sys.stderr)
+        return 2
+    print(json.dumps(found, indent=2) if args.json else integrations.render(found))
+    return _check_integration(args, found) if args.check else 0
+
+
 async def _dev_connect_env(
     ctx: Any, project_id: str, *, free_tier: bool, age: int | None = None, country: str | None = None
 ) -> None:
@@ -528,6 +582,15 @@ def build_parser() -> argparse.ArgumentParser:
     st.add_argument("--dry-run", action="store_true", help="only report; connect nothing")
     st.add_argument("--no-local", action="store_true", help="do not connect detected local servers")
     st.set_defaults(func=_cmd_setup)
+
+    ig = sub.add_parser(
+        "integrate",
+        help="settings for Claude Code, Codex, Cursor, Cline, Roo Code, Aider, OpenCode, Continue, SDKs",
+    )
+    ig.add_argument("tool", nargs="?", help="tool id (omit to list)")
+    _add_api_args(ig)
+    ig.add_argument("--check", action="store_true", help="test the endpoint with your Oasis Key")
+    ig.set_defaults(func=_cmd_integrate)
 
     d = sub.add_parser("dev", help="local all-in-one: SQLite, mock providers, API, worker, admin key")
     d.add_argument("--port", type=int, default=8080)

@@ -986,8 +986,11 @@ class Engine:
                             data = {
                                 **data,
                                 "oasis_route": {
+                                    "request_id": st.request_id,
                                     "provider": d.cand.provider_id,
                                     "model": d.cand.upstream_model,
+                                    "fallback": st.fallback_used,
+                                    "spend": st.spend(),
                                 },
                             }
                             meta_sent = True

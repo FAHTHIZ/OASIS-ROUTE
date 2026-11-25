@@ -138,12 +138,20 @@ async def chat_completions(
 
 
 def _anthropic_error(
-    status: int, message: str, code: str | None, retry_after_s: float | None
+    status: int,
+    message: str,
+    code: str | None,
+    retry_after_s: float | None,
+    meta: dict[str, Any] | None = None,
+    request_id: str | None = None,
 ) -> JSONResponse:
     headers = {}
     if retry_after_s is not None:
         headers["retry-after"] = str(max(1, int(retry_after_s + 0.999)))
-    return JSONResponse(status_code=status, content=ac.error_body(status, message, code), headers=headers)
+    body = ac.error_body(status, message, code)
+    if meta:  # route metadata (rejections, attempts, approval options) alongside the Anthropic error shape
+        body["oasis_route"] = {**meta, "request_id": request_id or meta.get("request_id")}
+    return JSONResponse(status_code=status, content=body, headers=headers)
 
 
 async def _map_requested_model(ctx: AppContext, name: str) -> str:
@@ -207,7 +215,7 @@ async def anthropic_messages(
             return StreamingResponse(stream, media_type="text/event-stream", headers=headers)
         result = await engine.complete(st)
     except GatewayError as err:
-        return _anthropic_error(err.status, err.message, err.code, err.retry_after_s)
+        return _anthropic_error(err.status, err.message, err.code, err.retry_after_s, err.meta, request_id)
     message = ac.to_message(dict(result.payload), requested)
     message["oasis_route"] = st.meta()
     return JSONResponse(content=message, headers=_headers(st))

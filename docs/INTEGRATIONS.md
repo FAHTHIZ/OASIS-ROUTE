@@ -6,6 +6,17 @@ Oasis Route speaks two client protocols on the same port, both authenticated wit
 |---|---|---|
 | OpenAI Chat Completions | `http://localhost:8080/v1` | `POST /v1/chat/completions`, `GET /v1/models` |
 | Anthropic Messages | `http://localhost:8080` (the client appends `/v1/messages`) | `POST /v1/messages`, `POST /v1/messages/count_tokens` |
+| OpenAI Responses | `http://localhost:8080/v1` | `POST /v1/responses` (Codex CLI) |
+
+The fastest way to configure a tool is to let Oasis Route print its settings, with your server's URL filled in:
+
+```bash
+oasis-route integrate                  # list supported tools
+oasis-route integrate claude_code      # env vars / config files for one tool
+oasis-route integrate cursor --url https://gw.example.com --check   # also test /v1/models and one request
+```
+
+The same recipes are served at `GET /api/v1/integrations` and `/api/v1/integrations/{tool}`. They never contain a key; they reference `$OASIS_API_KEY`. Every response (including streaming first chunks and errors in both OpenAI and Anthropic shapes) carries `oasis_route` metadata with the request id, served provider/model, fallback chain and spend label.
 
 Use `auto` as the model to get the strongest suitable eligible model with failover, `auto/coding` (or `auto/reasoning`, `auto/vision`, ...) to rank by task-specific evidence, or `provider/model` to pin a model. Every response carries `x-oasis-route-provider` and `x-oasis-route-model` so you can see which upstream served it. Details: [API reference](API.md).
 
@@ -119,6 +130,10 @@ Choose the **OpenAI Compatible** API provider, then set Base URL `http://localho
   }
 }
 ```
+
+### Cursor
+
+Settings → Models → API Keys: enable "Override OpenAI Base URL", set it to `https://<your-host>/v1`, paste your Oasis Key as the OpenAI API key, and add a custom model named `auto`. Cursor calls custom endpoints from its own servers ([Cursor forum](https://forum.cursor.com/t/how-can-i-use-a-local-llm-on-my-desktop-ai-computer/152419)), so `localhost` and LAN addresses do not work: use a deployed instance or an HTTPS tunnel and keep Oasis Key auth on. Cursor may strip `/`, `-` and `:` from custom model names ([Cursor forum](https://forum.cursor.com/t/connecting-local-ai-server-to-cursor-does-not-work/152940/3)), which is why the recipe uses plain `auto`. The override applies to all OpenAI-format models; Tab completion keeps Cursor's own models ([Cursor docs](https://docs.cursor.com/settings/api-keys)).
 
 ### Open WebUI
 

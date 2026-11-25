@@ -13,6 +13,7 @@ def register_routers(app: FastAPI) -> None:
         capacity,
         discovery,
         gateway,
+        integrations,
         mail,
         oauth,
         registry_connections,
@@ -23,6 +24,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(registry_connections.router)
     app.include_router(setup.router)
     app.include_router(budgets.router)
+    app.include_router(integrations.router)
     app.include_router(discovery.router)
     app.include_router(capacity.router)
     app.include_router(mail.router)

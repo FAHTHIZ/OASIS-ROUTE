@@ -230,6 +230,8 @@ All paths are under `/api/v1`. Project-scoped endpoints require the key's own pr
 | `DELETE` | `/projects/{id}/budgets/{period}` | Owner: remove a cap. Audited. |
 | `GET` | `/projects/{id}/receipts` | Recent per-request receipts: worst-case estimate, reservation, actual tokens and cost, drift, outcome, digest. |
 | `GET` | `/projects/{id}/receipts/{request_id}` | One request's receipt. |
+| `GET` | `/integrations` | Paste-ready settings for every supported coding tool and SDK (base URL, model, env, config files, docs link). No secrets; recipes reference `$OASIS_API_KEY`. |
+| `GET` | `/integrations/{tool}` | One recipe plus rendered `text` (`claude_code`, `codex`, `cursor`, `cline`, `roo_code`, `aider`, `opencode`, `continue`, `openai_sdk`, `anthropic_sdk`). |
 | `GET` | `/projects/{id}/route-decisions/{request_id}` | Explain one past request: selected route and reason, alternatives, rejections by gate, verification, quota state, estimated and actual cost, fallback chain. |
 | `GET` | `/notifications` | Notifications for the caller (administrators also see instance-wide ones). |
 | `POST` | `/notifications/{id}/read` | Mark read. |
