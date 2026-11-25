@@ -523,8 +523,12 @@ const views = {
         "button",
         {
           type: "button",
-          onclick: async () => {
-            testOut.replaceChildren(el("p", { class: "muted" }, "Sending…"));
+          onclick: async (ev) => {
+            // One test at a time: free endpoints often serve one request per client.
+            const button = ev.currentTarget;
+            if (button.disabled) return;
+            button.disabled = true;
+            testOut.replaceChildren(el("p", { class: "muted" }, "Sending… free models can take up to a minute."));
             try {
               const r = await api("/v1/chat/completions", {
                 method: "POST",
@@ -540,6 +544,8 @@ const views = {
               testOut.replaceChildren(...parts.filter(Boolean));
             } catch (e) {
               testOut.replaceChildren(errorBox(e));
+            } finally {
+              button.disabled = false;
             }
           },
         },

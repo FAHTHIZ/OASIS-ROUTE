@@ -607,8 +607,11 @@ async def worker_status(ctx: AppContext, now: datetime | None = None) -> dict[st
 
 
 async def watchdog(ctx: AppContext, now: datetime | None = None) -> str:
-    """Raise (deduplicated) admin alerts when background automation is stalled or failing."""
-    from oasis_route.notifications.service import notify
+    """Raise (deduplicated) admin alerts when background automation is stalled or failing.
+
+    Once every job is healthy again, open alerts are marked read with a "Recovered" note.
+    """
+    from oasis_route.notifications.service import notify, resolve
 
     st = await worker_status(ctx, now)
     if st["state"] in ("stalled", "degraded"):
@@ -628,4 +631,8 @@ async def watchdog(ctx: AppContext, now: datetime | None = None) -> str:
                 facts={"state": st["state"], "jobs": failing},
                 dedupe_key=f"worker:{st['state']}",
             )
+    elif st["state"] == "running":
+        async with ctx.db.transaction() as s:
+            stamp = (now or utcnow()).strftime("%Y-%m-%d %H:%M UTC")
+            await resolve(s, kind="system.worker", note=f"Recovered at {stamp}.")
     return str(st["state"])

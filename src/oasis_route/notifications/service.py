@@ -57,3 +57,28 @@ async def notify(
     session.add(n)
     await session.flush()
     return n
+
+
+async def resolve(session: AsyncSession, *, kind: str, note: str, project_id: str | None = None) -> int:
+    """Mark unread notices of ``kind`` read once their cause is gone, saying so in the body.
+
+    Returns how many were resolved. A stale "is failing" warning would otherwise stay in the
+    inbox after the problem fixed itself.
+    """
+    existing = (
+        await session.execute(
+            select(Notification).where(
+                Notification.project_id == project_id,
+                Notification.kind == kind,
+                Notification.read_at.is_(None),
+            )
+        )
+    ).scalars()
+    count = 0
+    now = utcnow()
+    for n in existing:
+        body = (n.body or "").rstrip()
+        n.body = (body + ("" if body.endswith((".", "!", "?")) else ".") + " " if body else "") + note
+        n.read_at = now
+        count += 1
+    return count

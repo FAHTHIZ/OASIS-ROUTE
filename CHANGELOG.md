@@ -5,6 +5,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 ## [Unreleased]
 
 ### Fixed
+- A "Background maintenance is failing" or "stopped" notice now resolves itself once every job is healthy again: it is marked read with a "Recovered at …" note instead of staying in Notices as if the problem continued.
+- The console's Send test message button is disabled while a test runs, so a second click no longer fires another request that a one-at-a-time free endpoint rejects. It also says free models can take up to a minute.
 - After a restart, background jobs no longer wait out the old process's lease (up to 15 minutes) when that worker has stopped or stopped heart-beating; this also stops a false "Background maintenance is failing" notice right after restarting.
 - A custom OpenAI-compatible endpoint's models no longer start as "no tool calling": their listing says nothing about tools, so support is now unknown. Naming such a model (for example `custom/openai-fast`) with tools works, and existing rows are corrected on the next model sync. When `model=auto` has no model known to support a requested capability, the 503 now names the model set aside and how to use it.
 - After connecting a real endpoint whose billing is unknown (for example a keyless custom endpoint), `model=auto` failed with only "no authorized, eligible, healthy candidate satisfies this request": the demo was set aside and the new route was blocked by the free-only policy. The error now names the blocked provider and the exact fix (`oasis-route billing <provider> free_tier`, or Connections in the console).

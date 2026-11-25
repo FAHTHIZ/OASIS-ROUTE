@@ -35,13 +35,14 @@ async def test_lease_is_renewed_while_a_long_job_runs(ctx: AppContext) -> None:
 
     async def slow(_c: AppContext) -> Any:
         started.set()
-        await asyncio.sleep(0.8)
+        await asyncio.sleep(2.4)
         return "done"
 
-    job = Job("test.slow", 3600, slow, lease_s=0.3)
+    # Lease and waits are roomy enough for a busy CI machine; renewal runs every lease_s / 3.
+    job = Job("test.slow", 3600, slow, lease_s=1.0)
     task = asyncio.create_task(runner.run_once(ctx, [job], holder="a"))
     await started.wait()
-    await asyncio.sleep(0.5)  # longer than lease_s: without renewal the lease would have expired
+    await asyncio.sleep(1.5)  # longer than lease_s: without renewal the lease would have expired
     row = await _lease(ctx, "test.slow")
     assert row.holder == "a" and row.lease_until > utcnow()
     async with ctx.db.transaction() as s:  # make it "due" so only the live lease protects it
@@ -153,6 +154,12 @@ async def test_watchdog_alerts_once_when_worker_is_missing(ctx: AppContext) -> N
     assert len(notes) == 1 and notes[0].severity == "critical"
     await runner.heartbeat(ctx, "w1", "embedded")
     assert await runner.watchdog(ctx) == "running"
+    # The alert resolves itself once a worker reports in again.
+    async with ctx.db.session() as s:
+        note = (
+            await s.execute(select(Notification).where(Notification.kind == "system.worker"))
+        ).scalar_one()
+    assert note.read_at is not None and ". Recovered at" in note.body
 
 
 async def test_watchdog_reports_repeatedly_failing_job(ctx: AppContext) -> None:
