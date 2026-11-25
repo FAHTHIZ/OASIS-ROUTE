@@ -17,6 +17,7 @@ from oasis_route.db.models import (
     Model,
     Notification,
     QuotaPool,
+    WorkerInstance,
     WorkerLease,
     utcnow,
 )
@@ -69,6 +70,31 @@ async def test_live_lease_blocks_other_holder(ctx: AppContext) -> None:
     assert await runner.acquire(ctx, job, "a")  # "a" is mid-run
     await runner.run_once(ctx, [job], holder="b")
     assert calls == []
+
+
+async def test_lease_of_a_stopped_or_silent_worker_is_taken_over(ctx: AppContext) -> None:
+    """A restart must not wait out the old process's lease (and raise a false 'failing' alert)."""
+    calls, fn = _counter()
+    job = Job("test.abandoned", 1, fn, lease_s=900)
+    await runner.heartbeat(ctx, "old", "embedded")
+    assert await runner.acquire(ctx, job, "old")  # "old" was mid-run when it went away
+    await runner.run_once(ctx, [job], holder="new")
+    assert calls == []  # "old" is still heart-beating: its lease stands
+    await runner.heartbeat(ctx, "old", "embedded", stopped=True)
+    await runner.run_once(ctx, [job], holder="new")
+    assert calls == [1]
+    # A crash leaves no stop mark; a heartbeat older than the stall window counts as gone too.
+    await runner.heartbeat(ctx, "crashed", "embedded")
+    async with ctx.db.transaction() as s:
+        row = await s.get(WorkerLease, "test.abandoned")
+        assert row is not None
+        row.holder, row.lease_until, row.next_run_at = "crashed", utcnow() + timedelta(seconds=900), None
+        row.last_run_at = utcnow() - timedelta(hours=1)
+        inst = await s.get(WorkerInstance, "crashed")
+        assert inst is not None
+        inst.heartbeat_at = utcnow() - timedelta(seconds=ctx.settings.worker_stall_after_s + 5)
+    await runner.run_once(ctx, [job], holder="new")
+    assert calls == [1, 1]
 
 
 async def test_failing_job_is_recorded_and_does_not_stop_others(ctx: AppContext) -> None:

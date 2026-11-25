@@ -5,6 +5,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 ## [Unreleased]
 
 ### Fixed
+- After a restart, background jobs no longer wait out the old process's lease (up to 15 minutes) when that worker has stopped or stopped heart-beating; this also stops a false "Background maintenance is failing" notice right after restarting.
 
 - After connecting a real endpoint whose billing is unknown (for example a keyless custom endpoint), `model=auto` failed with only "no authorized, eligible, healthy candidate satisfies this request": the demo was set aside and the new route was blocked by the free-only policy. The error now names the blocked provider and the exact fix (`oasis-route billing <provider> free_tier`, or Connections in the console).
 

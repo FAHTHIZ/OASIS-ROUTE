@@ -355,7 +355,12 @@ async def acquire(ctx: AppContext, job: Job, holder: str, now: datetime | None =
             if row.paused:
                 return False
             if row.lease_until > now and row.holder != holder:
-                return False
+                # A lease left by a worker that stopped or stopped heart-beating (a restart, a
+                # crash) is abandoned: take it rather than wait up to lease_s for it to expire.
+                owner = await s.get(WorkerInstance, row.holder)
+                stall = timedelta(seconds=ctx.settings.worker_stall_after_s)
+                if owner is None or (owner.stopped_at is None and owner.heartbeat_at >= now - stall):
+                    return False
             due = row.next_run_at
             if due is None and row.last_run_at is not None:
                 due = row.last_run_at + timedelta(seconds=job.interval_s)
