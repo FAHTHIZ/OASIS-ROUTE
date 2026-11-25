@@ -508,7 +508,7 @@ Read the [security and compliance model](docs/SECURITY_AND_COMPLIANCE.md), [thre
 | **Operate it** | [Operations runbook](docs/OPERATIONS.md) · [Zero-operations autonomy](docs/ZERO_OPERATIONS_AUTONOMY.md) |
 | **Explore the design** | [Architecture](docs/ARCHITECTURE.md) · [Decision records](docs/adr/): [stack](docs/adr/0001-stack-and-architecture.md), [free-only spend](docs/adr/0002-free-only-spend-policy.md), [seed sources and frontier](docs/adr/0003-seed-sources-and-frontier.md) |
 | **Review the project** | [Implementation audit](docs/IMPLEMENTATION_AUDIT.md) · [Release checklist](docs/RELEASE_CHECKLIST.md) |
-| **Compare alternatives** | [Comparison with LiteLLM, OmniRoute, and others](docs/COMPARISON.md) |
+| **Compare alternatives** | [Comparison with LiteLLM, OmniRoute, and others](docs/COMPARISON.md) · [OmniRoute alignment report](docs/OMNIROUTE_ALIGNMENT.md) |
 | **Contribute** | [Development guide](docs/DEVELOPMENT.md) · [Agent handoff](AGENT_HANDOFF.md) |
 
 ## Design principles
