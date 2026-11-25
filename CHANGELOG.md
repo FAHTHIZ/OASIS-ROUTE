@@ -4,6 +4,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+### Fixed
+
+- After connecting a real endpoint whose billing is unknown (for example a keyless custom endpoint), `model=auto` failed with only "no authorized, eligible, healthy candidate satisfies this request": the demo was set aside and the new route was blocked by the free-only policy. The error now names the blocked provider and the exact fix (`oasis-route billing <provider> free_tier`, or Connections in the console).
+
 ## [0.2.1] - 2026-11-25
 
 Smoother first run. A new user can go from one command to a real model answering in a few clicks: `oasis-route dev --open` signs you in, connects local models, and the new **Get started** page lists free no-card keys, takes them in one paste box, and sends a test message. `model=auto` no longer answers with the demo echo once something real is connected. Fixes about 15 rough edges found by using 0.2.0 as a new user. No schema change.

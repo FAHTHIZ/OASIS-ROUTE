@@ -47,6 +47,9 @@ async def test_unknown_cost_is_blocked_until_declared_free(
     assert {r["reason"] for r in plan["rejected"]} == {"cost_unknown"}
     r = await chat(client, g["key"])
     assert r.status_code >= 400
+    # The error names the blocked provider and the command that unblocks it.
+    message = r.json()["error"]["message"]
+    assert "free-only spend policy" in message and "oasis-route billing mock free_tier" in message, message
     st = (await client.get(f"/api/v1/projects/{g['pid']}/status", headers=auth(g["key"]))).json()
     assert st["status"] == "Action required" and "Free-only" in st["summary"], st
     assert st["spend_policy"] == "free_only"

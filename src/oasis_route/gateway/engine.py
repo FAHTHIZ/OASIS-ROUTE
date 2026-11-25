@@ -841,10 +841,24 @@ class Engine:
                 type_="upstream_error",
                 meta=meta,
             )
+        message = "no authorized, eligible, healthy candidate satisfies this request"
+        # The most common first-run dead end: a real connection whose cost is unknown or paid,
+        # blocked by the free-only spend policy, which also sets the demo aside. Say how to fix it.
+        blocked = sorted(
+            {r.provider_id for r in rejected if r.reason in ("cost_unknown", "paid_route_blocked")}
+        )
+        if blocked:
+            names = ", ".join(blocked)
+            message += (
+                f"; routes on {names} are blocked by the free-only spend policy because their cost "
+                f"is unknown or paid. If the account is free, declare it with `oasis-route billing "
+                f"{blocked[0]} free_tier` (or Connections in the console); to allow paid use, change "
+                "the project's spend mode"
+            )
         return GatewayError(
             503,
             "no_eligible_route",
-            "no authorized, eligible, healthy candidate satisfies this request",
+            message,
             type_="no_route_error",
             meta=meta,
         )
