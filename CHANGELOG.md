@@ -4,8 +4,17 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+### Fixed
+
+- CLI commands that talk to a server (`setup`, `integrate --check`) crashed with "Cannot open a client instance more than once" against a live server.
+- docs/INTEGRATIONS.md told users to `cat .oasis-dev/admin.key` into `OASIS_API_KEY`, which includes the project id line and breaks every client; it now reads line 2. The CLI also accepts the whole file and falls back to it when no key is set.
+- An unreachable server or rejected key now produces a one-line explanation instead of a traceback.
+- Console navigation no longer hides Offers, Notices and Background off-screen on screens narrower than about 1440px.
+
 ### Added
 
+- Operator CLI ([docs/CLI.md](docs/CLI.md)): `oasis-route providers`, `models`, `routes`, `quota`, `verify`, `preview`, `decisions`, `explain <request-id>` and `doctor`, each with `--json`. Imported catalogue providers, models and prices are always labelled advertised/unconfirmed/unverified. `/api/v1/providers` and `/api/v1/models` now include `catalog` provenance, and models include `pricing` with its `verified` flag.
+- Console: new **Routes**, **Spend** (budgets and receipts) and **Integrations** views; **Capacity** shows active cooldowns and budgets; **Usage** and **Spend** have an **Explain** panel for any past request; **Route preview** offers every routing strategy and shows the full explanation and per-candidate cost.
 - Client integrations ([docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)): `oasis-route integrate [tool] [--check]` and `GET /api/v1/integrations[/{tool}]` print paste-ready settings for Claude Code, Codex CLI, Cursor, Cline, Roo Code, Aider, OpenCode, Continue and the OpenAI/Anthropic SDKs (no secrets; `$OASIS_API_KEY`). `--check` tests model listing and one request through the tool's protocol. Streaming first chunks now carry `oasis_route.request_id`, `fallback` and `spend`; Anthropic-shaped errors carry `oasis_route` route metadata like OpenAI-shaped ones.
 - USD budget ledger ([docs/ROUTING_AND_QUOTAS.md](docs/ROUTING_AND_QUOTAS.md#51-budget-ledger-usd)): per-project `day`, `month` and `total` caps (`/api/v1/projects/{id}/budgets`). Each request holds its worst-case cost atomically with its quota reservation (also against provider credit pools, which previously could not be reserved), dispatches only if the hold succeeds, settles to the actual cost exactly once with drift, and writes a receipt with a SHA-256 digest (`/api/v1/projects/{id}/receipts`). Unknown-cost routes never run under a budget. Budgets report burn rate, projected window spend and exhaustion time. Tables `spend_budgets` and `request_receipts`, migration 0012.
 - Spend modes ([docs/ROUTING_AND_QUOTAS.md](docs/ROUTING_AND_QUOTAS.md#21-spend-policy-never-silently-incur-paid-usage)): `zero_budget` (alias of `free_only`), new `bounded_autonomy`, and `continuity` (alias of `allow_paid`). Bounded autonomy answers `402 paid_approval_required` with priced, single-use approval tokens (hashed, atomically consumed, audited; table `paid_approvals`, migration 0011) instead of using a paid route; `oasis_route.approve_paid` admits exactly the approved route once. Free routes always rank before paid ones outside zero-budget. Responses carry `oasis_route.spend` (a `PAID FALLBACK` label with cost estimate, authorisation and reason), `oasis_route.cooldowns` with retry/reset times after a 429, and `x-oasis-route-spend-mode` / `x-oasis-route-paid` headers. Unknown stored spend policies fail closed to `free_only`.

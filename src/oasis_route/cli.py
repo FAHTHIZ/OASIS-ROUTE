@@ -235,20 +235,49 @@ def _cmd_connect(args: argparse.Namespace) -> int:
     return 0 if out["needs_attention"] == 0 else 3
 
 
+def _clean_key(raw: str) -> str:
+    """Accept a key pasted with whitespace or the whole two-line ``admin.key`` file (project id, key)."""
+    parts = raw.split()
+    keys = [p for p in parts if p.startswith("oasis_")]
+    return keys[-1] if keys else (parts[-1] if parts else "")
+
+
+def _dev_key() -> str:
+    """The key `oasis-route dev` saved locally (line 2 of admin.key), if any."""
+    path = Path(os.environ.get("OASIS_ROUTE_DEV_STATE_DIR", ".oasis-dev")) / "admin.key"
+    try:
+        return _clean_key(path.read_text(encoding="utf-8"))
+    except OSError:
+        return ""
+
+
 def _api(args: argparse.Namespace) -> tuple[Any, str] | None:
     """An HTTP client for a running Oasis Route plus the project id (from --project or the Oasis Key)."""
     import httpx
 
-    oasis_key = getattr(args, "oasis_key", None) or os.environ.get("OASIS_API_KEY", "")
+    raw = getattr(args, "oasis_key", None) or os.environ.get("OASIS_API_KEY", "")
+    oasis_key = _clean_key(raw) if raw else _dev_key()
     if not oasis_key:
-        print("set OASIS_API_KEY or pass --oasis-key", file=sys.stderr)
+        print(
+            "No Oasis Key: set OASIS_API_KEY or pass --oasis-key (local dev: `oasis-route dev` saves one in "
+            ".oasis-dev/admin.key, which is used automatically from that directory)",
+            file=sys.stderr,
+        )
         return None
     c = httpx.Client(
         base_url=args.url.rstrip("/"), headers={"authorization": f"Bearer {oasis_key}"}, timeout=120
     )
-    me = c.get("/api/v1/me")
+    try:
+        me = c.get("/api/v1/me")
+    except httpx.TransportError as exc:
+        print(
+            f"Cannot reach Oasis Route at {args.url}: {exc}. Is the server running? (--url)", file=sys.stderr
+        )
+        c.close()
+        return None
     if me.status_code != 200:
-        print(f"Oasis Key rejected: HTTP {me.status_code}", file=sys.stderr)
+        hint = " (revoked, expired or for another server?)" if me.status_code == 401 else ""
+        print(f"Oasis Key rejected: HTTP {me.status_code}{hint}", file=sys.stderr)
         c.close()
         return None
     return c, getattr(args, "project", None) or me.json()["project"]["id"]
@@ -299,7 +328,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     if api is None:
         return 2
     c, project = api
-    with c:
+    with contextlib.closing(c):
         if args.dry_run:
             r = c.get(f"/api/v1/projects/{project}/setup")
         else:
@@ -324,7 +353,7 @@ def _check_integration(args: argparse.Namespace, r: dict[str, Any]) -> int:
     model = r["model"]
     for prefix in ("openai/", "oasis/"):
         model = model.removeprefix(prefix)
-    with c:
+    with contextlib.closing(c):
         m = c.get("/v1/models")
         n = len(m.json().get("data", [])) if m.is_success else 0
         print(f"  GET /v1/models: HTTP {m.status_code}, {n} models")
@@ -591,6 +620,10 @@ def build_parser() -> argparse.ArgumentParser:
     _add_api_args(ig)
     ig.add_argument("--check", action="store_true", help="test the endpoint with your Oasis Key")
     ig.set_defaults(func=_cmd_integrate)
+
+    from oasis_route import ops_cli
+
+    ops_cli.register(sub, _add_api_args)
 
     d = sub.add_parser("dev", help="local all-in-one: SQLite, mock providers, API, worker, admin key")
     d.add_argument("--port", type=int, default=8080)

@@ -57,6 +57,8 @@ class ProviderOut(ORM):
     endpoints: list[EndpointOut] = []
     oauth_available: bool = False
     oauth_device: bool = False  # sign in by entering a short code on any device (RFC 8628)
+    # Imported catalogue facts with provenance; advertised data, never evidence of verification.
+    catalog: dict[str, Any] = {}
 
 
 @router.get("/providers", response_model=list[ProviderOut])
@@ -153,6 +155,8 @@ class ModelOut(ORM):
     max_output_tokens: int | None
     lifecycle: str
     quality: dict[str, Any]
+    pricing: dict[str, Any] = {}  # carries its own source and ``verified`` flag
+    catalog: dict[str, Any] = {}
 
 
 @router.get("/models", response_model=list[ModelOut])

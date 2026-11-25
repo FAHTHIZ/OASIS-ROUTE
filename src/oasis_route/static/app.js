@@ -389,6 +389,110 @@ function providerCard(p) {
 }
 
 // ---------------------------------------------------------------------------------------------- views
+const MODES = ["strict_quality", "balanced", "lowest_cost", "most_quota", "lowest_latency", "reliability", "context_fit", "reset_aware", "diversity"];
+const usd = (v) => (v === null || v === undefined ? "—" : `$${Number(v).toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}`);
+
+// Explanation of a route decision or preview: selected route and why, cost and its evidence, quota,
+// alternatives, rejections grouped by gate, and the fallback chain with each attempt.
+function explainBlock(e) {
+  if (!e) return el("p", { class: "muted" }, "No explanation recorded.");
+  const rows = [];
+  const kv = (k, v) => rows.push(el("tr", {}, el("th", {}, k), el("td", {}, v)));
+  const s = e.selected;
+  if (s) {
+    kv("Selected", `${s.route} (${e.strategy})`);
+    kv("Why", s.reason || "—");
+    const c = s.cost || {};
+    kv("Cost", `${c.status} · estimated ${usd(c.usd)} · basis ${c.cost_basis}${c.price_verified ? " · price verified" : " · price unverified"}`);
+  } else kv("Selected", el("span", { class: "warn" }, "none: no route passed every gate"));
+  const v = e.verification || {};
+  if (v.cost_basis) kv("Free evidence", v.free ? v.free_evidence || v.cost_basis : "not free");
+  const q = e.quota || {};
+  if ("metered" in q) kv("Quota", q.metered ? `${q.remaining_fraction === null ? "unknown" : Math.round(q.remaining_fraction * 100) + "%"} left${q.reset_in_s ? ` · resets in ${Math.round(q.reset_in_s)}s` : ""}` : "unmetered");
+  const sp = e.spend || {};
+  if (sp.mode) kv("Spend", `${sp.mode}${sp.paid ? " · PAID" : " · free"}${sp.label ? ` · ${sp.label}` : ""}`);
+  if (e.actual_cost) kv("Actual cost", `${usd(e.actual_cost.usd)} (${e.actual_cost.status}, ${e.actual_cost.source})`);
+  const fc = e.fallback_chain || {};
+  if (fc.planned && fc.planned.length) kv("Fallback chain", fc.planned.join(" → "));
+  const parts = [el("table", { class: "kv" }, el("tbody", {}, rows))];
+  if (fc.attempts && fc.attempts.length)
+    parts.push(
+      el("h3", {}, "Attempts"),
+      table(
+        [
+          { label: "Route", get: (a) => `${a.provider}/${a.model}` },
+          { label: "Outcome", get: (a) => pill(a.outcome) },
+          { label: "Category", get: (a) => a.category || "" },
+          { label: "Retry in", get: (a) => (a.retry_in_s ? `${Math.round(a.retry_in_s)}s` : "") },
+        ],
+        fc.attempts
+      )
+    );
+  if (e.alternatives && e.alternatives.length)
+    parts.push(
+      el("h3", {}, "Alternatives"),
+      table(
+        [
+          { label: "Route", get: (a) => a.route },
+          { label: "Quality", num: true, get: (a) => fmt(a.quality ?? a.prior) },
+          { label: "Cost", get: (a) => (a.cost || {}).status },
+        ],
+        e.alternatives.slice(0, 10)
+      )
+    );
+  if (e.rejected && e.rejected.length)
+    parts.push(
+      el("h3", {}, "Rejected"),
+      table(
+        [
+          { label: "Gate", get: (g) => g.gate },
+          { label: "Reason", get: (g) => g.reason },
+          { label: "Routes", num: true, get: (g) => g.count },
+          { label: "Examples", get: (g) => g.routes.slice(0, 3).map((r) => r.route).join(", ") },
+        ],
+        e.rejected
+      )
+    );
+  return el("div", {}, parts);
+}
+
+function cooldownsOf(cap, conns) {
+  const out = [];
+  for (const a of cap.allocations || [])
+    for (const d of a.dimensions || [])
+      for (const p of d.pools || []) if (p.exhausted_until) out.push({ kind: "quota", scope: `${a.provider_id}/${a.model_scope || "*"}`, detail: d.unit, until: p.exhausted_until });
+  for (const c of conns || [])
+    for (const h of c.health || []) if (h.open_until) out.push({ kind: "circuit", scope: `${c.provider_id}/${h.model_scope}`, detail: h.last_error_category || "", until: h.open_until });
+  return out;
+}
+
+async function explainRequest(requestId) {
+  const box = document.getElementById("explain-box");
+  if (!box) return;
+  box.replaceChildren(el("p", { class: "muted" }, "Loading…"));
+  try {
+    const d = await api(`/api/v1/projects/${pid()}/route-decisions/${encodeURIComponent(requestId)}`);
+    const receipt = await api(`/api/v1/projects/${pid()}/receipts/${encodeURIComponent(requestId)}`).catch(() => null);
+    box.replaceChildren(
+      card(
+        `Request ${requestId}`,
+        el("p", { class: "muted" }, `Asked for ${d.requested_model} · task ${d.task} · ${d.outcome} · served by ${d.served_provider ? `${d.served_provider}/${d.served_model}` : "nothing"}${d.fallback_used ? " · fallback used" : ""}`),
+        explainBlock(d.explanation),
+        receipt
+          ? el(
+              "p",
+              { class: "muted spaced" },
+              `Receipt: ${fmt(receipt.input_tokens)} in / ${fmt(receipt.output_tokens)} out (${receipt.usage_source}) · estimated ${usd(receipt.estimated_usd)} · reserved ${usd(receipt.reserved_usd)} · actual ${usd(receipt.actual_usd)} · digest ${receipt.digest_valid ? "valid" : "INVALID"}`
+            )
+          : el("p", { class: "muted spaced" }, "No receipt: the request was refused before any reservation.")
+      )
+    );
+    box.scrollIntoView({ behavior: "smooth" });
+  } catch (e) {
+    box.replaceChildren(card(null, errorBox(e)));
+  }
+}
+
 const views = {
   async discover() {
     const d = await api(`/api/v1/discover?project_id=${encodeURIComponent(pid())}`);
@@ -519,7 +623,12 @@ const views = {
   },
 
   async capacity() {
-    const cap = await api(`/api/v1/projects/${pid()}/capacity`);
+    const [cap, conns, budgets] = await Promise.all([
+      api(`/api/v1/projects/${pid()}/capacity`),
+      api(`/api/v1/projects/${pid()}/connections`),
+      api(`/api/v1/projects/${pid()}/budgets`),
+    ]);
+    const cds = cooldownsOf(cap, conns);
     const kpi = (l, v) => el("div", { class: "kpi" }, el("div", { class: "v" }, fmt(v)), el("div", { class: "l" }, l));
     const h = cap.consumed.last_24h;
     const out = [
@@ -575,6 +684,38 @@ const views = {
           )
         )
       );
+    out.push(
+      card(
+        "Active cooldowns",
+        el("p", { class: "muted" }, "Routes resting after a rate limit or repeated errors. They are skipped, not retried, until the time shown."),
+        table(
+          [
+            { label: "Kind", get: (x) => x.kind },
+            { label: "Scope", get: (x) => x.scope },
+            { label: "Detail", get: (x) => x.detail },
+            { label: "Until", get: (x) => when(x.until) },
+          ],
+          cds,
+          "None."
+        )
+      ),
+      card(
+        `Budgets (spend policy ${budgets.spend_policy})`,
+        table(
+          [
+            { label: "Period", get: (b) => b.period },
+            { label: "Limit", num: true, get: (b) => usd(b.limit_usd) },
+            { label: "Used", num: true, get: (b) => usd(b.used_usd) },
+            { label: "Reserved", num: true, get: (b) => usd(b.reserved_usd) },
+            { label: "Remaining", num: true, get: (b) => usd(b.remaining_usd) },
+            { label: "Resets", get: (b) => when(b.resets_at) },
+            { label: "Exhausts", get: (b) => when((b.forecast || {}).exhausts_at || b.exhausts_at) },
+          ],
+          budgets.budgets,
+          "No USD caps set. Zero-budget projects never spend; caps bound bounded-autonomy and continuity modes."
+        )
+      )
+    );
     out.push(
       card(
         "Forecast",
@@ -780,7 +921,8 @@ const views = {
               },
             });
             out.replaceChildren(
-              el("p", { class: "muted" }, `Mode ${r.mode}, task ${r.task}, best quality ${fmt(r.best_quality)}, max fallback hops ${r.max_fallback_hops}.`),
+              el("p", { class: "muted" }, `Mode ${r.mode}, task ${r.task}, spend mode ${r.spend_mode}, best quality ${fmt(r.best_quality)}, max fallback hops ${r.max_fallback_hops}.`),
+              explainBlock(r.explanation),
               el("h2", {}, "Candidates, in order"),
               table(
                 [
@@ -788,6 +930,7 @@ const views = {
                   { label: "Provider", get: (c) => c.provider_id },
                   { label: "Model", get: (c) => c.upstream_model },
                   { label: "Quality", num: true, get: (c) => fmt(c.quality) },
+                  { label: "Cost", get: (c) => `${c.cost_status}${c.cost_status === "free" ? "" : ` · ${usd((c.est_cost_usd_micros || 0) / 1e6)}`}` },
                   { label: "Downgrade", get: (c) => (r.downgrade_flags[r.candidates.indexOf(c)] ? el("span", { class: "warn" }, "yes") : "no") },
                 ],
                 r.candidates,
@@ -811,7 +954,7 @@ const views = {
         },
       },
       el("label", {}, "Model", el("input", { name: "model", value: "auto" })),
-      el("label", {}, "Mode", el("select", { name: "mode" }, ["strict_quality", "balanced"].map((m) => el("option", {}, m)))),
+      el("label", {}, "Mode", el("select", { name: "mode" }, MODES.map((m) => el("option", {}, m)))),
       el("label", {}, "Task", el("select", { name: "task" }, ["general", "coding", "reasoning", "creative", "extraction", "vision"].map((m) => el("option", {}, m)))),
       el("label", {}, "Prompt", el("input", { name: "prompt", value: "hello" })),
       el("button", { type: "submit" }, "Preview")
@@ -835,10 +978,12 @@ const views = {
             { label: "Attempts", num: true, get: (d) => d.attempts.length },
             { label: "Fallback", get: (d) => (d.fallback_used ? "yes" : "no") },
             { label: "Outcome", get: (d) => pill(d.outcome) },
+            { label: "", get: (d) => el("button", { class: "secondary", onclick: () => explainRequest(d.request_id) }, "Explain") },
           ],
           decisions
         )
       ),
+      el("div", { id: "explain-box" }),
       card(
         "Usage records",
         table(
@@ -855,6 +1000,102 @@ const views = {
           usage
         )
       ),
+    ];
+  },
+
+  async routes() {
+    const data = await api(`/api/v1/projects/${pid()}/routes`);
+    const s = data.summary;
+    return [
+      card(
+        "Routes",
+        el("p", { class: "muted" }, `${s.total} routes · ${s.eligible_free} eligible free · spend policy ${s.spend_policy}. A route is free only with evidence (local server, verified price list, or a declared free-tier account); paid and unknown routes are never used under zero-budget.`),
+        s.unconfirmed_catalog_models ? el("p", { class: "muted" }, `${s.unconfirmed_catalog_models} catalogue models await confirmation by a connected account's model list.`) : null,
+        table(
+          [
+            { label: "Route", get: (r) => r.route },
+            { label: "Cost", get: (r) => pill(r.cost_class) },
+            { label: "Evidence", get: (r) => r.free_evidence || r.cost_basis || "—" },
+            { label: "State", get: (r) => pill(r.state) },
+            { label: "Reason", get: (r) => (r.reason || "") + (r.retry_in_s ? ` (retry in ${Math.round(r.retry_in_s)}s)` : "") },
+          ],
+          data.routes,
+          "No routes yet. Connect a provider first."
+        )
+      ),
+    ];
+  },
+
+  async spend() {
+    const [budgets, receipts] = await Promise.all([
+      api(`/api/v1/projects/${pid()}/budgets`),
+      api(`/api/v1/projects/${pid()}/receipts`),
+    ]);
+    const list = Array.isArray(receipts) ? receipts : receipts.receipts || [];
+    return [
+      card(
+        `Spend mode: ${budgets.spend_policy}`,
+        el("p", { class: "muted" }, "Every request holds its worst-case cost before it is sent and settles to the actual cost once. Receipts carry a tamper-evident digest."),
+        table(
+          [
+            { label: "Period", get: (b) => b.period },
+            { label: "Limit", num: true, get: (b) => usd(b.limit_usd) },
+            { label: "Used", num: true, get: (b) => usd(b.used_usd) },
+            { label: "Reserved", num: true, get: (b) => usd(b.reserved_usd) },
+            { label: "Remaining", num: true, get: (b) => usd(b.remaining_usd) },
+            { label: "Resets", get: (b) => when(b.resets_at) },
+          ],
+          budgets.budgets,
+          "No USD caps set."
+        )
+      ),
+      card(
+        "Receipts",
+        table(
+          [
+            { label: "Time", get: (r) => when(r.created_at) },
+            { label: "Route", get: (r) => (r.provider_id ? `${r.provider_id}/${r.upstream_model}` : "—") },
+            { label: "Outcome", get: (r) => pill(r.outcome) },
+            { label: "Cost", get: (r) => r.cost_status },
+            { label: "Estimated", num: true, get: (r) => usd(r.estimated_usd) },
+            { label: "Actual", num: true, get: (r) => usd(r.actual_usd) },
+            { label: "Tokens", num: true, get: (r) => `${fmt(r.input_tokens)} / ${fmt(r.output_tokens)}` },
+            { label: "Digest", get: (r) => (r.digest_valid ? "valid" : el("span", { class: "warn" }, "invalid")) },
+            { label: "", get: (r) => el("button", { class: "secondary", onclick: () => explainRequest(r.request_id) }, "Explain") },
+          ],
+          list,
+          "No requests yet."
+        )
+      ),
+      el("div", { id: "explain-box" }),
+    ];
+  },
+
+  async integrations() {
+    const data = await api("/api/v1/integrations");
+    const out = el("div", {});
+    const show = async (id) => {
+      try {
+        const r = await api(`/api/v1/integrations/${id}`);
+        out.replaceChildren(
+          card(
+            r.name,
+            el("p", { class: "muted" }, `Protocol ${r.protocol} · endpoint ${r.endpoint} · model ${r.model}`),
+            el("pre", {}, r.text),
+            r.docs_url ? el("p", {}, el("a", { href: r.docs_url, rel: "noopener noreferrer", target: "_blank" }, "Official setup docs")) : null
+          )
+        );
+      } catch (e) {
+        out.replaceChildren(errorBox(e));
+      }
+    };
+    return [
+      card(
+        "Connect a coding tool",
+        el("p", { class: "muted" }, `Everything points at ${data.base_url}. Settings use $OASIS_API_KEY; create a key under Oasis Keys. CLI: oasis-route integrate <tool> --check.`),
+        el("div", { class: "row" }, data.integrations.map((r) => el("button", { class: "secondary", onclick: () => show(r.id) }, r.name)))
+      ),
+      out,
     ];
   },
 

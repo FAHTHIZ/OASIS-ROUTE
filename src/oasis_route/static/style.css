@@ -100,3 +100,15 @@ nav button { white-space: nowrap; padding: 6px 9px; }
   header { flex-wrap: wrap; }
   nav { order: 3; flex-basis: 100%; }
 }
+table.kv th { text-align: left; width: 150px; font-weight: 600; vertical-align: top; }
+table.kv td { word-break: break-word; }
+.card h3 { margin: 14px 0 6px; font-size: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill.free, .pill.eligible { color: var(--ok); }
+.pill.paid, .pill.blocked { color: var(--bad); }
+.pill.unknown, .pill.exhausted { color: var(--muted); }
+.brand { white-space: nowrap; flex-shrink: 0; }
+#who { white-space: nowrap; }
+nav button { white-space: nowrap; }
+/* Twelve views do not fit one row below ~1440px: wrap instead of hiding items off-screen. */
+@media (max-width: 1440px) { nav { flex-wrap: wrap; overflow-x: visible; row-gap: 2px; } }

@@ -176,6 +176,8 @@ claude
 
 Any OpenAI SDK can use the same gateway by setting its base URL to <code>https://route.example.com/v1</code> and its API key to the Oasis Key.
 
+Every coding tool gets its settings printed for you (`oasis-route integrate claude_code`, `codex`, `cursor`, `cline`, `roo_code`, `aider`, `opencode`, `continue`), and `oasis-route doctor`, `quota`, `preview` and `explain <request-id>` show what the gateway is doing and why ([docs/CLI.md](docs/CLI.md)).
+
 ### Production deployment
 
 For a PostgreSQL-backed deployment, follow the [deployment guide](docs/DEPLOYMENT.md):
@@ -511,7 +513,8 @@ Read the [security and compliance model](docs/SECURITY_AND_COMPLIANCE.md), [thre
 | **Explore the design** | [Architecture](docs/ARCHITECTURE.md) · [Decision records](docs/adr/): [stack](docs/adr/0001-stack-and-architecture.md), [free-only spend](docs/adr/0002-free-only-spend-policy.md), [seed sources and frontier](docs/adr/0003-seed-sources-and-frontier.md) |
 | **Review the project** | [Implementation audit](docs/IMPLEMENTATION_AUDIT.md) · [Release checklist](docs/RELEASE_CHECKLIST.md) |
 | **Compare alternatives** | [Comparison with LiteLLM, OmniRoute, and others](docs/COMPARISON.md) · [OmniRoute alignment report](docs/OMNIROUTE_ALIGNMENT.md) |
-| **Get started fast** | [Turnkey onboarding: `oasis-route setup`](docs/ONBOARDING.md) |
+| **Get started fast** | [Turnkey onboarding: `oasis-route setup`](docs/ONBOARDING.md) · [Coding tools: `oasis-route integrate`](docs/INTEGRATIONS.md) |
+| **Inspect a running gateway** | [CLI: providers, models, routes, quota, verify, preview, doctor, explain](docs/CLI.md) |
 | **Provider catalogue** | [Unified catalogue: curated seeds plus 220 imported providers, with provenance](docs/CATALOG.md) |
 | **Contribute** | [Development guide](docs/DEVELOPMENT.md) · [Agent handoff](AGENT_HANDOFF.md) |
 

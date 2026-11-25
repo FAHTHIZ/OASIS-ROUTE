@@ -23,7 +23,7 @@ Use `auto` as the model to get the strongest suitable eligible model with failov
 The examples assume a local stack (`uv run oasis-route dev` prints the key and stores it in `.oasis-dev/admin.key`):
 
 ```bash
-export OASIS_API_KEY="$(cat .oasis-dev/admin.key)"
+export OASIS_API_KEY="$(sed -n 2p .oasis-dev/admin.key)"   # line 1 is the project id
 ```
 
 ## Quickstart snippets
