@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oasis_route.context import AppContext
 from oasis_route.db.models import Connection, Model, Offer, Project, Provider, User
 from oasis_route.domain.enums import ConnectionStatus
-from oasis_route.registry.catalog import LOCAL_SERVER_IDS, LOCAL_SERVERS
+from oasis_route.registry.catalog import DEMO_PROVIDER_IDS, LOCAL_SERVER_IDS, LOCAL_SERVERS
 from oasis_route.registry.imported import UNROUTABLE_LIFECYCLES
 from oasis_route.routing.router import RouteOptions, build_plan, cost_basis
 
@@ -39,6 +39,21 @@ DETECT_TIMEOUT_S = 1.0
 VERIFIED_OFFER_STATES = ("verified_eligible", "connectable", "active")
 FREE_BASES = {"local": "local", "free_model": "provider_price_list", "free_tier_account": "account_declared"}
 EXHAUSTED_PREFIXES = ("quota_exhausted", "health:")
+# Hosted providers whose own documentation describes a no-card free plan or trial key, in the order a new
+# user gets the most from them. Display-only guidance (links from connections/access.py); a route only
+# becomes free through the provider's price list or the owner declaring the account free-tier.
+FREE_KEY_ORDER = (
+    "groq",
+    "gemini",
+    "openrouter",
+    "cerebras",
+    "mistral",
+    "sambanova",
+    "nvidia",
+    "cohere",
+    "zai",
+    "huggingface",
+)
 
 
 # ------------------------------------------------------------------------------------------ local servers
@@ -128,6 +143,7 @@ async def classify_routes(session: AsyncSession, project: Project) -> dict[str, 
         cost_class = "free" if basis in FREE_BASES else basis
         return {
             "connection_id": conn_id,
+            "demo": provider_id in DEMO_PROVIDER_IDS,
             "provider_id": provider_id,
             "model": upstream,
             "route": f"{provider_id}/{upstream}",
@@ -160,7 +176,11 @@ async def classify_routes(session: AsyncSession, project: Project) -> dict[str, 
         "total": len(routes),
         "by_cost_class": dict(Counter(x["cost_class"] for x in routes)),
         "by_state": dict(Counter(x["state"] for x in routes)),
-        "eligible_free": sum(1 for x in routes if x["state"] == "eligible" and x["cost_class"] == "free"),
+        # Demo (mock) routes answer with canned echoes: counted apart so "ready" means real models.
+        "eligible_free": sum(
+            1 for x in routes if x["state"] == "eligible" and x["cost_class"] == "free" and not x["demo"]
+        ),
+        "eligible_demo": sum(1 for x in routes if x["state"] == "eligible" and x["demo"]),
         "spend_policy": project.spend_policy,
         "free_only": plan.free_only,
         "unconfirmed_catalog_models": unconfirmed,
@@ -221,6 +241,66 @@ async def connectable_providers(session: AsyncSession, project_id: str) -> dict[
     return {"verified": order, "advertised": leads}
 
 
+def free_key_providers(providers: dict[str, Provider], connected: set[str]) -> list[dict[str, Any]]:
+    """Where to get a free key for each reviewed hosted provider, most useful first (display-only)."""
+    from oasis_route.connections.access import access_for
+    from oasis_route.connections.key_detect import ENV_NAMES
+
+    env_for: dict[str, str] = {}
+    for name, pid in ENV_NAMES.items():
+        env_for.setdefault(pid, name)
+    out = []
+    for pid in FREE_KEY_ORDER:
+        prov = providers.get(pid)
+        info = access_for(pid)
+        if prov is None or prov.status != "active" or not info.api_key:
+            continue
+        out.append(
+            {
+                "provider_id": pid,
+                "name": prov.name,
+                "connected": pid in connected,
+                "get_key_url": info.api_key,
+                "env_var": env_for.get(pid),
+                "free_tier_hint": info.free_tier_hint,
+                "card_required": info.card_required,
+            }
+        )
+    return out
+
+
+async def billing_attention(
+    session: AsyncSession, project_id: str, routes: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Active hosted connections with no free route because nobody has said whether billing is set up."""
+    conns = list(
+        (
+            await session.execute(
+                select(Connection).where(
+                    Connection.project_id == project_id, Connection.status == ConnectionStatus.ACTIVE.value
+                )
+            )
+        ).scalars()
+    )
+    free_by_conn = Counter(
+        r["connection_id"] for r in routes["routes"] if r["state"] == "eligible" and r["cost_class"] == "free"
+    )
+    unknown_by_conn = Counter(r["connection_id"] for r in routes["routes"] if r["reason"] == "cost_unknown")
+    return [
+        {
+            "connection_id": c.id,
+            "provider_id": c.provider_id,
+            "name": c.display_name,
+            "blocked_routes": unknown_by_conn[c.id],
+            "fix": "declare the account free-tier if no billing is set up on it "
+            f"(PATCH /api/v1/projects/{project_id}/connections/{c.id} with billing_mode=free_tier, or the "
+            "console's Get started page)",
+        }
+        for c in conns
+        if c.billing_mode == "unknown" and unknown_by_conn[c.id] and not free_by_conn[c.id]
+    ]
+
+
 # ------------------------------------------------------------------------------------------------ setup
 def endpoint_info(base_url: str) -> dict[str, Any]:
     base = base_url.rstrip("/")
@@ -241,6 +321,18 @@ async def setup_plan(ctx: AppContext, project: Project, base_url: str) -> dict[s
         assert fresh is not None
         connectable = await connectable_providers(session, project.id)
         routes = await classify_routes(session, fresh)
+        attention = await billing_attention(session, project.id, routes)
+        all_providers = {p.id: p for p in (await session.execute(select(Provider))).scalars()}
+        connected_ids = set(
+            (
+                await session.execute(
+                    select(Connection.provider_id).where(
+                        Connection.project_id == project.id,
+                        Connection.status != ConnectionStatus.REVOKED.value,
+                    )
+                )
+            ).scalars()
+        )
         local_conns = {
             c.provider_id
             for c in (
@@ -269,6 +361,8 @@ async def setup_plan(ctx: AppContext, project: Project, base_url: str) -> dict[s
         "steps": steps,
         "local_servers": local,
         "connectable_providers": connectable,
+        "free_keys": free_key_providers(all_providers, connected_ids),
+        "billing_attention": attention,
         "routes": routes,
         "endpoint": endpoint_info(base_url),
         "spend_policy": project.spend_policy,

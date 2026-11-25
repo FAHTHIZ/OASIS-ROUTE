@@ -31,6 +31,7 @@ GATES = {
     "offer_not_usable": "verification",
     "ineligible": "eligibility",
     "not_in_requested_providers": "authorization",
+    "demo_provider_superseded": "authorization",
     "data_policy": "privacy",
     "paid_route_blocked": "budget",
     "cost_unknown": "budget",

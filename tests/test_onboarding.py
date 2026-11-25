@@ -93,7 +93,10 @@ async def test_routes_are_classified_honestly(
 ) -> None:
     g = await gateway_setup(client, two_providers=False)
     out = (await client.get(f"/api/v1/projects/{g['pid']}/routes", headers=auth(g["key"]))).json()
-    assert out["summary"]["eligible_free"] > 0
+    # The mock provider is a demo: its free routes are counted apart from real ones.
+    assert out["summary"]["eligible_free"] == 0
+    assert out["summary"]["eligible_demo"] > 0
+    assert all(x["demo"] for x in out["routes"])
     assert {x["cost_class"] for x in out["routes"]} == {"free"}
     # Same provider, but now billable with unknown cost: blocked under zero-budget, never shown as free.
     async with ctx.db.transaction() as s:
@@ -102,7 +105,7 @@ async def test_routes_are_classified_honestly(
     assert {x["cost_class"] for x in out["routes"]} == {"unknown"}
     assert {x["state"] for x in out["routes"]} == {"blocked"}
     assert {x["reason"] for x in out["routes"]} == {"cost_unknown"}
-    assert out["summary"]["eligible_free"] == 0
+    assert out["summary"]["eligible_demo"] == 0
     # Declared paid: still blocked, labelled paid.
     cid = g["conn_a"]["id"]
     await client.patch(
@@ -132,3 +135,58 @@ async def test_connectable_lists_verified_and_advertised_separately(
     assert out["verified"][0]["verification"] == "verified"
     assert [e["provider_id"] for e in out["advertised"]] == ["cerebras"]
     assert out["advertised"][0]["verification"] == "advertised"
+
+
+async def test_auto_prefers_a_real_provider_over_the_demo(
+    client: httpx.AsyncClient, ctx: AppContext, upstreams: Any
+) -> None:
+    """Once a real model is connected, `auto` stops answering with demo echoes; pinning still works."""
+    from tests.helpers import chat
+
+    g = await gateway_setup(client, two_providers=False)
+    _serve_local(ctx)
+    base = ctx.upstream_transport.apps["127.0.0.1"]  # type: ignore[union-attr]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/chat/completions"):
+            body = {
+                "id": "x",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "llama3.2",
+                "choices": [
+                    {"index": 0, "message": {"role": "assistant", "content": "real"}, "finish_reason": "stop"}
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            }
+            return httpx.Response(200, json=body)
+        return base.handler(request)  # type: ignore[no-any-return]
+
+    ctx.upstream_transport.apps["127.0.0.1"] = httpx.MockTransport(handler)  # type: ignore[union-attr]
+    before = await chat(client, g["key"])
+    assert before.headers["x-oasis-route-provider"] == "mock"  # demo is all there is: it answers
+    await client.post(f"/api/v1/projects/{g['pid']}/setup", json={}, headers=auth(g["key"]))
+    r = await chat(client, g["key"])
+    assert r.status_code == 200, r.text
+    assert r.headers["x-oasis-route-provider"] != "mock"
+    assert r.json()["choices"][0]["message"]["content"] == "real"
+    pinned = await chat(client, g["key"], model="mock/mock-small")
+    assert pinned.status_code == 200 and pinned.headers["x-oasis-route-provider"] == "mock"
+
+
+async def test_setup_lists_free_key_links_and_flags_unknown_billing(
+    client: httpx.AsyncClient, ctx: AppContext, upstreams: Any
+) -> None:
+    g = await gateway_setup(client, two_providers=False)
+    out = (await client.get(f"/api/v1/projects/{g['pid']}/setup", headers=auth(g["key"]))).json()
+    keys = out["free_keys"]
+    assert [k["provider_id"] for k in keys][:3] == ["groq", "gemini", "openrouter"]
+    assert all(k["get_key_url"].startswith("https://") and not k["card_required"] for k in keys)
+    assert {k["env_var"] for k in keys if k["provider_id"] == "groq"} == {"GROQ_API_KEY"}
+    assert out["billing_attention"] == []
+    # Billing unknown on a billable provider: its routes are held back and setup says how to fix it.
+    async with ctx.db.transaction() as s:
+        await s.execute(update(Provider).where(Provider.id == "mock").values(regions=["us"]))
+    out = (await client.get(f"/api/v1/projects/{g['pid']}/setup", headers=auth(g["key"]))).json()
+    assert [a["provider_id"] for a in out["billing_attention"]] == ["mock"]
+    assert "billing_mode=free_tier" in out["billing_attention"][0]["fix"]

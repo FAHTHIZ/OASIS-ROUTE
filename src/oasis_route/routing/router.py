@@ -31,6 +31,7 @@ from oasis_route.domain.enums import ConnectionStatus, QuotaPeriod, RoutingMode,
 from oasis_route.health import breaker
 from oasis_route.quota import ledger
 from oasis_route.quota.windows import next_reset
+from oasis_route.registry.catalog import DEMO_PROVIDER_IDS
 from oasis_route.routing.cost import CostEstimate, estimate_cost
 from oasis_route.routing.priors import PRIOR_SOURCE, model_prior
 from oasis_route.spend import budgets
@@ -340,6 +341,11 @@ async def build_plan(
 
     spend = SPEND_FREE_ONLY if opts.free_only else spend_mode(project)
     free_only = spend == SPEND_FREE_ONLY
+    # Demo providers (`oasis-route dev` mocks) answer with canned echoes. Once a real provider is active,
+    # ``auto`` must never pick them, on any path a connection was created by; naming a mock model still works.
+    real_active = any(
+        c.status == ConnectionStatus.ACTIVE.value and c.provider_id not in DEMO_PROVIDER_IDS for c in conns
+    )
     survivors: list[Candidate] = []
     pending: list[Candidate] = []
     headroom = budgets.tightest(await budgets.for_project(session, project.id), now)
@@ -355,6 +361,8 @@ async def build_plan(
             conn_reason = f"provider_{prov.status}"
         elif opts.providers and prov.id not in opts.providers:
             conn_reason = "not_in_requested_providers"
+        elif auto and pinned_provider is None and real_active and prov.id in DEMO_PROVIDER_IDS:
+            conn_reason = "demo_provider_superseded"
         else:
             offer = offers.get(c.offer_id) if c.offer_id else None
             if c.offer_id and (

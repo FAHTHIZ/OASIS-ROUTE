@@ -4,7 +4,13 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+### Fixed
+
+- `model=auto` kept answering with the built-in demo echo (`mock`, `mock_alt`) after a real provider or local model was connected. Demo providers now step aside for `auto` as soon as any real connection is active (gate `demo_provider_superseded`); pinning a demo model still works.
+- Route summaries counted demo routes as ready free capacity. `eligible_free` now counts real models only, and demo routes are reported separately as `eligible_demo`; routes carry a `demo` flag.
+
 ### Added
+
 
 - 0.2.0 release announcement ([docs/releases/v0.2.0.md](docs/releases/v0.2.0.md)), a documentation home page ([docs/README.md](docs/README.md)) with a release index, and a release banner in the README. The README test count now reads 409.
 

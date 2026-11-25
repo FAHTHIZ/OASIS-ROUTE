@@ -74,6 +74,8 @@ LOCAL_SERVERS: tuple[tuple[str, str, str, str], ...] = (
     ("xinference", "Xinference", "http://127.0.0.1:9997/v1", "https://inference.readthedocs.io"),
 )
 LOCAL_SERVER_IDS = frozenset(s[0] for s in LOCAL_SERVERS)
+# Deterministic mock providers seeded by `oasis-route dev`: canned echoes, never real answers.
+DEMO_PROVIDER_IDS = frozenset({"mock", "mock_alt"})
 
 PROVIDERS: tuple[ProviderSeed, ...] = (
     ProviderSeed(
