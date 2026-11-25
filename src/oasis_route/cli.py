@@ -238,7 +238,7 @@ def _cmd_connect(args: argparse.Namespace) -> int:
     with contextlib.closing(c):
         accept, free_tier = args.accept_terms, args.free_tier
         if not accept:
-            r = c.post(path, json={"text": text, "dry_run": True})
+            r = c.post(path, json={"text": text, "accept_terms": False, "dry_run": True})
             if r.status_code != 200:
                 print(f"HTTP {r.status_code}: {r.text[:500]}", file=sys.stderr)
                 return 1
@@ -423,7 +423,15 @@ def _print_setup(out: dict[str, Any]) -> None:
     rs = out["routes"]["summary"]
     print("\nRoutes")
     print(f"  {rs['total']:,} total: {_counts(rs['by_cost_class'])}; {_counts(rs['by_state'])}")
-    print(f"  {rs['eligible_free']:,} free routes ready on real models · spend policy {rs['spend_policy']}")
+    n = rs["eligible_free"]
+    print(
+        f"  {n:,} free route{'' if n == 1 else 's'} ready on real models · spend policy {rs['spend_policy']}"
+    )
+    aside = sum(1 for r in out["routes"]["routes"] if r.get("reason") == "demo_provider_superseded")
+    if aside:
+        print(
+            f"  {aside} demo routes set aside: a real model is connected, so `auto` no longer uses the demo"
+        )
     if rs.get("eligible_demo") and not rs["eligible_free"]:
         print(
             f"  only demo providers are connected ({rs['eligible_demo']} routes): `auto` answers with echoes "
@@ -569,8 +577,29 @@ async def _dev_connect_env(
                     c.last_error = "paused: real providers are connected"
 
 
+def _port_in_use(host: str, port: int) -> bool:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind((host, port))
+        except OSError:
+            return True
+    return False
+
+
 def _cmd_dev(args: argparse.Namespace) -> int:
     """One command: SQLite + migrations + two mock providers + API + worker + an admin Oasis Key."""
+    busy = [p for p in (args.port, args.mock_port, args.mock_port + 1) if _port_in_use("127.0.0.1", p)]
+    if busy:
+        print(
+            f"{'Port' if len(busy) == 1 else 'Ports'} {', '.join(map(str, busy))} "
+            f"{'is' if len(busy) == 1 else 'are'} already in use: is another `oasis-route dev` running? "
+            "Stop it, or pick free ports with --port and --mock-port.",
+            file=sys.stderr,
+        )
+        return 2
     import uvicorn
 
     from oasis_route.app import create_app
@@ -640,14 +669,22 @@ def _cmd_dev(args: argparse.Namespace) -> int:
         if args.connect_env and pid != "?":
             await _dev_connect_env(ctx, pid, free_tier=args.free_tier, age=args.age, country=args.country)
         base = f"http://{s.host}:{args.port}"
+        local_note = ""
+        if args.local and pid != "?":
+            local_note = await _dev_connect_local(ctx, pid, base)
+        console = f"{base}/console/#key={secret}"
         print(
-            f"\nOasis Route dev is running.\n  console:  {base}/console/\n  API docs: {base}/docs\n"
+            f"\nOasis Route dev is running.\n  console:  {console}\n"
+            "            (one click: the key in the link signs you in and is removed from the address bar)\n"
+            f"  API docs: {base}/docs\n{local_note}"
             f"  project:  {pid}\n  export OASIS_API_KEY={secret}\n\n"
             f'  curl {base}/v1/chat/completions -H "Authorization: Bearer $OASIS_API_KEY" \\\n'
             "    -H 'content-type: application/json' "
             '-d \'{"model":"auto","messages":[{"role":"user","content":"hello"}]}\'\n',
             flush=True,
         )
+        if args.open:
+            tasks.append(asyncio.create_task(_open_when_ready(api, console)))
         try:
             await api.serve()  # the app lifespan supervises the embedded worker
         finally:
@@ -659,6 +696,39 @@ def _cmd_dev(args: argparse.Namespace) -> int:
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(_run())
     return 0
+
+
+async def _dev_connect_local(ctx: Any, project_id: str, base: str) -> str:
+    """Connect running local model servers (Ollama, LM Studio, ...) so `auto` has a real model at once."""
+    from sqlalchemy import select
+
+    from oasis_route import onboarding
+    from oasis_route.db.models import User
+
+    async with ctx.db.session() as sess:
+        admin = (await sess.execute(select(User).where(User.role == "admin"))).scalars().first()
+    if admin is None:
+        return ""
+    try:
+        out = await onboarding.apply_setup(ctx, project_id, admin, connect_local=True, base_url=base)
+    except Exception as exc:  # detection is a convenience; the server must still start
+        return f"  local models: detection failed ({exc})\n"
+    servers = [x for x in out["local_servers"]["servers"] if x["reachable"]]
+    if not servers:
+        return "  local models: none running (optional: https://ollama.com, then `ollama pull qwen2.5`)\n"
+    names = ", ".join(
+        f"{x['provider_id']} ({len(x['models'])} model{'' if len(x['models']) == 1 else 's'})"
+        for x in servers
+    )
+    return f"  local models: {names} connected; `auto` uses them before the demo\n"
+
+
+async def _open_when_ready(server: Any, url: str) -> None:
+    import webbrowser
+
+    while not server.started:  # noqa: ASYNC110 - uvicorn exposes only a flag
+        await asyncio.sleep(0.05)
+    await asyncio.to_thread(webbrowser.open, url)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -767,6 +837,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     d.add_argument("--age", type=int, help="with --connect-env: your age (some providers require 18+)")
     d.add_argument("--country", help="with --connect-env: your ISO country code, e.g. BD")
+    d.add_argument("--open", action="store_true", help="open the console in your browser, signed in")
+    d.add_argument(
+        "--no-local",
+        dest="local",
+        action="store_false",
+        help="do not detect and connect local model servers (Ollama, LM Studio, vLLM, ...) on start",
+    )
     d.set_defaults(func=_cmd_dev)
     return p
 

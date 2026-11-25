@@ -105,6 +105,10 @@ def _run(args: argparse.Namespace, fn: Callable[[Any, str, argparse.Namespace], 
 # --- providers / models ---------------------------------------------------------------------------
 
 
+def _kv(d: dict[str, int]) -> str:
+    return ", ".join(f"{v} {k}" for k, v in sorted(d.items(), key=lambda kv: -kv[1])) or "none"
+
+
 def _free_claim(cat: dict[str, Any]) -> str | None:
     ft = cat.get("free_tier") or {}
     if not ft or ft.get("advertised") is False:
@@ -218,9 +222,11 @@ def _routes(c: Any, project: str, args: argparse.Namespace) -> tuple[Any, str, i
     s = data["summary"]
     text = _table(rows, ["route", "cost", "evidence", "state", "reason"])
     text += (
-        f"\n\n{s['total']} routes · cost {s['by_cost_class']} · state {s['by_state']} · "
-        f"{s['eligible_free']} eligible free · spend policy {s['spend_policy']}"
+        f"\n\n{s['total']} routes · {_kv(s['by_cost_class'])} · {_kv(s['by_state'])} · "
+        f"{s['eligible_free']} eligible free on real models · spend policy {s['spend_policy']}"
     )
+    if s.get("eligible_demo"):
+        text += f"\n{s['eligible_demo']} eligible demo routes (canned echoes, not a real model)."
     if s.get("unconfirmed_catalog_models"):
         text += f"\n{s['unconfirmed_catalog_models']} catalogue models await confirmation by a model list."
     return {**data, "routes": rs}, text, 0

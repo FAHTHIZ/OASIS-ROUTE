@@ -104,10 +104,10 @@ The fastest way to explore OASIS Route is its deterministic mock-provider mode. 
 Requires [uv](https://docs.astral.sh/uv/).
 
 ~~~bash
-uvx --from git+https://github.com/FAHTHIZ/OASIS-ROUTE oasis-route dev
+uvx --from git+https://github.com/FAHTHIZ/OASIS-ROUTE oasis-route dev --open
 ~~~
 
-The command prints the console URL, your project ID, and an Oasis Key.
+The command opens the console already signed in on **Get started**, connects any local model server it finds (Ollama, LM Studio, vLLM, ...), and lists where to get free keys. Paste them in the console, or run `oasis-route connect` in a second shell and paste them there. Until something real is connected, `model=auto` answers with a built-in demo echo, and the console says so.
 
 ### 2. Run with Docker
 

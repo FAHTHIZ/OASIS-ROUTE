@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- Console: the paste-keys box was a narrow textarea with the confirmations squeezed beside it; it is now full width with one checkbox per line. **Connect one provider** defaulted to a blocked provider (`adapta-web`) and listed all 231; it now lists only connectable providers, reviewed adapters first, behind a "Choose a provider" placeholder. **Discover** rendered every provider card (about 27,000 px of mostly unavailable entries); it shows connected and connectable providers first with **Show all** for the rest.
+- Discover asked to "confirm the account is free-tier" for Ollama and other local servers, which have no account or bill; local connections now simply show Connected. Paid connections are shown as connected paid accounts rather than as needing confirmation.
+- `oasis-route dev` hung with a traceback when its ports were already taken (for example a second `dev` in another shell); it now exits with a one-line message naming the ports.
+- `oasis-route routes` printed raw Python dictionaries in its summary line.
+- Detected local servers were named twice, e.g. "Ollama (local) (detected)".
 - `oasis-route connect` with no flags now asks you to paste keys (hidden), shows what it detected, and asks the two confirmations (your own accounts and terms; whether billing is set up) instead of stopping with "no keys found" or a silent dry run. Like other commands, it now uses the dev key in `.oasis-dev/admin.key` when `OASIS_API_KEY` is unset. Scripts keep `--from-env`/`--env-file`/`--stdin` with `--accept-terms`.
 - `oasis-route setup` printed raw Python dictionaries for route counts and gave no next step on a fresh install; it now prints readable counts, the free-key links, a warning when only demo providers answer, and the one-line fix for accounts with unknown billing.
 - `oasis-route providers` labelled the hand-written adapters (Groq, Cerebras, Gemini, OpenRouter, Mistral, NVIDIA, OpenAI, Anthropic, Cohere, Hugging Face, SambaNova, Z.ai) as imported `omniroute`/`advertised` because an imported row shares their id; they now show `curated`/`reviewed`. Their free-tier column is still marked advertised.
@@ -15,6 +20,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Console **Get started** page, now the first screen: whether real models or only the demo are connected, a **Send test message** button showing who answered, free no-card key links, the paste-keys box, detected local models with a connect button, a one-click fix for accounts with unknown billing, and the endpoint.
+- One-click console sign-in: `oasis-route dev` prints `/console/#key=<key>`; the console moves the key into session storage and strips it from the address bar. `oasis-route dev --open` opens it in the browser.
+- `oasis-route dev` connects running local model servers (Ollama, LM Studio, vLLM, ...) on start, so `auto` answers with a real model without a separate `setup` step (`--no-local` to skip).
 - `GET /api/v1/projects/{id}/setup` now returns `free_keys` (where to create a no-card key for each reviewed hosted provider, with its environment variable and free-tier note) and `billing_attention` (connections whose routes are held back only because nobody declared whether billing is set up). A fresh install no longer ends at "none reviewed yet".
 - `oasis-route billing <provider> free_tier|paid|unknown` declares whether billing is set up on a connected account, so free-plan keys connected without `--free-tier` can be fixed in one command.
 - 0.2.0 release announcement ([docs/releases/v0.2.0.md](docs/releases/v0.2.0.md)), a documentation home page ([docs/README.md](docs/README.md)) with a release index, and a release banner in the README. The README test count now reads 409.

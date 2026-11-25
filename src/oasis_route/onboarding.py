@@ -406,7 +406,7 @@ async def apply_setup(
                         provider_id=s["provider_id"],
                         secret=None,
                         base_url=s["base_url"],
-                        display_name=f"{s['name']} (detected)",
+                        display_name=s["name"] if "(local)" in s["name"] else f"{s['name']} (local)",
                         priority=LOCAL_PRIORITY,
                         accept_terms=True,
                     ),

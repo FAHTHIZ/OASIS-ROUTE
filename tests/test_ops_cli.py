@@ -172,3 +172,14 @@ async def test_connect_without_confirmation_stores_nothing(
     g = run_cli.g
     conns = (await client.get(f"/api/v1/projects/{g['pid']}/connections", headers=auth(g["key"]))).json()
     assert "groq" not in {c["provider_id"] for c in conns}
+
+
+def test_dev_refuses_busy_ports_with_a_clear_message(capsys: pytest.CaptureFixture[str]) -> None:
+    import socket
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen()
+        port = sock.getsockname()[1]
+        assert cli.main(["dev", "--port", str(port), "--mock-port", str(port + 1)]) == 2
+    assert "already in use" in capsys.readouterr().err

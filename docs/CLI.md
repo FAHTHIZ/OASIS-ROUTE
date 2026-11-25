@@ -17,7 +17,7 @@ An unreachable server or a rejected key is reported in one line with the likely 
 
 | Command | Shows | API |
 |---|---|---|
-| `oasis-route providers [--connected] [--advertised] [--status S] [--search T]` | Every registry and catalogue provider: status, source (`curated` or `omniroute`), verification (`reviewed` or `advertised`), advertised free tier, connected accounts. Imported entries are always labelled advertised and unverified. | `/api/v1/providers`, `/connections` |
+| `oasis-route providers [--connected] [--advertised] [--status S] [--search T]` | Every registry and catalogue provider: status, source (`curated` or `omniroute`), verification (`reviewed` or `advertised`), advertised free tier, connected accounts. Hand-written adapters stay `curated`/`reviewed` even when the imported catalogue has a row with the same id; imported entries are always labelled advertised and unverified. | `/api/v1/providers`, `/connections` |
 | `oasis-route models [--provider P] [--routable] [--search T] [--limit N]` | Models with lifecycle (`unconfirmed` for catalogue models no connected account has listed yet), context window, capabilities, price (marked `(unverified)` unless it comes from a verified price list) and advertised free tier. | `/api/v1/models` |
 | `oasis-route routes [--state S] [--cost C]` | Every connection × model route: free, paid or unknown with the evidence, and eligible, blocked or exhausted with the reason and retry time. | `/projects/{id}/routes` |
 | `oasis-route quota` | Remaining quota per account and unit, reset times, active cooldowns (rate-limited pools and open circuits), forecast exhaustion, and USD budgets. | `/capacity`, `/connections`, `/budgets` |
@@ -27,10 +27,13 @@ An unreachable server or a rejected key is reported in one line with the likely 
 | `oasis-route explain REQUEST_ID` | One past request: selected route and reason, cost evidence, quota, alternatives, rejections, each attempt (with retry/reset after a 429), and the receipt (tokens, estimated, reserved and actual cost, drift, digest check). | `/route-decisions/{rid}`, `/receipts/{rid}` |
 | `oasis-route doctor` | Server readiness and schema, worker, key scopes and expiry, project status, each credential, open circuits, eligible free routes, spend policy, budgets. Exit code 1 on any failure. | several |
 | `oasis-route integrate [TOOL] [--check]` | Paste-ready settings for coding tools and SDKs ([INTEGRATIONS.md](INTEGRATIONS.md)). | `/api/v1/integrations` |
-| `oasis-route setup` | Turnkey onboarding ([ONBOARDING.md](ONBOARDING.md)). | `/projects/{id}/setup` |
+| `oasis-route setup` | Turnkey onboarding ([ONBOARDING.md](ONBOARDING.md)): local servers, free-key links, accounts needing a billing answer, route counts (real and demo separately). | `/projects/{id}/setup` |
+| `oasis-route connect` | Connect provider keys. In a terminal with no flags it asks you to paste them (hidden), shows each detected provider, and asks to confirm the accounts are yours and whether billing is set up. Scripts: `--from-env`, `--env-file PATH`, `--stdin` with `--accept-terms` (without it: dry run) and `--free-tier`. | `/connections/quick` |
+| `oasis-route billing PROVIDER free_tier\|paid\|unknown` | Declare whether billing is set up on a connected account. `free_tier` makes its routes usable under zero-budget; `paid` keeps them for paid spend modes only. | `PATCH /connections/{cid}` |
+| `oasis-route dev [--open] [--no-local]` | Local all-in-one server. Prints a one-click console link (`/console/#key=...`), connects running local model servers unless `--no-local`, and with `--open` opens the browser. Refuses to start, with a clear message, when its ports are taken. | |
 
 Request ids appear in every response (`x-request-id` and `oasis_route.request_id`), so `oasis-route explain "$(curl -si ... | grep -i x-request-id | cut -d' ' -f2)"` explains a request you just made.
 
 ## Console
 
-The web console at `/console/` shows the same information: **Routes** (classification), **Capacity** (quota, active cooldowns, budgets, forecast), **Usage** (recent decisions with an **Explain** panel), **Spend** (budgets and receipts), **Route preview** (with the full explanation) and **Integrations** (per-tool settings).
+The web console at `/console/` opens on **Get started** (status, test message, free-key links, paste box, local models, endpoint) and shows the same information: **Routes** (classification), **Capacity** (quota, active cooldowns, budgets, forecast), **Usage** (recent decisions with an **Explain** panel), **Spend** (budgets and receipts), **Route preview** (with the full explanation) and **Integrations** (per-tool settings).
