@@ -668,7 +668,9 @@ def _cmd_dev(args: argparse.Namespace) -> int:
         pid, secret = key_file.read_text().split()[:2] if key_file.exists() else ("?", "?")
         if args.connect_env and pid != "?":
             await _dev_connect_env(ctx, pid, free_tier=args.free_tier, age=args.age, country=args.country)
-        base = f"http://{s.host}:{args.port}"
+        # A wildcard bind (0.0.0.0 in Docker) is not a browsable address: print loopback instead.
+        shown_host = "127.0.0.1" if s.host in ("0.0.0.0", "::", "") else s.host  # noqa: S104 - comparison only
+        base = f"http://{shown_host}:{args.port}"
         local_note = ""
         if args.local and pid != "?":
             local_note = await _dev_connect_local(ctx, pid, base)
