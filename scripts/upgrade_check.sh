@@ -12,7 +12,7 @@
 #    still serve a request, the earlier usage is still there, and the background worker is running.
 set -euo pipefail
 
-PREV_REF="${1:-${OASIS_UPGRADE_FROM:-c1c1d94}}"   # c1c1d94 = the 0.1.0 release commit
+PREV_REF="${1:-${OASIS_UPGRADE_FROM:-a775cea8655c}}"   # a775cea8655c = last 0.1.0 commit on main
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
 STATE="$WORK/state"

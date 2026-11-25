@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Regression tests for the commit-attribution filter."""
+
 import unittest
 
 from commit_attribution import is_ai_credit, strip_ai_attribution
@@ -21,14 +22,14 @@ class CommitAttributionTests(unittest.TestCase):
     def test_preserves_human_coauthor(self):
         line = "Co-authored-by: Ada Lovelace <ada@example.org>"
         self.assertFalse(is_ai_credit(line))
-        self.assertEqual(strip_ai_attribution("Change parser\n\n" + line + "\n"),
-                         "Change parser\n\n" + line + "\n")
+        self.assertEqual(
+            strip_ai_attribution("Change parser\n\n" + line + "\n"), "Change parser\n\n" + line + "\n"
+        )
 
     def test_preserves_human_signoff(self):
         line = "Signed-off-by: Dev Example <dev@example.org>"
         self.assertFalse(is_ai_credit(line))
-        self.assertEqual(strip_ai_attribution("Fix typo\n\n" + line + "\n"),
-                         "Fix typo\n\n" + line + "\n")
+        self.assertEqual(strip_ai_attribution("Fix typo\n\n" + line + "\n"), "Fix typo\n\n" + line + "\n")
 
     def test_preserves_body_and_issue_references(self):
         message = (

@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- Routing on PostgreSQL broke ties between equally ranked connections by undefined row order, so failover could try candidates in a different order each run; ties now resolve by connection creation time and id.
+- CI: the commit-attribution scripts under `scripts/` now pass `ruff check` and `ruff format --check`, and `scripts/upgrade_check.sh` defaults to a base commit that exists on `main`.
 - CLI commands that talk to a server (`setup`, `integrate --check`) crashed with "Cannot open a client instance more than once" against a live server.
 - docs/INTEGRATIONS.md told users to `cat .oasis-dev/admin.key` into `OASIS_API_KEY`, which includes the project id line and breaks every client; it now reads line 2. The CLI also accepts the whole file and falls back to it when no key is set.
 - An unreachable server or rejected key now produces a one-line explanation instead of a traceback.

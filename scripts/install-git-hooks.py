@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Enable the repository's versioned Git hooks for this local checkout."""
+
 from __future__ import annotations
 
 import os
@@ -11,7 +12,9 @@ from pathlib import Path
 def main() -> int:
     root_result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
-        check=False, capture_output=True, text=True,
+        check=False,
+        capture_output=True,
+        text=True,
     )
     if root_result.returncode:
         print("Run this installer from inside a Git checkout.", file=sys.stderr)
@@ -25,7 +28,8 @@ def main() -> int:
 
     configured = subprocess.run(
         ["git", "config", "--local", "core.hooksPath", ".githooks"],
-        cwd=root, check=False,
+        cwd=root,
+        check=False,
     )
     if configured.returncode:
         print("Could not configure core.hooksPath.", file=sys.stderr)

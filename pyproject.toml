@@ -80,6 +80,8 @@ ignore = ["S101", "B008", "RUF012", "S311", "PT018"]
 "tests/**" = ["S105", "S106", "S107", "S108", "B017", "PT011"]
 "src/oasis_route/db/migrations/**" = ["E501"]
 "scripts/readme_assets.py" = ["E501"]  # SVG markup templates
+"scripts/test_commit_attribution.py" = ["PT009", "PT027"]  # stdlib unittest, runs without pytest
+"scripts/install-git-hooks.py" = ["S607"]  # invokes `git` from PATH by design
 
 [tool.mypy]
 python_version = "3.12"

@@ -4,6 +4,7 @@
 Human co-authors, sign-offs, issue references, and the commit body are kept.
 The script is used by the repository's optional Git commit-msg hook.
 """
+
 from __future__ import annotations
 
 import re
@@ -11,23 +12,65 @@ import sys
 from pathlib import Path
 
 AI_NAMES = (
-    "perplexity", "claude", "anthropic", "chatgpt", "openai", "codex",
-    "github copilot", "copilot", "gemini", "cursor", "devin", "aider",
-    "cline", "roo code", "kilo code", "continue", "windsurf", "codeium",
-    "amazon q", "codewhisperer", "kiro", "qodo", "sourcegraph cody",
-    "amp", "factory", "droid", "opencode", "goose", "hermes", "qwen",
-    "deepseek", "mistral", "grok", "llama", "ollama", "sweep",
-    "coderabbit", "replit", "lovable", "bolt", "manus", "openhands",
-    "warp", "zed", "augment", "trae", "junie", "jetbrains ai", "gitlab duo",
+    "perplexity",
+    "claude",
+    "anthropic",
+    "chatgpt",
+    "openai",
+    "codex",
+    "github copilot",
+    "copilot",
+    "gemini",
+    "cursor",
+    "devin",
+    "aider",
+    "cline",
+    "roo code",
+    "kilo code",
+    "continue",
+    "windsurf",
+    "codeium",
+    "amazon q",
+    "codewhisperer",
+    "kiro",
+    "qodo",
+    "sourcegraph cody",
+    "amp",
+    "factory",
+    "droid",
+    "opencode",
+    "goose",
+    "hermes",
+    "qwen",
+    "deepseek",
+    "mistral",
+    "grok",
+    "llama",
+    "ollama",
+    "sweep",
+    "coderabbit",
+    "replit",
+    "lovable",
+    "bolt",
+    "manus",
+    "openhands",
+    "warp",
+    "zed",
+    "augment",
+    "trae",
+    "junie",
+    "jetbrains ai",
+    "gitlab duo",
 )
 NAME_RE = re.compile(
     r"(?:^|[^a-z0-9])(?:"
-    + "|".join(re.escape(name).replace(r"\ ", r"[\s_-]*")
-              for name in sorted(AI_NAMES, key=len, reverse=True))
+    + "|".join(re.escape(name).replace(r"\ ", r"[\s_-]*") for name in sorted(AI_NAMES, key=len, reverse=True))
     + r")(?:$|[^a-z0-9])",
     re.IGNORECASE,
 )
-BOT_RE = re.compile(r"\[bot\]|(?:^|[.+_-])(?:no-?reply|agent|assistant|copilot|claude|codex|gemini|devin)(?:[.+_-]|@)", re.I)
+BOT_RE = re.compile(
+    r"\[bot\]|(?:^|[.+_-])(?:no-?reply|agent|assistant|copilot|claude|codex|gemini|devin)(?:[.+_-]|@)", re.I
+)
 AI_DOMAIN_RE = re.compile(
     r"@(?:[a-z0-9-]+\.)*(?:perplexity\.ai|anthropic\.com|openai\.com|"
     r"cursor\.(?:com|sh)|cognition(?:-labs)?\.(?:ai|com)|devin\.ai|"
@@ -58,7 +101,7 @@ def is_ai_credit(line: str) -> bool:
         value = trailer.group(1).strip()
         address_match = re.search(r"<([^<>]+)>", value)
         address = address_match.group(1).strip() if address_match else ""
-        name = value[:address_match.start()].strip() if address_match else value
+        name = value[: address_match.start()].strip() if address_match else value
         if "[bot]" in value.lower() or AI_DOMAIN_RE.search(address):
             return True
         # Keep a person's own address, even when their name resembles a tool.

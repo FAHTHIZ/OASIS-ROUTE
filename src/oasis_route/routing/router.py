@@ -281,9 +281,13 @@ async def build_plan(
     conns = (
         (
             await session.execute(
-                select(Connection).where(
+                select(Connection)
+                .where(
                     Connection.project_id == project.id, Connection.status != ConnectionStatus.REVOKED.value
                 )
+                # Deterministic tie-break between equally ranked routes: the older connection first, on
+                # every database (row order is unspecified without ORDER BY, e.g. on PostgreSQL).
+                .order_by(Connection.created_at, Connection.id)
             )
         )
         .scalars()
