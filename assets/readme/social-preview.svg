@@ -19,7 +19,7 @@
 <rect x="340" y="468" width="240" height="96" rx="18" fill="#111B2B" stroke="#22344A"/>
 <text x="364" y="516" font-size="38" fill="#A78BFA">~650M</text><text x="364" y="546" font-size="15" font-weight="600" fill="#93A8C0">built-in, agent use*</text>
 <rect x="600" y="468" width="240" height="96" rx="18" fill="#111B2B" stroke="#22344A"/>
-<text x="624" y="516" font-size="38" fill="#62A9FF">319</text><text x="624" y="546" font-size="15" font-weight="600" fill="#93A8C0">tests · SQLite + Postgres</text>
+<text x="624" y="516" font-size="38" fill="#62A9FF">409</text><text x="624" y="546" font-size="15" font-weight="600" fill="#93A8C0">tests · SQLite + Postgres</text>
 </g>
 <text x="80" y="600" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#6F86A0">every listed free tier, one account each · * after OpenRouter's 10-credit unlock</text>
 <g transform="translate(930 170)" fill="none" stroke-linecap="round">

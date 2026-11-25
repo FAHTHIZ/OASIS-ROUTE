@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="162" height="30" viewBox="0 0 162 30" role="img" aria-label="docs: 25 guides">
-<title>docs: 25 guides</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="162" height="30" viewBox="0 0 162 30" role="img" aria-label="docs: 27 guides">
+<title>docs: 27 guides</title>
 <defs>
 <linearGradient id="docs-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#131D2E"/><stop offset="1" stop-color="#0B1220"/></linearGradient>
 <linearGradient id="docs-val" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#62A9FF"/><stop offset="1" stop-color="#A78BFA"/></linearGradient>
@@ -19,5 +19,5 @@
 <rect x=".5" y=".5" width="161" height="29" rx="14.5" fill="none" stroke="url(#docs-edge)"/>
 <g transform="translate(12 6) scale(.75)" fill="none" stroke="#62A9FF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 21V5M19 19v2H6"/></g>
 <text x="38" y="18.8" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#A6B8CC" letter-spacing=".04em">DOCS</text>
-<text x="117.5" y="19.4" text-anchor="middle" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0B1220">25 guides</text>
+<text x="117.5" y="19.4" text-anchor="middle" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0B1220">27 guides</text>
 </svg>

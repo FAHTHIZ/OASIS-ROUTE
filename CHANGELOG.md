@@ -4,6 +4,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [Unreleased]
 
+### Added
+
+- 0.2.0 release announcement ([docs/releases/v0.2.0.md](docs/releases/v0.2.0.md)), a documentation home page ([docs/README.md](docs/README.md)) with a release index, and a release banner in the README. The README test count now reads 409.
+
 ## [0.2.0] - 2026-11-25
 
 Unified gateway release: an advertised catalogue of about 220 providers and 2,000 models (always labelled unverified until checked), protocol adapters, turnkey onboarding, routing strategies with explanations, spend modes with explicit paid approval, a USD budget ledger with receipts, client integration recipes, and an operator CLI and console. Nothing paid is ever enabled or used silently.
